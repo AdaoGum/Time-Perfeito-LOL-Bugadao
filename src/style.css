@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+@theme {
+  --font-cave: "Cinzel", "Georgia", serif;
+  --font-stone: "Georgia", "Times New Roman", serif;
+  --font-ritual: "Palatino Linotype", "Palatino", serif;
+}
+
+@keyframes float-fade {
+  0%   { opacity: 0; transform: translateY(0) scale(0.7); }
+  20%  { opacity: 1; transform: translateY(-15px) scale(1.1); }
+  70%  { opacity: 0.7; transform: translateY(-38px) scale(1); }
+  100% { opacity: 0; transform: translateY(-58px) scale(0.9); }
+}
+
+@keyframes udyr-run {
+  0%   { transform: translateX(-260px); opacity: 0; }
+  8%   { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateX(110vw); opacity: 0; }
+}
+
+.uga-word {
+  position: absolute;
+  font-weight: 900;
+  letter-spacing: .12em;
+  animation: float-fade ease-in-out infinite;
+  pointer-events: none;
+  text-shadow: 0 0 18px currentColor;
+}
