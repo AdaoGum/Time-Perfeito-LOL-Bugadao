@@ -1,0 +1,70 @@
+export function renderHomeTab() {
+  const section = document.getElementById('aba-home');
+  if (!section) return;
+
+  const UDYR_BASE = 'https://ddragon.leagueoflegends.com/cdn/img/champion/splash/';
+
+  section.innerHTML = `
+    <div class="relative overflow-hidden rounded-3xl border border-slate-800 min-h-[80vh] p-4 sm:p-6">
+      <!-- Camadas de fundo — trocadas pelo hover dos cards -->
+      <div id="home-bg-0" class="absolute inset-0 bg-cover bg-center transition-[opacity] duration-500" style="opacity:0.42; background-image:url('${UDYR_BASE}Udyr_0.jpg')"></div>
+      <div id="home-bg-1" class="absolute inset-0 bg-cover bg-center transition-[opacity] duration-500" style="opacity:0;    background-image:url('${UDYR_BASE}Udyr_2.jpg')"></div>
+      <div id="home-bg-2" class="absolute inset-0 bg-cover bg-center transition-[opacity] duration-500" style="opacity:0;    background-image:url('${UDYR_BASE}Udyr_3.jpg')"></div>
+      <div id="home-bg-3" class="absolute inset-0 bg-cover bg-center transition-[opacity] duration-500" style="opacity:0;    background-image:url('${UDYR_BASE}Udyr_4.jpg')"></div>
+      <div class="absolute inset-0 bg-slate-950/72"></div>
+
+      <div class="relative z-10 flex min-h-[74vh] flex-col items-center justify-center">
+        <h2 class="mb-10 text-center text-3xl font-black tracking-wide text-slate-100 drop-shadow-[0_2px_16px_rgba(6,182,212,0.5)] sm:text-5xl">
+          Selecione Seu Modo <span class="bg-gradient-to-r from-lime-300 via-cyan-300 to-fuchsia-400 bg-clip-text text-transparent">bUGA</span>
+        </h2>
+
+        <div class="grid w-full max-w-6xl gap-6 lg:gap-8 md:grid-cols-3">
+          <!-- Card: Uga Perfil -->
+          <button type="button" data-action="nav-card" data-tab="perfil" data-color="#0d2a4a"
+            class="group relative min-h-[220px] overflow-hidden rounded-2xl border border-cyan-500/40 bg-gradient-to-br from-blue-900/80 via-cyan-800/40 to-slate-950 p-8 sm:p-10 text-left shadow-2xl transition duration-300 hover:scale-[1.04] hover:shadow-[0_0_40px_rgba(6,182,212,0.35)]">
+            <div class="absolute -right-12 -top-12 h-44 w-44 rounded-full bg-cyan-400/20 blur-3xl transition-all duration-500 group-hover:opacity-80"></div>
+            <p class="text-5xl font-black text-cyan-300 drop-shadow-[0_0_12px_rgba(34,211,238,0.6)]">Uga</p>
+            <p class="mt-1 text-3xl font-extrabold text-white">Perfil</p>
+            <p class="mt-6 text-base font-semibold text-slate-200">Informações do Jogador</p>
+            <p class="mt-2 text-xs uppercase tracking-widest text-cyan-300/80">⚔️ Estatísticas · Partidas · Elo</p>
+          </button>
+
+          <!-- Card: Buga Especialidades -->
+          <button type="button" data-action="nav-card" data-tab="maestria" data-color="#2d1200"
+            class="group relative min-h-[220px] overflow-hidden rounded-2xl border border-amber-700/50 bg-gradient-to-br from-red-950/90 via-orange-900/40 to-slate-950 p-8 sm:p-10 text-left shadow-2xl transition duration-300 hover:scale-[1.04] hover:shadow-[0_0_40px_rgba(251,146,60,0.3)]">
+            <div class="absolute -left-10 -top-10 h-40 w-40 rounded-full bg-orange-500/25 blur-3xl transition-all duration-500 group-hover:opacity-80"></div>
+            <p class="text-5xl font-black text-amber-300 drop-shadow-[0_0_12px_rgba(251,191,36,0.6)]">Buga</p>
+            <p class="mt-1 text-3xl font-extrabold text-orange-100">Especialidades</p>
+            <p class="mt-6 text-base font-semibold text-slate-200">Maestrias do Jogador</p>
+            <p class="mt-2 text-xs uppercase tracking-widest text-amber-300/80">🏆 Monos · Pontos · Caverna</p>
+          </button>
+
+          <!-- Card: UGA BUGA Time Perfeito -->
+          <button type="button" data-action="nav-card" data-tab="sinergia" data-color="#092018"
+            class="group relative min-h-[220px] overflow-hidden rounded-2xl border border-lime-500/40 bg-gradient-to-br from-emerald-900/80 via-cyan-900/40 to-slate-950 p-8 sm:p-10 text-left shadow-2xl transition duration-300 hover:scale-[1.04] hover:shadow-[0_0_40px_rgba(132,204,22,0.3)]">
+            <div class="absolute -bottom-10 -right-8 h-36 w-36 rounded-full bg-lime-400/25 blur-3xl transition-all duration-500 group-hover:opacity-80"></div>
+            <p class="text-3xl font-black text-lime-300 drop-shadow-[0_0_12px_rgba(163,230,53,0.5)]">UGA BUGA</p>
+            <p class="mt-1 text-2xl font-extrabold text-cyan-100">Time Perfeito</p>
+            <p class="mt-6 text-base font-semibold text-slate-200">Monte sua composição com sinergia ancestral</p>
+            <p class="mt-2 text-xs uppercase tracking-widest text-lime-300/80">🔮 Planejador · Sinergia · Conforto</p>
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Hover: troca wallpaper ao passar o mouse nos cards
+  const bgs = [0, 1, 2, 3].map(i => section.querySelector(`#home-bg-${i}`));
+  const cardBgMap = { perfil: 1, maestria: 2, sinergia: 3 };
+  section.querySelectorAll('[data-action="nav-card"]').forEach(card => {
+    const bgIdx = cardBgMap[card.dataset.tab];
+    card.addEventListener('mouseenter', () => {
+      bgs[0].style.opacity = '0';
+      bgs[bgIdx].style.opacity = '0.48';
+    });
+    card.addEventListener('mouseleave', () => {
+      bgs[0].style.opacity = '0.42';
+      bgs[bgIdx].style.opacity = '0';
+    });
+  });
+}
