@@ -1,0 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=Creepster&family=Permanent+Marker&family=Rock+Salt&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  font-family: Inter, system-ui, sans-serif;
+  background:
+    linear-gradient(rgba(2, 6, 23, 0.88), rgba(2, 6, 23, 0.97)),
+    radial-gradient(circle at top, rgba(251, 146, 60, 0.14), transparent 30%),
+    radial-gradient(circle at bottom, rgba(34, 211, 238, 0.08), transparent 35%);
+}
+
+body {
+  min-height: 100vh;
+  background-color: #020617;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+@layer components {
+  .moldura-pedra {
+    @apply rounded-3xl border border-stone-700/80 bg-stone-950/80 shadow-2xl backdrop-blur-sm;
+    background-image:
+      radial-gradient(circle at top, rgba(251, 146, 60, 0.10), transparent 45%),
+      radial-gradient(circle at bottom right, rgba(34, 211, 238, 0.08), transparent 35%),
+      linear-gradient(135deg, rgba(28, 25, 23, 0.96), rgba(12, 10, 9, 0.94));
+  }
+
+  .stone-input {
+    @apply w-full rounded-xl border border-stone-700 bg-slate-950/80 px-4 py-3 text-sm text-stone-100 placeholder:text-stone-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500;
+  }
+
+  .lava-chip {
+    @apply inline-flex items-center rounded-full border border-orange-500/40 bg-orange-950/40 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-orange-200;
+  }
+}
+
+.font-ritual {
+  font-family: 'Permanent Marker', cursive;
+}
+
+.font-cavern {
+  font-family: 'Rock Salt', cursive;
+}
+
+.font-eldritch {
+  font-family: 'Creepster', cursive;
+}
