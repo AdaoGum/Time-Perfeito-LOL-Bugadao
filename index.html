@@ -7,6 +7,35 @@
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
   <body class="h-full bg-slate-950 text-white antialiased">
+    
+    <div id="telemetry-widget" class="fixed right-4 top-20 z-40 w-56 rounded-xl border border-slate-700 bg-slate-900/90 p-3 shadow-2xl backdrop-blur-sm transition-all">
+      <div class="mb-2 border-b border-slate-700/50 pb-2 text-center text-xs font-bold uppercase tracking-wider text-slate-400">
+        Monitor da API (Riot)
+      </div>
+      <div class="flex items-center justify-between text-sm font-semibold">
+        <span class="text-slate-300">Uso (2 min)</span>
+        <span id="tel-count" class="text-white">0 / 100</span>
+      </div>
+      <div class="mt-1 flex items-center justify-between text-sm font-semibold">
+        <span class="text-slate-300">Disponível</span>
+        <span id="tel-status" class="text-green-400">100</span>
+      </div>
+      <div id="tel-time" class="mt-2 rounded bg-slate-950/50 py-1 text-center text-xs font-medium text-slate-400">
+        Status: Liberado
+      </div>
+    </div>
+
+    <div id="cinematic-overlay" class="fixed inset-0 z-50 hidden flex-col items-center justify-center bg-slate-950/85 backdrop-blur-sm transition-all">
+      <div class="relative flex h-40 w-40 items-center justify-center">
+        <svg class="absolute inset-0 h-full w-full animate-[spin_3s_linear_infinite] text-cyan-500" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="15 10" opacity="0.8" />
+          <circle cx="50" cy="50" r="38" fill="none" stroke="#3b82f6" stroke-width="4" stroke-dasharray="30 15" class="animate-[spin_2s_linear_infinite_reverse]" />
+        </svg>
+        <span id="countdown-text" class="text-6xl font-black text-white drop-shadow-[0_0_15px_rgba(6,182,212,0.8)]">3</span>
+      </div>
+      <p class="mt-8 animate-pulse text-xl font-bold tracking-[0.2em] text-cyan-400">EXTRAINDO DADOS TÁTICOS...</p>
+    </div>
+
     <header class="fixed inset-x-0 top-0 z-40 border-b border-slate-800/80 bg-slate-950/95 backdrop-blur">
       <div class="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-3 md:px-6">
         <h1 class="text-base font-extrabold tracking-tight sm:text-lg md:text-xl">
@@ -25,7 +54,6 @@
     <div id="mastery-tooltip" class="pointer-events-none fixed z-50 hidden rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100 shadow-2xl"></div>
 
     <script>
-      // URL única para centralizar o tráfego de API via Cloudflare Worker.
       const WORKER_URL = 'https://lol-riotgames-api-bridge.adaojmsantos.workers.dev/';
       const DDRAGON_VERSION = '14.22.1';
       const TAB_IDS = {
@@ -34,9 +62,12 @@
         sinergia: 'aba-sinergia'
       };
 
-      // Estado global centralizado da aplicação.
+      // Estado global centralizado
       window.appState = {
         currentTab: 'perfil',
+        telemetry: {
+          timestamps: [] // Guarda a hora exata de cada requisição
+        },
         searchProfile: {
           loading: false,
           error: null,
@@ -75,17 +106,9 @@
       const tooltipEl = document.getElementById('mastery-tooltip');
 
       const CHAMPION_KEY_OVERRIDES = {
-        "Wukong": "MonkeyKing",
-        "Cho'Gath": "Chogath",
-        "Dr. Mundo": "DrMundo",
-        "Nunu & Willump": "Nunu",
-        "K'Sante": "KSante",
-        "Kai'Sa": "Kaisa",
-        "Kha'Zix": "Khazix",
-        "Bel'Veth": "Belveth",
-        "Rek'Sai": "RekSai",
-        "Vel'Koz": "Velkoz",
-        "LeBlanc": "Leblanc"
+        "Wukong": "MonkeyKing", "Cho'Gath": "Chogath", "Dr. Mundo": "DrMundo", "Nunu & Willump": "Nunu", 
+        "K'Sante": "KSante", "Kai'Sa": "Kaisa", "Kha'Zix": "Khazix", "Bel'Veth": "Belveth", 
+        "Rek'Sai": "RekSai", "Vel'Koz": "Velkoz", "LeBlanc": "Leblanc"
       };
 
       function setAtPath(obj, path, value) {
@@ -101,72 +124,65 @@
         parent[parsedLast] = value;
       }
 
-      // Função reativa central: muta estado e dispara renderização.
       function updateState(path, newValue) {
         setAtPath(window.appState, path, newValue);
         renderApp();
       }
 
-      function renderApp() {
-        renderTabsNav();
-        Object.entries(TAB_IDS).forEach(([tab, sectionId]) => {
-          document.getElementById(sectionId).classList.toggle('hidden', tab !== window.appState.currentTab);
-        });
+      // --- LOGICA DE TELEMETRIA (MONITORAMENTO DA API) ---
+      function updateTelemetryUI() {
+        const timestamps = window.appState.telemetry.timestamps;
+        const count = timestamps.length;
+        const available = 100 - count;
 
-        renderProfileTab();
-        renderMasteryTab();
-        renderSynergyTab();
-      }
+        const countEl = document.getElementById('tel-count');
+        const statusEl = document.getElementById('tel-status');
+        const timeEl = document.getElementById('tel-time');
 
-      function renderTabsNav() {
-        const nav = document.getElementById('tabs-nav');
-        const tabs = [
-          { id: 'perfil', label: 'Perfil Geral' },
-          { id: 'maestria', label: 'Maestrias' },
-          { id: 'sinergia', label: 'Planejador de Sinergia' }
-        ];
+        if(countEl) countEl.innerText = `${count} / 100`;
 
-        nav.innerHTML = tabs
-          .map(({ id, label }) => {
-            const active = window.appState.currentTab === id;
-            return `
-              <button
-                data-action="switch-tab"
-                data-tab="${id}"
-                class="rounded-lg border px-3 py-2 text-sm font-semibold transition ${active ? 'border-blue-500 bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'border-slate-700 text-slate-300 hover:border-slate-500 hover:text-slate-100'}"
-                type="button"
-              >${label}</button>
-            `;
-          })
-          .join('');
-      }
-
-      function errorBanner(message, action, slotId = '') {
-        if (!message) return '';
-        const isRateLimit = message.includes('muitas consultas');
-        const classes = isRateLimit
-          ? 'border-amber-700 bg-amber-950/40 text-amber-300'
-          : 'border-red-800 bg-red-950/40 text-red-300';
-        const idAttr = slotId ? `data-id="${slotId}"` : '';
-        return `
-          <div class="mb-4 flex items-start justify-between gap-3 rounded-lg border ${classes} px-4 py-3 text-sm">
-            <p>${message}</p>
-            <button data-action="${action}" ${idAttr} class="rounded border border-current px-2 py-0.5 text-xs font-semibold hover:opacity-80" type="button">Fechar</button>
-          </div>
-        `;
-      }
-
-      function normalizeWorkerError(status) {
-        if (status === 404) {
-          return 'Erro: Invocador não encontrado. Verifique a ortografia do nome e se a tag correspondente está correta.';
+        if(statusEl) {
+          statusEl.innerText = available;
+          statusEl.className = available > 25 ? 'text-green-400' : (available > 10 ? 'text-amber-400' : 'text-red-500 animate-pulse font-black');
         }
-        if (status === 429) {
-          return 'A plataforma está recebendo muitas consultas simultâneas. Por favor, aguarde alguns segundos antes de tentar novamente.';
+
+        if(timeEl) {
+          if(count === 0) {
+            timeEl.innerText = 'Status: Liberado';
+            timeEl.className = 'mt-2 rounded bg-slate-950/50 py-1 text-center text-xs font-medium text-slate-400';
+          } else {
+            const oldest = timestamps[0];
+            const msLeft = 120000 - (Date.now() - oldest);
+            const secsLeft = Math.max(0, Math.ceil(msLeft / 1000));
+            const m = Math.floor(secsLeft / 60);
+            const s = secsLeft % 60;
+            timeEl.innerText = `Próximo reset: ${m}:${String(s).padStart(2, '0')}`;
+            timeEl.className = 'mt-2 rounded bg-blue-950/40 py-1 text-center text-xs font-medium text-blue-300 border border-blue-800/50';
+          }
         }
-        return 'Falha crítica amigável: não foi possível completar a operação agora. Tente novamente em instantes.';
       }
+
+      // Roda a cada 1 segundo para limpar requisições antigas
+      setInterval(() => {
+        const now = Date.now();
+        const twoMinsAgo = now - 120000;
+        const timestamps = window.appState.telemetry.timestamps;
+        
+        while(timestamps.length > 0 && timestamps[0] < twoMinsAgo) {
+          timestamps.shift(); // Remove a requisição mais velha se já passou de 2 min
+        }
+        updateTelemetryUI();
+      }, 1000);
 
       async function workerRequest(action, payload) {
+        // Registra o custo na telemetria ANTES de fazer a requisição
+        const cost = action === 'profile_overview' ? 24 : (action === 'masteries' ? 2 : 1);
+        const now = Date.now();
+        for(let i=0; i<cost; i++) {
+          window.appState.telemetry.timestamps.push(now);
+        }
+        updateTelemetryUI(); // Atualiza painel instantaneamente
+
         const response = await fetch(WORKER_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -176,18 +192,22 @@
         if (!response.ok) {
           throw new Error(normalizeWorkerError(response.status));
         }
-
         return response.json();
       }
 
+      function normalizeWorkerError(status) {
+        if (status === 404) return 'Erro: Invocador não encontrado. Verifique a ortografia do nome e a tag.';
+        if (status === 429) return 'A plataforma está recebendo muitas consultas simultâneas. Por favor, aguarde.';
+        if (status === 401 || status === 403) return 'Erro de Chave: A API Key da Riot expirou no Cloudflare.';
+        return 'Falha crítica amigável: não foi possível completar a operação agora.';
+      }
+
       function getChampionIdFromName(name) {
-        const normalized = CHAMPION_KEY_OVERRIDES[name] || name?.replace(/[\s'.]/g, '') || '';
-        return normalized;
+        return CHAMPION_KEY_OVERRIDES[name] || name?.replace(/[\s'.]/g, '') || '';
       }
 
       function championImage(name) {
-        const id = getChampionIdFromName(name);
-        return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${encodeURIComponent(id)}.png`;
+        return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${encodeURIComponent(getChampionIdFromName(name))}.png`;
       }
 
       function profileIconImage(id) {
@@ -208,6 +228,42 @@
         return `${m}m ${String(s).padStart(2, '0')}s`;
       }
 
+      function renderApp() {
+        renderTabsNav();
+        Object.entries(TAB_IDS).forEach(([tab, sectionId]) => {
+          document.getElementById(sectionId).classList.toggle('hidden', tab !== window.appState.currentTab);
+        });
+        renderProfileTab();
+        renderMasteryTab();
+        renderSynergyTab();
+      }
+
+      function renderTabsNav() {
+        const nav = document.getElementById('tabs-nav');
+        const tabs = [
+          { id: 'perfil', label: 'Perfil Geral' },
+          { id: 'maestria', label: 'Maestrias' },
+          { id: 'sinergia', label: 'Planejador de Sinergia' }
+        ];
+
+        nav.innerHTML = tabs.map(({ id, label }) => {
+          const active = window.appState.currentTab === id;
+          return `<button data-action="switch-tab" data-tab="${id}" class="rounded-lg border px-3 py-2 text-sm font-semibold transition ${active ? 'border-blue-500 bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'border-slate-700 text-slate-300 hover:border-slate-500 hover:text-slate-100'}" type="button">${label}</button>`;
+        }).join('');
+      }
+
+      function errorBanner(message, action, slotId = '') {
+        if (!message) return '';
+        const isRateLimit = message.includes('muitas consultas') || message.includes('expirou');
+        const classes = isRateLimit ? 'border-amber-700 bg-amber-950/40 text-amber-300' : 'border-red-800 bg-red-950/40 text-red-300';
+        return `
+          <div class="mb-4 flex items-start justify-between gap-3 rounded-lg border ${classes} px-4 py-3 text-sm">
+            <p>${message}</p>
+            <button data-action="${action}" ${slotId ? `data-id="${slotId}"` : ''} class="rounded border border-current px-2 py-0.5 text-xs font-semibold hover:opacity-80" type="button">Fechar</button>
+          </div>
+        `;
+      }
+
       function renderProfileTab() {
         const section = document.getElementById('aba-perfil');
         const { searchProfile } = window.appState;
@@ -215,32 +271,27 @@
         const winRate = searchProfile.stats.winRate || 0;
         const winColor = winRate >= 50 ? 'bg-blue-500' : 'bg-red-500';
 
-        const matchesHtml = (searchProfile.matches || []).slice(0, 5).map((match) => {
+        // Atualizado de 5 para 20 partidas visualizadas
+        const matchesHtml = (searchProfile.matches || []).slice(0, 20).map((match) => {
           const isWin = Boolean(match.win);
           const rowClass = isWin ? 'border-blue-800 bg-blue-950/40 text-blue-100' : 'border-red-800 bg-red-950/40 text-red-100';
           const ratio = calculateKdaRatio(match.kills, match.deaths, match.assists);
           const ratioClass = Number(ratio) >= 4 ? 'text-amber-400' : 'text-slate-300';
-          const items = [match.item0, match.item1, match.item2, match.item3, match.item4, match.item5, match.item6, match.item7];
+          const items = [match.item0, match.item1, match.item2, match.item3, match.item4, match.item5, match.item6];
 
           return `
             <article class="mb-3 grid gap-3 rounded-xl border ${rowClass} p-3 md:grid-cols-[70px_1fr_180px_210px] md:items-center">
-              <img class="h-16 w-16 rounded-lg border border-slate-700 object-cover" src="${championImage(match.championName || 'Aatrox')}" alt="${match.championName || 'Campeão'}" loading="lazy" />
+              <img class="h-16 w-16 rounded-lg border border-slate-700 object-cover shadow-md" src="${championImage(match.championName || 'Aatrox')}" alt="${match.championName}" loading="lazy" />
               <div>
-                <p class="font-semibold ${isWin ? 'text-blue-300' : 'text-red-300'}">${isWin ? 'Vitória' : 'Derrota'}</p>
+                <p class="font-bold ${isWin ? 'text-blue-400' : 'text-red-400'}">${isWin ? 'VITÓRIA' : 'DERROTA'}</p>
                 <p class="text-sm text-slate-300">${formatDuration(match.gameDuration)}</p>
               </div>
               <div>
-                <p class="text-base font-semibold text-white">${match.kills} / ${match.deaths} / ${match.assists}</p>
-                <p class="text-sm ${ratioClass}">${ratio} KDA</p>
+                <p class="text-base font-bold text-white">${match.kills} / ${match.deaths} / ${match.assists}</p>
+                <p class="text-sm font-medium ${ratioClass}">${ratio} KDA</p>
               </div>
               <div class="grid grid-cols-4 gap-1">
-                ${items
-                  .map((itemId) =>
-                    itemId
-                      ? `<img class="h-9 w-9 rounded border border-slate-700 bg-slate-800" src="${itemImage(itemId)}" alt="Item ${itemId}" loading="lazy" />`
-                      : '<div class="h-9 w-9 rounded border border-slate-700 bg-slate-800"></div>'
-                  )
-                  .join('')}
+                ${items.map(itemId => itemId ? `<img class="h-8 w-8 rounded border border-slate-700 bg-slate-800 shadow" src="${itemImage(itemId)}" loading="lazy" />` : '<div class="h-8 w-8 rounded border border-slate-700 bg-slate-800/50"></div>').join('')}
               </div>
             </article>
           `;
@@ -249,12 +300,13 @@
         section.innerHTML = `
           <div class="space-y-6">
             <div class="transition-all ${hasProfile ? 'pt-2' : 'flex min-h-[60vh] items-center justify-center'}">
-              <form id="profile-form" class="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xl sm:p-5">
+              <form id="profile-form" class="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-2xl sm:p-5 relative overflow-hidden">
+                <div class="absolute inset-0 bg-gradient-to-br from-blue-900/10 to-transparent pointer-events-none"></div>
                 ${errorBanner(searchProfile.error, 'clear-profile-error')}
-                <div class="grid gap-2 sm:grid-cols-[1fr_120px_auto] sm:items-center">
-                  <input required id="profile-summoner" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white placeholder:text-slate-500 focus:border-blue-500 focus:outline-none" placeholder="Nome#TAG (ex: Faker#KR1)" value="${searchProfile.gameName && searchProfile.tagLine ? `${searchProfile.gameName}#${searchProfile.tagLine}` : ''}" />
-                  <button ${searchProfile.loading ? 'disabled' : ''} class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70" type="submit">
-                    ${searchProfile.loading ? '<span class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>' : 'Buscar'}
+                <div class="grid gap-2 sm:grid-cols-[1fr_120px_auto] sm:items-center relative z-10">
+                  <input required id="profile-summoner" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white placeholder:text-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none transition" placeholder="Nome#TAG (ex: Faker#KR1)" value="${searchProfile.gameName && searchProfile.tagLine ? `${searchProfile.gameName}#${searchProfile.tagLine}` : ''}" />
+                  <button ${searchProfile.loading ? 'disabled' : ''} class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-6 py-2 font-bold text-white shadow-lg transition hover:bg-blue-500 hover:shadow-blue-900/50 disabled:cursor-not-allowed disabled:opacity-70" type="submit">
+                    Buscar
                   </button>
                 </div>
               </form>
@@ -263,31 +315,35 @@
             ${hasProfile ? `
               <div class="grid gap-4 lg:grid-cols-[1.4fr_0.9fr]">
                 <section class="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xl">
-                  <div class="flex flex-wrap items-center gap-4 rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-                    <img class="h-20 w-20 rounded-xl border border-slate-700" src="${profileIconImage(searchProfile.profileIconId || 29)}" alt="Ícone de invocador" />
+                  <div class="flex flex-wrap items-center gap-4 rounded-xl border border-slate-700/50 bg-slate-950/80 p-4">
+                    <img class="h-24 w-24 rounded-2xl border-2 border-slate-700 shadow-xl" src="${profileIconImage(searchProfile.profileIconId || 29)}" alt="Ícone" />
                     <div>
-                      <h2 class="text-2xl font-bold text-slate-100">${searchProfile.gameName}<span class="ml-2 text-base font-medium text-slate-400">#${searchProfile.tagLine}</span></h2>
-                      <span class="mt-2 inline-block rounded-full border border-blue-700 bg-blue-900/40 px-3 py-1 text-xs font-semibold text-blue-300">Nível ${searchProfile.summonerLevel || 0}</span>
+                      <h2 class="text-3xl font-black text-white drop-shadow-md">${searchProfile.gameName}<span class="ml-2 text-lg font-medium text-slate-400">#${searchProfile.tagLine}</span></h2>
+                      <span class="mt-2 inline-block rounded-full border border-cyan-700 bg-cyan-950/40 px-4 py-1 text-xs font-bold text-cyan-400 shadow-sm">Nível ${searchProfile.summonerLevel || 0}</span>
                     </div>
                   </div>
                 </section>
 
-                <section class="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xl">
-                  <h3 class="mb-2 text-lg font-semibold text-slate-100">Resumo Competitivo</h3>
+                <section class="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xl flex flex-col justify-center">
+                  <h3 class="mb-3 text-lg font-semibold text-slate-200 text-center">Desempenho (Solo/Duo)</h3>
                   <div class="mb-3 grid grid-cols-2 gap-3 text-center">
-                    <div class="rounded-lg border border-slate-700 bg-slate-950/80 p-3"><p class="text-sm text-slate-400">Vitórias</p><p class="text-xl font-bold text-blue-300">${searchProfile.stats.wins}</p></div>
-                    <div class="rounded-lg border border-slate-700 bg-slate-950/80 p-3"><p class="text-sm text-slate-400">Derrotas</p><p class="text-xl font-bold text-red-300">${searchProfile.stats.losses}</p></div>
+                    <div class="rounded-xl border border-slate-700 bg-slate-950/80 p-3 shadow-inner"><p class="text-xs font-semibold text-slate-400 uppercase">Vitórias</p><p class="text-2xl font-black text-blue-400">${searchProfile.stats.wins}</p></div>
+                    <div class="rounded-xl border border-slate-700 bg-slate-950/80 p-3 shadow-inner"><p class="text-xs font-semibold text-slate-400 uppercase">Derrotas</p><p class="text-2xl font-black text-red-400">${searchProfile.stats.losses}</p></div>
                   </div>
-                  <p class="mb-2 text-center text-sm text-slate-200">Win Rate: <span class="font-bold">${winRate.toFixed(1)}%</span></p>
-                  <div class="h-3 overflow-hidden rounded-full bg-slate-800">
-                    <div class="h-full ${winColor} transition-all" style="width: ${Math.max(0, Math.min(100, winRate))}%"></div>
+                  <p class="mb-2 text-center text-sm font-medium text-slate-300">Win Rate: <span class="font-bold text-white">${winRate.toFixed(1)}%</span></p>
+                  <div class="h-3 overflow-hidden rounded-full bg-slate-800 shadow-inner">
+                    <div class="h-full ${winColor} transition-all duration-1000" style="width: ${Math.max(0, Math.min(100, winRate))}%"></div>
                   </div>
                 </section>
               </div>
 
-              <section class="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xl">
-                <h3 class="mb-3 text-lg font-semibold text-slate-100">Últimas 5 Partidas</h3>
-                ${matchesHtml || '<p class="text-sm text-slate-400">Sem histórico recente para exibir.</p>'}
+              <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+                <div class="mb-4 flex items-center justify-between">
+                  <h3 class="text-xl font-bold text-slate-100">Últimas ${searchProfile.matches.length} Partidas</h3>
+                </div>
+                <div class="space-y-3">
+                  ${matchesHtml || '<p class="text-center text-slate-400 py-8">Nenhum histórico recente encontrado.</p>'}
+                </div>
               </section>
             ` : ''}
           </div>
@@ -297,9 +353,8 @@
       function renderMasteryTab() {
         const section = document.getElementById('aba-maestria');
         const { searchProfile, masteryDashboard } = window.appState;
-
         if (!searchProfile.puuid) {
-          section.innerHTML = '<div class="flex min-h-[65vh] items-center justify-center rounded-2xl border border-slate-800 bg-slate-900 p-6 text-center text-slate-300">Por favor, busque um jogador na aba Perfil para visualizar o painel de maestrias</div>';
+          section.innerHTML = '<div class="flex min-h-[65vh] items-center justify-center rounded-2xl border border-slate-800 bg-slate-900 p-6 text-center text-slate-400">Por favor, busque um jogador na aba Perfil primeiro.</div>';
           return;
         }
 
@@ -308,27 +363,25 @@
         const maxPoints = top10[0]?.championPoints || 1;
 
         section.innerHTML = `
-          <div class="space-y-4">
+          <div class="space-y-6">
             ${errorBanner(masteryDashboard.error, 'clear-mastery-error')}
-            ${masteryDashboard.loading ? '<div class="rounded-xl border border-slate-800 bg-slate-900 p-4"><div class="h-6 w-44 animate-pulse rounded bg-slate-700"></div><div class="mt-4 h-24 animate-pulse rounded bg-slate-800"></div></div>' : ''}
             ${top10.length ? `
-              <section class="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xl">
-                <h2 class="mb-3 text-xl font-bold text-slate-100">Top 10 Campeões</h2>
-                <div class="space-y-3">
+              <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+                <h2 class="mb-4 text-2xl font-black text-slate-100">Top 10 Maestrias</h2>
+                <div class="grid gap-3 lg:grid-cols-2">
                   ${top10.map((entry, index) => {
                     const pct = Math.max(4, Math.round((entry.championPoints / maxPoints) * 100));
-                    const gradient = index < 3 ? 'from-amber-500 to-yellow-600' : 'from-blue-500 to-cyan-600';
+                    const gradient = index < 3 ? 'from-amber-400 to-yellow-600' : 'from-blue-500 to-cyan-600';
                     return `
-                      <article class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                        <div class="mb-2 flex items-center gap-3">
-                          <img class="h-12 w-12 rounded-full border-2 border-slate-700 object-cover" src="${championImage(entry.championName)}" alt="${entry.championName}" loading="lazy" />
-                          <div class="flex-1">
-                            <p class="font-semibold">${entry.championName} <span class="ml-2 rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-300">M${entry.championLevel}</span></p>
-                            <p class="text-sm text-slate-400">${Number(entry.championPoints || 0).toLocaleString('pt-BR')} pts</p>
+                      <article class="flex items-center gap-4 rounded-xl border border-slate-700/50 bg-slate-950/60 p-3 shadow-sm transition hover:bg-slate-800">
+                        <span class="text-xl font-black text-slate-600 w-6 text-center">#${index + 1}</span>
+                        <img class="h-14 w-14 rounded-full border-2 border-slate-700 object-cover" src="${championImage(entry.championName)}" loading="lazy" />
+                        <div class="flex-1">
+                          <p class="font-bold text-white">${entry.championName} <span class="ml-2 rounded bg-slate-800 px-2 py-0.5 text-[10px] uppercase font-bold text-slate-300">Nível ${entry.championLevel}</span></p>
+                          <div class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+                            <div class="h-full bg-gradient-to-r ${gradient}" style="width:${pct}%"></div>
                           </div>
-                        </div>
-                        <div class="h-2.5 overflow-hidden rounded-full bg-slate-800">
-                          <div class="h-full bg-gradient-to-r ${gradient}" style="width:${pct}%"></div>
+                          <p class="mt-1 text-xs font-medium text-slate-400">${Number(entry.championPoints || 0).toLocaleString('pt-BR')} pts</p>
                         </div>
                       </article>
                     `;
@@ -336,28 +389,21 @@
                 </div>
               </section>
 
-              <section class="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xl">
-                <h3 class="mb-4 text-lg font-semibold text-slate-100">Distribuição Geral de Campeões</h3>
+              <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+                <h3 class="mb-4 text-lg font-bold text-slate-200">Arsenal Completo</h3>
                 <div class="grid grid-cols-8 gap-2 sm:grid-cols-10 lg:grid-cols-14 2xl:grid-cols-16">
                   ${remainder.map((entry) => {
                     const level = entry.championLevel || 1;
-                    const tone = level >= 8 ? 'bg-red-700/80' : level >= 6 ? 'bg-orange-600/80' : level >= 4 ? 'bg-blue-700/80' : 'bg-slate-700/80';
+                    const tone = level >= 8 ? 'bg-red-700/80 ring-1 ring-red-500' : level >= 6 ? 'bg-orange-600/80 ring-1 ring-orange-500' : level >= 4 ? 'bg-blue-700/80' : 'bg-slate-700/50';
                     return `
-                      <button
-                        data-action="show-tooltip"
-                        data-name="${entry.championName}"
-                        data-level="${entry.championLevel}"
-                        data-points="${entry.championPoints}"
-                        class="group relative aspect-square overflow-hidden rounded border border-slate-700 ${tone}"
-                        type="button"
-                      >
-                        <img class="h-full w-full object-cover opacity-85 transition group-hover:opacity-100" src="${championImage(entry.championName)}" alt="${entry.championName}" loading="lazy" />
+                      <button data-action="show-tooltip" data-name="${entry.championName}" data-level="${entry.championLevel}" data-points="${entry.championPoints}" class="group relative aspect-square overflow-hidden rounded-lg shadow-sm ${tone}" type="button">
+                        <img class="h-full w-full object-cover opacity-75 transition-transform duration-300 group-hover:scale-110 group-hover:opacity-100" src="${championImage(entry.championName)}" loading="lazy" />
                       </button>
                     `;
                   }).join('')}
                 </div>
               </section>
-            ` : '<div class="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-slate-300">Nenhum dado de maestria carregado.</div>'}
+            ` : ''}
           </div>
         `;
       }
@@ -368,91 +414,94 @@
         const activeSlots = teamPlanner.slots.slice(0, teamPlanner.playerCount);
 
         section.innerHTML = `
-          <div class="space-y-4">
+          <div class="space-y-6">
             <section class="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xl">
               <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p class="mb-2 text-sm text-slate-400">Tipo de fila</p>
-                  <div class="inline-flex rounded-lg border border-slate-700 p-1">
-                    <button type="button" data-action="set-queue" data-queue="solo_duo" class="rounded-md px-3 py-1.5 text-sm font-semibold ${teamPlanner.queueType === 'solo_duo' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:text-white'}">Solo/Duo</button>
-                    <button type="button" data-action="set-queue" data-queue="flex" class="rounded-md px-3 py-1.5 text-sm font-semibold ${teamPlanner.queueType === 'flex' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:text-white'}">Fila Flex</button>
+                  <p class="mb-2 text-xs font-bold uppercase text-slate-400">Tipo de Fila</p>
+                  <div class="inline-flex rounded-lg border border-slate-700 bg-slate-950 p-1">
+                    <button type="button" data-action="set-queue" data-queue="solo_duo" class="rounded-md px-4 py-1.5 text-sm font-semibold transition ${teamPlanner.queueType === 'solo_duo' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}">Solo/Duo</button>
+                    <button type="button" data-action="set-queue" data-queue="flex" class="rounded-md px-4 py-1.5 text-sm font-semibold transition ${teamPlanner.queueType === 'flex' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}">Fila Flex</button>
                   </div>
                 </div>
                 <div>
-                  <p class="mb-2 text-sm text-slate-400">Quantidade de jogadores</p>
+                  <p class="mb-2 text-xs font-bold uppercase text-slate-400">Tamanho da Equipe</p>
                   <div class="flex flex-wrap gap-2">
-                    ${[1,2,3,4,5].map((count) => `<button type="button" data-action="set-player-count" data-count="${count}" class="h-9 w-9 rounded-full border text-sm font-bold transition ${teamPlanner.playerCount === count ? 'border-cyan-500 bg-cyan-600 text-white' : 'border-slate-700 text-slate-300 hover:border-slate-500'}">${count}</button>`).join('')}
+                    ${[1,2,3,4,5].map((count) => `<button type="button" data-action="set-player-count" data-count="${count}" class="h-10 w-10 rounded-full border-2 text-sm font-bold transition ${teamPlanner.playerCount === count ? 'border-cyan-500 bg-cyan-600 text-white shadow-[0_0_10px_rgba(6,182,212,0.5)]' : 'border-slate-700 bg-slate-950 text-slate-400 hover:border-slate-500 hover:text-white'}">${count}</button>`).join('')}
                   </div>
                 </div>
               </div>
             </section>
 
             <section class="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xl">
-              <div class="grid gap-3" style="grid-template-columns: repeat(${teamPlanner.playerCount}, minmax(0, 1fr));">
+              <div class="grid gap-4" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
                 ${activeSlots.map((slot, index) => `
-                  <article class="relative rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-                    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <h3 class="text-sm font-semibold text-slate-200">Slot ${index + 1}</h3>
-                      <div class="inline-flex rounded-md border border-slate-700 p-1 text-xs">
-                        <button type="button" data-action="set-slot-type" data-id="${slot.id}" data-type="anonymous" class="rounded px-2 py-1 ${slot.type === 'anonymous' ? 'bg-blue-600 text-white' : 'text-slate-300'}">Jogador Anônimo</button>
-                        <button type="button" data-action="set-slot-type" data-id="${slot.id}" data-type="profile" class="rounded px-2 py-1 ${slot.type === 'profile' ? 'bg-blue-600 text-white' : 'text-slate-300'}">Buscar Perfil</button>
+                  <article class="relative flex flex-col rounded-xl border border-slate-800 bg-slate-950/50 p-4 shadow-inner">
+                    <div class="mb-4 flex flex-col gap-2">
+                      <h3 class="text-center text-xs font-bold uppercase tracking-widest text-slate-500">Slot ${index + 1}</h3>
+                      <div class="flex rounded-md border border-slate-700 bg-slate-900 p-1 text-xs mx-auto">
+                        <button type="button" data-action="set-slot-type" data-id="${slot.id}" data-type="anonymous" class="rounded px-2 py-1 font-semibold ${slot.type === 'anonymous' ? 'bg-slate-700 text-white' : 'text-slate-400'}">Anônimo</button>
+                        <button type="button" data-action="set-slot-type" data-id="${slot.id}" data-type="profile" class="rounded px-2 py-1 font-semibold ${slot.type === 'profile' ? 'bg-blue-600 text-white' : 'text-slate-400'}">Perfil</button>
                       </div>
                     </div>
                     ${slot.error ? errorBanner(slot.error, 'clear-slot-error', slot.id) : ''}
 
+                    <div class="flex-1 space-y-3">
                     ${slot.loading ? `
-                      <div class="space-y-2">
-                        <div class="h-8 animate-pulse rounded bg-slate-800"></div>
-                        <div class="h-24 animate-pulse rounded bg-slate-800"></div>
-                      </div>
+                      <div class="h-10 w-full animate-pulse rounded bg-slate-800"></div><div class="h-24 w-full animate-pulse rounded bg-slate-800"></div>
                     ` : slot.type === 'anonymous' ? `
-                      <div class="space-y-2">
-                        <input data-action="slot-query" data-id="${slot.id}" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500" placeholder="Digite um campeão" value="${slot.query || ''}" />
+                        <input data-action="slot-query" data-id="${slot.id}" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none" placeholder="Buscar campeão..." value="${slot.query || ''}" />
                         ${slot.suggestions.length ? `
-                          <div class="max-h-40 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900">
-                            ${slot.suggestions.slice(0, 8).map((name) => `
-                              <button type="button" data-action="slot-select-suggestion" data-id="${slot.id}" data-name="${name}" class="flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm text-slate-200 hover:bg-slate-800">
-                                <img src="${championImage(name)}" class="h-6 w-6 rounded" alt="${name}" loading="lazy" />
-                                ${name}
+                          <div class="absolute left-0 top-[120px] z-20 w-full max-h-40 overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 shadow-xl">
+                            ${slot.suggestions.slice(0, 6).map((name) => `
+                              <button type="button" data-action="slot-select-suggestion" data-id="${slot.id}" data-name="${name}" class="flex w-full items-center gap-3 border-b border-slate-800 px-3 py-2 text-left text-sm text-slate-200 hover:bg-blue-900/50">
+                                <img src="${championImage(name)}" class="h-6 w-6 rounded" />${name}
                               </button>
                             `).join('')}
                           </div>
                         ` : ''}
-                        ${slot.championSelected ? `<div class="rounded-lg border border-cyan-700 bg-cyan-950/30 p-2 text-center"><img class="mx-auto h-16 w-16 rounded-lg" src="${championImage(slot.championSelected)}" alt="${slot.championSelected}" loading="lazy" /><p class="mt-2 text-sm font-semibold text-cyan-300">${slot.championSelected}</p></div>` : ''}
-                      </div>
+                        ${slot.championSelected ? `
+                          <div class="mt-4 flex flex-col items-center rounded-xl border border-cyan-800 bg-cyan-950/20 p-4 shadow-inner">
+                            <img class="h-20 w-20 rounded-xl border-2 border-cyan-600 shadow-[0_0_15px_rgba(8,145,178,0.4)]" src="${championImage(slot.championSelected)}" />
+                            <p class="mt-3 text-sm font-bold text-cyan-300">${slot.championSelected}</p>
+                          </div>
+                        ` : ''}
                     ` : `
-                      <div class="space-y-2">
                         ${slot.searchedData ? `
-                          <div class="rounded-lg border border-slate-700 bg-slate-900 p-2">
-                            <p class="mb-2 text-xs text-slate-400">Top 10 maestrias (clique para travar campeão)</p>
+                          <div class="rounded-xl border border-slate-700 bg-slate-950 p-2 shadow-inner">
+                            <p class="mb-2 text-center text-[10px] font-bold uppercase text-slate-400">Escolha o Campeão</p>
                             <div class="space-y-1">
                               ${slot.masteryChoices.map((entry) => `
-                                <button type="button" data-action="slot-select-mastery" data-id="${slot.id}" data-name="${entry.championName}" class="flex w-full items-center justify-between rounded border border-slate-700 px-2 py-1 text-xs hover:border-blue-500 hover:bg-slate-800">
-                                  <span class="flex items-center gap-2"><img class="h-5 w-5 rounded" src="${championImage(entry.championName)}" alt="${entry.championName}" loading="lazy" />${entry.championName}</span>
-                                  <span class="text-slate-400">M${entry.championLevel}</span>
+                                <button type="button" data-action="slot-select-mastery" data-id="${slot.id}" data-name="${entry.championName}" class="flex w-full items-center justify-between rounded border border-slate-800 bg-slate-900 px-2 py-1.5 hover:border-blue-500 hover:bg-blue-950/30 transition">
+                                  <span class="flex items-center gap-2 text-xs font-semibold text-slate-200"><img class="h-5 w-5 rounded" src="${championImage(entry.championName)}" />${entry.championName}</span>
+                                  <span class="text-[10px] font-bold text-amber-500">M${entry.championLevel}</span>
                                 </button>
                               `).join('')}
                             </div>
                           </div>
-                          <button type="button" data-action="slot-clear" data-id="${slot.id}" class="w-full rounded-lg border border-slate-700 py-2 text-xs font-semibold text-slate-200 hover:border-slate-500">Limpar/Trocar</button>
-                          ${slot.championSelected ? `<p class="rounded border border-blue-700 bg-blue-950/30 px-2 py-1 text-xs text-blue-300">Selecionado: ${slot.championSelected}</p>` : ''}
+                          <button type="button" data-action="slot-clear" data-id="${slot.id}" class="mt-2 w-full rounded-lg border border-slate-700 py-1.5 text-xs font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition">Trocar Perfil</button>
+                          ${slot.championSelected ? `
+                            <div class="mt-3 text-center border-t border-slate-800 pt-3">
+                              <p class="text-[10px] font-bold uppercase text-blue-400 mb-1">Confirmado</p>
+                              <div class="inline-flex items-center gap-2 rounded bg-blue-900/40 px-2 py-1 border border-blue-800"><img class="h-6 w-6 rounded" src="${championImage(slot.championSelected)}" /><span class="text-xs font-bold text-blue-200">${slot.championSelected}</span></div>
+                            </div>
+                          ` : ''}
                         ` : `
-                          <div class="grid grid-cols-[1fr_auto] items-center gap-2">
-                            <input data-action="slot-summoner" data-id="${slot.id}" class="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs" placeholder="Nome#TAG (ex: bUGA dão#bUGA)" value="${slot.gameName && slot.tagLine ? `${slot.gameName}#${slot.tagLine}` : ''}" />
-                            <button type="button" data-action="slot-fetch" data-id="${slot.id}" class="rounded bg-blue-600 px-2 py-1.5 text-xs font-semibold">Puxar</button>
+                          <div class="flex flex-col gap-2">
+                            <input data-action="slot-summoner" data-id="${slot.id}" class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm placeholder:text-slate-600 focus:border-blue-500 focus:outline-none" placeholder="Ex: Kami#BR1" value="${slot.gameName && slot.tagLine ? `${slot.gameName}#${slot.tagLine}` : ''}" />
+                            <button type="button" data-action="slot-fetch" data-id="${slot.id}" class="rounded-lg bg-blue-600 py-2 text-sm font-bold text-white hover:bg-blue-500 shadow">Puxar Perfil</button>
                           </div>
                         `}
-                      </div>
                     `}
+                    </div>
                   </article>
                 `).join('')}
               </div>
             </section>
 
-            <section class="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xl">
-              <h3 class="mb-3 text-lg font-semibold text-slate-100">Analisador de Sinergia de Equipe</h3>
-              <button type="button" data-action="analyze-composition" class="mx-auto flex w-full max-w-md items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 px-4 py-3 text-sm font-bold text-white transition hover:scale-[1.01] hover:from-blue-500 hover:to-cyan-500">Analisar Composição de Equipe</button>
-              ${teamPlanner.analysisLoading ? '<div class="mt-4 space-y-2"><div class="h-2 w-full animate-pulse rounded-full bg-slate-700"></div><div class="h-2 w-4/5 animate-pulse rounded-full bg-slate-700"></div></div>' : ''}
+            <section class="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+              <button type="button" data-action="analyze-composition" class="mx-auto flex w-full max-w-lg items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-6 py-4 text-base font-black uppercase tracking-wider text-white shadow-lg transition hover:scale-[1.02] hover:shadow-cyan-900/50">Simular Sinergia de Equipe</button>
+              ${teamPlanner.analysisLoading ? '<div class="mt-6 flex flex-col items-center gap-3"><div class="h-2 w-full max-w-md animate-pulse rounded-full bg-slate-800"></div><div class="h-2 w-64 animate-pulse rounded-full bg-slate-800"></div><p class="text-xs font-bold text-cyan-500 animate-pulse uppercase mt-2">Processando Matriz Tática...</p></div>' : ''}
               ${teamPlanner.analysisResult ? renderAnalysisResult(teamPlanner.analysisResult) : ''}
             </section>
           </div>
@@ -461,36 +510,36 @@
 
       function renderAnalysisResult(result) {
         const bars = [
-          { label: 'Equilíbrio de Dano (AD/AP)', value: result.metrics.damageBalance, color: 'bg-blue-500' },
-          { label: 'Índice de Controle de Grupo (CC Score)', value: result.metrics.ccScore, color: 'bg-cyan-500' },
-          { label: 'Consistência de Linha de Frente', value: result.metrics.frontline, color: 'bg-amber-500' },
-          { label: 'Pressão de Rota e Transição', value: result.metrics.tempo, color: 'bg-purple-500' }
+          { label: 'Dano (AD/AP)', value: result.metrics.damageBalance, color: 'bg-blue-500' },
+          { label: 'Controle de Grupo (CC)', value: result.metrics.ccScore, color: 'bg-cyan-400' },
+          { label: 'Linha de Frente (Tank)', value: result.metrics.frontline, color: 'bg-amber-500' },
+          { label: 'Ritmo (Tempo/Scaling)', value: result.metrics.tempo, color: 'bg-purple-500' }
         ];
 
         return `
-          <div class="mt-4 grid gap-4 lg:grid-cols-[180px_1fr]">
-            <div class="flex flex-col items-center justify-center rounded-xl border border-slate-700 bg-slate-950/60 p-4">
-              <div class="flex h-24 w-24 items-center justify-center rounded-full border-2 border-cyan-500 bg-cyan-950/30 text-4xl font-black text-cyan-300 shadow-lg shadow-cyan-900/30">${result.grade}</div>
-              <p class="mt-2 text-xs text-slate-400">Nota da composição</p>
+          <div class="mt-8 grid gap-6 lg:grid-cols-[200px_1fr]">
+            <div class="flex flex-col items-center justify-center rounded-2xl border border-slate-700 bg-slate-950/80 p-6 shadow-inner">
+              <div class="flex h-28 w-28 items-center justify-center rounded-full border-4 border-cyan-500 bg-cyan-950/40 text-5xl font-black text-cyan-300 shadow-[0_0_20px_rgba(6,182,212,0.4)]">${result.grade}</div>
+              <p class="mt-3 text-xs font-bold uppercase tracking-widest text-slate-400">Nota Final</p>
             </div>
-            <div class="space-y-3 rounded-xl border border-slate-700 bg-slate-950/50 p-4">
+            <div class="space-y-4 rounded-2xl border border-slate-700 bg-slate-950/60 p-6">
               ${bars.map((bar) => `
                 <div>
-                  <div class="mb-1 flex items-center justify-between text-xs text-slate-300"><span>${bar.label}</span><span>${bar.value}%</span></div>
-                  <div class="h-2 rounded-full bg-slate-800"><div class="h-full rounded-full ${bar.color}" style="width:${bar.value}%"></div></div>
+                  <div class="mb-1.5 flex items-center justify-between text-xs font-bold uppercase text-slate-300"><span>${bar.label}</span><span>${bar.value}%</span></div>
+                  <div class="h-2.5 rounded-full bg-slate-800 shadow-inner"><div class="h-full rounded-full ${bar.color} shadow" style="width:${bar.value}%"></div></div>
                 </div>
               `).join('')}
             </div>
           </div>
-          <blockquote class="mt-4 rounded-xl border-l-4 border-blue-500 bg-slate-950/70 px-4 py-3 text-sm text-slate-200">${result.coach}</blockquote>
+          <blockquote class="mt-6 rounded-xl border-l-4 border-cyan-500 bg-cyan-950/20 p-5 text-sm leading-relaxed text-cyan-50 shadow-inner italic">
+            <span class="font-bold uppercase text-cyan-400 not-italic block mb-2 text-xs tracking-widest">Análise do Coach Virtual:</span>
+            "${result.coach}"
+          </blockquote>
         `;
       }
 
       function getSelectedChampions() {
-        return window.appState.teamPlanner.slots
-          .slice(0, window.appState.teamPlanner.playerCount)
-          .map((slot) => slot.championSelected)
-          .filter(Boolean);
+        return window.appState.teamPlanner.slots.slice(0, window.appState.teamPlanner.playerCount).map(s => s.championSelected).filter(Boolean);
       }
 
       function generateCompositionAnalysis(champions) {
@@ -498,15 +547,13 @@
         const hasDuplicates = uniqueCount < champions.length;
         const completeness = Math.round((champions.length / window.appState.teamPlanner.playerCount) * 100);
 
-        const championMeta = champions
-          .map((name) => window.appState.staticData.championList.find((c) => c.name === name))
-          .filter(Boolean);
-
-        const tags = championMeta.flatMap((c) => c.tags || []);
-        const adLike = tags.filter((tag) => ['Fighter', 'Marksman', 'Assassin'].includes(tag)).length;
-        const apLike = tags.filter((tag) => ['Mage', 'Support'].includes(tag)).length;
-        const ccLike = tags.filter((tag) => ['Tank', 'Support'].includes(tag)).length;
-        const frontlineLike = tags.filter((tag) => ['Tank', 'Fighter'].includes(tag)).length;
+        const championMeta = champions.map(name => window.appState.staticData.championList.find(c => c.name === name)).filter(Boolean);
+        const tags = championMeta.flatMap(c => c.tags || []);
+        
+        const adLike = tags.filter(tag => ['Fighter', 'Marksman', 'Assassin'].includes(tag)).length;
+        const apLike = tags.filter(tag => ['Mage', 'Support'].includes(tag)).length;
+        const ccLike = tags.filter(tag => ['Tank', 'Support'].includes(tag)).length;
+        const frontlineLike = tags.filter(tag => ['Tank', 'Fighter'].includes(tag)).length;
 
         const totalTagBase = Math.max(1, tags.length);
         const damageBalance = 100 - Math.min(100, Math.abs(adLike - apLike) * 18);
@@ -514,83 +561,97 @@
         const frontline = Math.min(100, Math.round((frontlineLike / totalTagBase) * 100) + 20);
         const tempo = Math.max(20, Math.min(100, 60 + (champions.length * 6) - (hasDuplicates ? 25 : 0)));
 
-        let grade = 'E';
-        if (completeness >= 100 && !hasDuplicates) grade = 'S';
-        else if (completeness >= 80 && !hasDuplicates) grade = 'A';
-        else if (completeness >= 60) grade = 'B';
-        else if (completeness >= 40) grade = 'C';
-        else grade = 'D';
+        let grade = completeness >= 100 && !hasDuplicates ? 'S' : completeness >= 80 && !hasDuplicates ? 'A' : completeness >= 60 ? 'B' : completeness >= 40 ? 'C' : 'D';
 
-        let coach = 'A composição ainda está em fase inicial. Complete mais slots para uma leitura tática mais precisa.';
-        if (champions.includes('Yasuo') && champions.includes('Malphite')) {
-          coach = 'Ótima sinergia de combo de controle de grupo detectada entre Malphite e Yasuo. Sua composição possui alta capacidade de iniciação em lutas de equipe através do Ultimate.';
-        } else if (hasDuplicates) {
-          coach = 'Foram detectados campeões repetidos. Isso pode reduzir a versatilidade tática e facilitar a resposta inimiga durante o draft.';
-        } else if (frontline < 45) {
-          coach = 'A linha de frente está frágil. Considere adicionar um iniciador ou tanque para criar espaço seguro para seus carregadores.';
-        } else if (damageBalance < 45) {
-          coach = 'A distribuição de dano está desequilibrada. Misturar fontes AD e AP dificultará a itemização defensiva adversária.';
-        } else {
-          coach = 'Composição equilibrada e com boa leitura macro. Ajustes finos no controle de visão e ordem de objetivos podem elevar o desempenho competitivo.';
-        }
+        let coach = 'A composição está incompleta. Preencha todos os slots para um feedback tático preciso.';
+        if (champions.includes('Yasuo') && champions.includes('Malphite')) coach = 'Combo devastador detectado (Malphite + Yasuo). Foquem em lutar por objetivos em áreas fechadas do mapa.';
+        else if (hasDuplicates) coach = 'Campeões repetidos detectados! Lembre-se que no Rift só pode haver um de cada.';
+        else if (frontline < 45 && completeness > 80) coach = 'Alerta: Linha de frente extremamente frágil. Vocês sofrerão contra iniciações pesadas (Hard Engage). Um tanque faz falta.';
+        else if (damageBalance < 45 && completeness > 80) coach = 'Dano muito concentrado em um único tipo (AD ou AP). O time inimigo vai construir armadura/resistência mágica barata e anular vocês.';
+        else if (completeness === 100) coach = 'Composição sólida com boas condições de vitória. Respeitem o tempo de pico (power spike) de cada campeão e controlem a visão.';
 
-        return {
-          grade,
-          metrics: {
-            damageBalance,
-            ccScore,
-            frontline,
-            tempo
-          },
-          coach
-        };
+        return { grade, metrics: { damageBalance, ccScore, frontline, tempo }, coach };
       }
 
+      // --- LOGICA DE BUSCA COM OVERLAY CINEMATOGRÁFICO ---
       async function handleProfileSearch(event) {
         event.preventDefault();
         const summoner = document.getElementById('profile-summoner')?.value?.trim();
         if (!summoner) return;
+        
         const [gameNameRaw, tagLineRaw] = summoner.split('#');
         const gameName = (gameNameRaw || '').trim();
         const tagLine = (tagLineRaw || '').trim();
-        if (!gameName || !tagLine) return;
-
-        updateState('searchProfile.loading', true);
-        updateState('searchProfile.error', null);
-        updateState('searchProfile.gameName', gameName);
-        updateState('searchProfile.tagLine', tagLine);
-
-        try {
-          const data = await workerRequest('profile_overview', { gameName, tagLine });
-
-          updateState('searchProfile.puuid', data.puuid || null);
-          updateState('searchProfile.profileIconId', data.profileIconId || 29);
-          updateState('searchProfile.summonerLevel', data.summonerLevel || 0);
-          updateState('searchProfile.stats', {
-            wins: Number(data.stats?.wins || 0),
-            losses: Number(data.stats?.losses || 0),
-            winRate: Number(data.stats?.winRate || 0)
-          });
-          updateState('searchProfile.matches', Array.isArray(data.matches) ? data.matches.slice(0, 5) : []);
-
-          updateState('masteryDashboard.loading', true);
-          updateState('masteryDashboard.error', null);
-          const masteryData = await workerRequest('masteries', { puuid: data.puuid, gameName, tagLine });
-          updateState('masteryDashboard.allMasteries', (masteryData.masteries || []).map(normalizeMasteryEntry));
-        } catch (error) {
-          updateState('searchProfile.error', error.message || 'Falha ao buscar perfil.');
-        } finally {
-          updateState('searchProfile.loading', false);
-          updateState('masteryDashboard.loading', false);
+        if (!gameName || !tagLine) {
+          updateState('searchProfile.error', 'Formato inválido. Use Nome#TAG.');
+          return;
         }
+
+        // Mostra o Overlay Fullscreen
+        const overlay = document.getElementById('cinematic-overlay');
+        const countdownEl = document.getElementById('countdown-text');
+        overlay.classList.remove('hidden');
+        overlay.classList.add('flex');
+        
+        let count = 3;
+        countdownEl.innerText = count;
+
+        // 1. Promessa do Timer Visual (3 segundos exatos)
+        const countdownPromise = new Promise(resolve => {
+          const timer = setInterval(() => {
+            count--;
+            if(count > 0) {
+              countdownEl.innerText = count;
+            } else {
+              clearInterval(timer);
+              resolve();
+            }
+          }, 1000);
+        });
+
+        // 2. Promessa do Fetch (Baixando dados em Background)
+        const fetchPromise = (async () => {
+          try {
+            window.appState.searchProfile.error = null;
+            const data = await workerRequest('profile_overview', { gameName, tagLine });
+
+            window.appState.searchProfile.puuid = data.puuid || null;
+            window.appState.searchProfile.gameName = gameName;
+            window.appState.searchProfile.tagLine = tagLine;
+            window.appState.searchProfile.profileIconId = data.profileIconId || 29;
+            window.appState.searchProfile.summonerLevel = data.summonerLevel || 0;
+            window.appState.searchProfile.stats = {
+              wins: Number(data.stats?.wins || 0),
+              losses: Number(data.stats?.losses || 0),
+              winRate: Number(data.stats?.winRate || 0)
+            };
+            // Limitamos a 20 partidas direto na visualização no render.
+            window.appState.searchProfile.matches = Array.isArray(data.matches) ? data.matches : [];
+
+            // Dispara a maestria também no background
+            window.appState.masteryDashboard.error = null;
+            const masteryData = await workerRequest('masteries', { puuid: data.puuid, gameName, tagLine });
+            window.appState.masteryDashboard.allMasteries = (masteryData.masteries || []).map(normalizeMasteryEntry);
+
+          } catch (error) {
+            window.appState.searchProfile.error = error.message;
+          }
+        })();
+
+        // Espera OBRIGATORIAMENTE os 3 segundos do timer E o carregamento da API acabarem
+        await Promise.all([countdownPromise, fetchPromise]);
+
+        // Esconde overlay e atualiza a tela
+        overlay.classList.add('hidden');
+        overlay.classList.remove('flex');
+        renderApp();
       }
 
       function normalizeMasteryEntry(entry) {
         if (!entry) return { championName: 'Aatrox', championLevel: 1, championPoints: 0 };
         const fromStatic = window.appState.staticData.championList.find((champ) => Number(champ.key) === Number(entry.championId));
-        const championName = entry.championName || fromStatic?.name || 'Aatrox';
         return {
-          championName,
+          championName: entry.championName || fromStatic?.name || 'Aatrox',
           championLevel: Number(entry.championLevel || 1),
           championPoints: Number(entry.championPoints || 0)
         };
@@ -602,7 +663,7 @@
         const slot = window.appState.teamPlanner.slots[slotIndex];
 
         if (!slot.gameName?.trim() || !slot.tagLine?.trim()) {
-          updateState(`teamPlanner.slots.${slotIndex}.error`, 'Preencha nome e tag para buscar o perfil.');
+          updateState(`teamPlanner.slots.${slotIndex}.error`, 'Preencha nome e tag.');
           return;
         }
 
@@ -610,16 +671,12 @@
         updateState(`teamPlanner.slots.${slotIndex}.error`, null);
 
         try {
-          const data = await workerRequest('masteries', {
-            gameName: slot.gameName.trim(),
-            tagLine: slot.tagLine.trim()
-          });
-
+          const data = await workerRequest('masteries', { gameName: slot.gameName.trim(), tagLine: slot.tagLine.trim() });
           const topMasteries = (data.masteries || []).map(normalizeMasteryEntry).slice(0, 10);
           updateState(`teamPlanner.slots.${slotIndex}.searchedData`, data);
           updateState(`teamPlanner.slots.${slotIndex}.masteryChoices`, topMasteries);
         } catch (error) {
-          updateState(`teamPlanner.slots.${slotIndex}.error`, error.message || 'Falha ao buscar maestrias.');
+          updateState(`teamPlanner.slots.${slotIndex}.error`, error.message);
         } finally {
           updateState(`teamPlanner.slots.${slotIndex}.loading`, false);
         }
@@ -628,9 +685,7 @@
       function filterChampionSuggestions(query) {
         if (!query) return [];
         const lower = query.toLowerCase();
-        return window.appState.staticData.championList
-          .filter((champion) => champion.name.toLowerCase().includes(lower))
-          .map((champion) => champion.name);
+        return window.appState.staticData.championList.filter(c => c.name.toLowerCase().includes(lower)).map(c => c.name);
       }
 
       async function loadChampionStaticData() {
@@ -639,164 +694,107 @@
           const json = await response.json();
           const entries = Object.values(json.data || {});
           updateState('staticData.championList', entries);
-          updateState('staticData.championsById', Object.fromEntries(entries.map((champ) => [champ.key, champ])));
-        } catch {
-          updateState('staticData.championList', []);
-          updateState('staticData.championsById', {});
-        }
+          updateState('staticData.championsById', Object.fromEntries(entries.map(c => [c.key, c])));
+        } catch {}
       }
 
-      document.addEventListener('submit', (event) => {
-        if (event.target.id === 'profile-form') {
-          handleProfileSearch(event);
-        }
+      // --- LISTENERS ---
+      document.addEventListener('submit', (e) => {
+        if (e.target.id === 'profile-form') handleProfileSearch(e);
       });
 
-      document.addEventListener('click', (event) => {
-        const target = event.target.closest('[data-action]');
+      document.addEventListener('click', (e) => {
+        const target = e.target.closest('[data-action]');
         if (!target) return;
 
         const action = target.dataset.action;
+        const id = Number(target.dataset.id);
 
-        if (action === 'switch-tab') {
-          updateState('currentTab', target.dataset.tab);
-          return;
-        }
-
-        if (action === 'clear-profile-error') {
-          updateState('searchProfile.error', null);
-          return;
-        }
-
-        if (action === 'clear-mastery-error') {
-          updateState('masteryDashboard.error', null);
-          return;
-        }
-
-        if (action === 'set-queue') {
-          updateState('teamPlanner.queueType', target.dataset.queue);
-          return;
-        }
-
-        if (action === 'set-player-count') {
-          updateState('teamPlanner.playerCount', Number(target.dataset.count));
-          return;
-        }
-
+        if (action === 'switch-tab') updateState('currentTab', target.dataset.tab);
+        if (action === 'clear-profile-error') updateState('searchProfile.error', null);
+        if (action === 'clear-mastery-error') updateState('masteryDashboard.error', null);
+        if (action === 'set-queue') updateState('teamPlanner.queueType', target.dataset.queue);
+        if (action === 'set-player-count') updateState('teamPlanner.playerCount', Number(target.dataset.count));
+        
         if (action === 'set-slot-type') {
-          const slotIndex = window.appState.teamPlanner.slots.findIndex((s) => s.id === Number(target.dataset.id));
-          if (slotIndex < 0) return;
-          updateState(`teamPlanner.slots.${slotIndex}.type`, target.dataset.type);
-          updateState(`teamPlanner.slots.${slotIndex}.error`, null);
-          return;
+          const idx = window.appState.teamPlanner.slots.findIndex(s => s.id === id);
+          if (idx >= 0) {
+            updateState(`teamPlanner.slots.${idx}.type`, target.dataset.type);
+            updateState(`teamPlanner.slots.${idx}.error`, null);
+          }
         }
-
         if (action === 'slot-select-suggestion') {
-          const slotIndex = window.appState.teamPlanner.slots.findIndex((s) => s.id === Number(target.dataset.id));
-          if (slotIndex < 0) return;
-          updateState(`teamPlanner.slots.${slotIndex}.championSelected`, target.dataset.name);
-          updateState(`teamPlanner.slots.${slotIndex}.query`, target.dataset.name);
-          updateState(`teamPlanner.slots.${slotIndex}.suggestions`, []);
-          return;
+          const idx = window.appState.teamPlanner.slots.findIndex(s => s.id === id);
+          if (idx >= 0) {
+            updateState(`teamPlanner.slots.${idx}.championSelected`, target.dataset.name);
+            updateState(`teamPlanner.slots.${idx}.suggestions`, []);
+          }
         }
-
-        if (action === 'slot-fetch') {
-          handleSlotFetch(Number(target.dataset.id));
-          return;
-        }
-
+        if (action === 'slot-fetch') handleSlotFetch(id);
         if (action === 'slot-select-mastery') {
-          const slotIndex = window.appState.teamPlanner.slots.findIndex((s) => s.id === Number(target.dataset.id));
-          if (slotIndex < 0) return;
-          updateState(`teamPlanner.slots.${slotIndex}.championSelected`, target.dataset.name);
-          return;
+          const idx = window.appState.teamPlanner.slots.findIndex(s => s.id === id);
+          if (idx >= 0) updateState(`teamPlanner.slots.${idx}.championSelected`, target.dataset.name);
         }
-
         if (action === 'slot-clear') {
-          const slotIndex = window.appState.teamPlanner.slots.findIndex((s) => s.id === Number(target.dataset.id));
-          if (slotIndex < 0) return;
-          const base = { championSelected: '', searchedData: null, error: null, masteryChoices: [], gameName: '', tagLine: '', loading: false };
-          Object.entries(base).forEach(([key, value]) => updateState(`teamPlanner.slots.${slotIndex}.${key}`, value));
-          return;
+          const idx = window.appState.teamPlanner.slots.findIndex(s => s.id === id);
+          if (idx >= 0) {
+            const base = { championSelected: '', searchedData: null, error: null, masteryChoices: [], gameName: '', tagLine: '', loading: false };
+            Object.entries(base).forEach(([k, v]) => updateState(`teamPlanner.slots.${idx}.${k}`, v));
+          }
         }
-
         if (action === 'analyze-composition') {
           const champions = getSelectedChampions();
           updateState('teamPlanner.analysisLoading', true);
           updateState('teamPlanner.analysisResult', null);
-
           setTimeout(() => {
-            const result = generateCompositionAnalysis(champions);
-            updateState('teamPlanner.analysisResult', result);
+            updateState('teamPlanner.analysisResult', generateCompositionAnalysis(champions));
             updateState('teamPlanner.analysisLoading', false);
           }, 2000);
-          return;
         }
-
         if (action === 'clear-slot-error') {
-          const slotId = Number(target.dataset.id);
-          const slotIndex = window.appState.teamPlanner.slots.findIndex((s) => s.id === slotId);
-          if (slotIndex >= 0) updateState(`teamPlanner.slots.${slotIndex}.error`, null);
+          const idx = window.appState.teamPlanner.slots.findIndex(s => s.id === id);
+          if (idx >= 0) updateState(`teamPlanner.slots.${idx}.error`, null);
         }
       });
 
-      document.addEventListener('input', (event) => {
-        const target = event.target;
+      document.addEventListener('input', (e) => {
+        const target = e.target;
         const action = target.dataset.action;
+        const id = Number(target.dataset.id);
         if (!action) return;
 
         if (action === 'slot-query') {
-          const slotIndex = window.appState.teamPlanner.slots.findIndex((s) => s.id === Number(target.dataset.id));
-          if (slotIndex < 0) return;
-          const query = target.value;
-          updateState(`teamPlanner.slots.${slotIndex}.query`, query);
-          updateState(`teamPlanner.slots.${slotIndex}.suggestions`, filterChampionSuggestions(query));
-          return;
+          const idx = window.appState.teamPlanner.slots.findIndex(s => s.id === id);
+          if (idx >= 0) {
+            updateState(`teamPlanner.slots.${idx}.query`, target.value);
+            updateState(`teamPlanner.slots.${idx}.suggestions`, filterChampionSuggestions(target.value));
+          }
         }
-
-        if (action === 'slot-game-name') {
-          const slotIndex = window.appState.teamPlanner.slots.findIndex((s) => s.id === Number(target.dataset.id));
-          if (slotIndex >= 0) updateState(`teamPlanner.slots.${slotIndex}.gameName`, target.value);
-          return;
-        }
-
-        if (action === 'slot-tag') {
-          const slotIndex = window.appState.teamPlanner.slots.findIndex((s) => s.id === Number(target.dataset.id));
-          if (slotIndex >= 0) updateState(`teamPlanner.slots.${slotIndex}.tagLine`, target.value);
-        }
-
         if (action === 'slot-summoner') {
-          const slotIndex = window.appState.teamPlanner.slots.findIndex((s) => s.id === Number(target.dataset.id));
-          if (slotIndex < 0) return;
-          const val = target.value || '';
-          const [nameRaw, tagRaw] = val.split('#');
-          updateState(`teamPlanner.slots.${slotIndex}.gameName`, (nameRaw || '').trim());
-          updateState(`teamPlanner.slots.${slotIndex}.tagLine`, (tagRaw || '').trim());
-          return;
+          const idx = window.appState.teamPlanner.slots.findIndex(s => s.id === id);
+          if (idx >= 0) {
+            const val = target.value || '';
+            const [nameRaw, tagRaw] = val.split('#');
+            updateState(`teamPlanner.slots.${idx}.gameName`, (nameRaw || '').trim());
+            updateState(`teamPlanner.slots.${idx}.tagLine`, (tagRaw || '').trim());
+          }
         }
       });
 
-      document.addEventListener('mouseover', (event) => {
-        const target = event.target.closest('[data-action="show-tooltip"]');
-        if (!target) return;
-        tooltipEl.innerHTML = `
-          <p class="font-semibold text-slate-100">${target.dataset.name}</p>
-          <p>Nível de Maestria: <span class="text-amber-400">M${target.dataset.level}</span></p>
-          <p>Pontos: ${Number(target.dataset.points || 0).toLocaleString('pt-BR')}</p>
-        `;
+      document.addEventListener('mouseover', (e) => {
+        const t = e.target.closest('[data-action="show-tooltip"]');
+        if (!t) return;
+        tooltipEl.innerHTML = `<p class="font-bold text-slate-100">${t.dataset.name}</p><p class="text-[10px] uppercase font-bold text-slate-400 mt-1">Nível de Maestria: <span class="text-amber-400">M${t.dataset.level}</span></p><p class="text-xs text-blue-300">Pontos: ${Number(t.dataset.points || 0).toLocaleString('pt-BR')}</p>`;
         tooltipEl.classList.remove('hidden');
       });
-
-      document.addEventListener('mousemove', (event) => {
-        if (tooltipEl.classList.contains('hidden')) return;
-        tooltipEl.style.left = `${event.clientX + 14}px`;
-        tooltipEl.style.top = `${event.clientY + 12}px`;
-      });
-
-      document.addEventListener('mouseout', (event) => {
-        if (event.target.closest('[data-action="show-tooltip"]')) {
-          tooltipEl.classList.add('hidden');
+      document.addEventListener('mousemove', (e) => {
+        if (!tooltipEl.classList.contains('hidden')) {
+          tooltipEl.style.left = `${e.clientX + 14}px`;
+          tooltipEl.style.top = `${e.clientY + 12}px`;
         }
+      });
+      document.addEventListener('mouseout', (e) => {
+        if (e.target.closest('[data-action="show-tooltip"]')) tooltipEl.classList.add('hidden');
       });
 
       renderApp();
