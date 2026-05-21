@@ -1,0 +1,50 @@
+name: Deploy do bUGAdão para o GitHub Pages
+
+on:
+  # O robô vai rodar sempre que você der um push na branch main
+  push:
+    branches: ['main']
+
+# Permissões necessárias para o robô alterar o GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o repositório
+        uses: actions/checkout@v4
+
+      - name: Instalar o Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm install
+
+      - name: Compilar o Vue (Build)
+        run: npm run build
+
+      - name: Configurar o Pages
+        uses: actions/configure-pages@v4
+
+      - name: Fazer upload dos arquivos compilados
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist' # O Vite salva tudo na pasta dist
+
+      - name: Publicar no GitHub Pages!
+        id: deployment
+        uses: actions/deploy-pages@v4
