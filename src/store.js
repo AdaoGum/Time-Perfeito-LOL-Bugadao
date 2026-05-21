@@ -1,4 +1,6 @@
-export const state = {
+import { reactive } from 'vue';
+
+export const state = reactive({
   currentTab: 'home',
   telemetry: {
     timestamps: []
@@ -36,24 +38,4 @@ export const state = {
     championsById: {},
     championList: []
   }
-};
-
-let onChangeCallback = () => {};
-
-export function onStateChange(callback) {
-  onChangeCallback = callback;
-}
-
-export function updateState(path, newValue) {
-  const keys = path.split('.');
-  const last = keys.pop();
-  const parent = keys.reduce((acc, key) => {
-    const numeric = Number(key);
-    const parsed = Number.isInteger(numeric) && String(numeric) === key ? numeric : key;
-    return acc[parsed];
-  }, state);
-  const lastNumeric = Number(last);
-  const parsedLast = Number.isInteger(lastNumeric) && String(lastNumeric) === last ? lastNumeric : last;
-  parent[parsedLast] = newValue;
-  onChangeCallback();
-}
+});

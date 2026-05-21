@@ -1,6 +1,5 @@
-import { state } from './state.js';
+import { state } from './store.js';
 import { WORKER_URL } from './utils.js';
-import { updateTelemetryUI } from './components/Telemetry.js';
 
 function normalizeWorkerError(status) {
   if (status === 404) return 'Erro: Invocador não encontrado. Verifique a ortografia do nome e a tag.';
@@ -12,10 +11,9 @@ function normalizeWorkerError(status) {
 export async function workerRequest(action, payload) {
   const cost = action === 'profile_overview' ? 24 : (action === 'masteries' ? 2 : 1);
   const now = Date.now();
-  for(let i=0; i<cost; i++) {
+  for (let i = 0; i < cost; i++) {
     state.telemetry.timestamps.push(now);
   }
-  updateTelemetryUI();
 
   const response = await fetch(WORKER_URL, {
     method: 'POST',
