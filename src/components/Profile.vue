@@ -89,7 +89,11 @@
       <div class="grid gap-4 lg:grid-cols-[1.4fr_0.9fr]">
         <section class="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xl">
           <div class="flex flex-wrap items-center gap-4 rounded-xl border border-slate-700/50 bg-slate-950/80 p-4">
-            <img class="h-24 w-24 rounded-2xl border-2 border-slate-700 shadow-xl" :src="profileIconImage(store.searchProfile.profileIconId || 29)" alt="Ícone" />
+            <img 
+              :src="profileIconImage(store.searchProfile.profileIconId)" 
+              @error="(e) => e.target.src = 'https://ddragon.leagueoflegends.com/cdn/14.22.1/img/profileicon/29.png'"
+              class="h-28 w-28 rounded-full border-4 border-slate-800 shadow-2xl object-cover"
+            >
             <div>
               <h2 class="text-3xl font-black text-white drop-shadow-md">
                 {{ store.searchProfile.gameName }}<span class="ml-2 text-lg font-medium text-slate-400">#{{ store.searchProfile.tagLine }}</span>

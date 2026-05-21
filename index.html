@@ -2,11 +2,24 @@
 <html lang="pt-BR" class="h-full bg-slate-950">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>UGA BUGA Infos + Caverna dos Monos + Tribo Perfeita</title>
+    <title>UGA BUGA Infos + Caverna do Time Perfeito</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* Suas fontes e animações base */
+      @import url('https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Rock+Salt&family=Creepster&display=swap');
+      .font-cave { font-family: 'Permanent Marker', cursive; }
+      .font-stone { font-family: 'Rock Salt', cursive; }
+      .font-ritual { font-family: 'Creepster', system-ui; }
+    </style>
   </head>
   <body class="h-full bg-slate-950 text-white antialiased">
+    
+    <div class="fixed inset-0 z-0 pointer-events-none select-none" style="background-image:url('/assets/caverna-bg.jpg');background-size:cover;background-position:center;opacity:0.09;filter:sepia(0.5) brightness(0.55) saturate(1.2);"></div>
+
     <div id="app"></div>
-    <script type="module" src="./src/main.js"></script>
+
+    <script type="module" src="/src/main.js"></script>
   </body>
 </html>
