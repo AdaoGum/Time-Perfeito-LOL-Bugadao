@@ -80,7 +80,8 @@ export default {
                 gameName: p.riotIdGameName || p.summonerName,
                 tagLine: p.riotIdTagline,
                 championName: p.championName,
-                teamId: p.teamId
+                teamId: p.teamId,
+                kills: p.kills
               }));
 
               return {
@@ -98,6 +99,10 @@ export default {
                 item4: participant.item4,
                 item5: participant.item5,
                 item6: participant.item6,
+                totalMinionsKilled: participant.totalMinionsKilled,
+                neutralMinionsKilled: participant.neutralMinionsKilled,
+                firstBloodKill: participant.firstBloodKill,
+                visionWardsBoughtInGame: participant.visionWardsBoughtInGame,
                 players: teams // Envia a lista dos 10 jogadores filtrados
               };
             } catch (e) { return null; }

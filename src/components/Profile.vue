@@ -29,6 +29,20 @@
       </form>
     </div>
 
+    <div class="mt-12 border-t border-slate-700 pt-8">
+      <button
+        @click="showDebug = !showDebug"
+        class="mb-4 flex items-center gap-2 rounded-lg bg-slate-800 px-5 py-2 font-bold text-slate-300 transition-colors hover:bg-slate-700 hover:text-white border border-slate-600 shadow-md"
+      >
+        <span v-if="!showDebug">👁️ Mostrar Dados Brutos do Worker</span>
+        <span v-else>🙈 Esconder Dados Brutos</span>
+      </button>
+
+      <div v-if="showDebug" class="max-h-[600px] overflow-auto rounded-xl bg-[#0d1117] p-5 shadow-inner border border-slate-700">
+        <pre class="text-xs font-mono text-green-400">{{ JSON.stringify(store.searchProfile, null, 2) }}</pre>
+      </div>
+    </div>
+
     <!-- Loading state -->
     <template v-if="store.searchProfile.loading">
       <div class="flex items-center justify-center gap-3 rounded-xl border border-cyan-800/50 bg-cyan-950/30 px-4 py-3">
@@ -131,6 +145,24 @@
         <div class="mb-4 flex items-center justify-between">
           <h3 class="text-xl font-bold text-slate-100">Últimas {{ store.searchProfile.matches.length }} Partidas</h3>
         </div>
+        <!-- Resumo das últimas partidas -->
+        <div v-if="store.searchProfile.matches.length" class="mb-5 grid grid-cols-1 gap-4 rounded-xl border border-slate-700/50 bg-slate-950/40 p-4 sm:grid-cols-2">
+          <div class="text-center">
+            <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">Winrate Recente</p>
+            <p class="text-3xl font-black" :class="recentWinRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ recentWinRate }}%</p>
+            <p class="text-xs text-slate-500">{{ store.searchProfile.matches.filter(m => m.win).length }}V / {{ store.searchProfile.matches.filter(m => !m.win).length }}D</p>
+          </div>
+          <div>
+            <p class="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-400">Top Campeões</p>
+            <div class="flex flex-wrap gap-2">
+              <div v-for="champ in topChampions" :key="champ.name" class="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/60 px-2 py-1">
+                <img class="h-6 w-6 rounded-full border border-slate-600" :src="championImage(champ.name)" :alt="champ.name" loading="lazy" />
+                <span class="text-xs font-semibold text-slate-200">{{ champ.name }}</span>
+                <span class="text-xs text-slate-400">{{ champ.games }}x</span>
+              </div>
+            </div>
+          </div>
+        </div>
         <div class="space-y-3">
           <p v-if="!store.searchProfile.matches.length" class="text-center text-slate-400 py-8">Nenhum histórico recente encontrado.</p>
           <article
@@ -144,12 +176,19 @@
               <p class="font-bold" :class="match.win ? 'text-blue-400' : 'text-red-400'">{{ match.win ? 'VITÓRIA' : 'DERROTA' }}</p>
               <p class="text-xs font-semibold uppercase tracking-wide text-slate-300">{{ match.queueType || 'Outro Modo' }}</p>
               <p class="text-sm text-slate-300">{{ formatDuration(match.gameDuration) }}</p>
+              <div v-if="matchBadges(match).length" class="mt-1 flex flex-wrap gap-1">
+                <span v-for="badge in matchBadges(match)" :key="badge.label"
+                  class="rounded border px-1.5 py-0.5 text-[10px] font-bold leading-none"
+                  :class="badge.color">{{ badge.label }}</span>
+              </div>
             </div>
             <div>
               <p class="text-base font-bold text-white">{{ match.kills }} / {{ match.deaths }} / {{ match.assists }}</p>
               <p class="text-sm font-medium" :class="Number(calculateKdaRatio(match.kills, match.deaths, match.assists)) >= 4 ? 'text-amber-400' : 'text-slate-300'">
                 {{ calculateKdaRatio(match.kills, match.deaths, match.assists) }} KDA
               </p>
+              <p class="mt-1 text-xs text-slate-400">{{ matchFarm(match) }} CS <span class="text-slate-500">({{ matchCsMin(match) }}/min)</span></p>
+              <p class="text-xs text-slate-400">KP: <span class="font-semibold text-slate-200">{{ matchKP(match) }}</span></p>
             </div>
             <div class="grid grid-cols-4 gap-1">
               <template v-for="(itemId, idx) in [match.item0, match.item1, match.item2, match.item3, match.item4, match.item5, match.item6]" :key="idx">
@@ -178,6 +217,17 @@
           </article>
         </div>
       </section>
+      <!-- Companheiros de Batalha -->
+      <section v-if="battleCompanions.length" class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+        <h3 class="mb-4 text-lg font-bold text-slate-100">Companheiros de Batalha <span class="text-sm font-normal text-slate-400">(Top aliados recentes)</span></h3>
+        <div class="flex flex-wrap gap-3">
+          <div v-for="(comp, i) in battleCompanions" :key="comp.name" class="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-2.5">
+            <span class="text-xs font-black text-slate-500">#{{ i + 1 }}</span>
+            <span class="font-semibold text-cyan-300">{{ comp.name }}</span>
+            <span class="text-xs text-slate-400">{{ comp.games }} partida{{ comp.games > 1 ? 's' : '' }} juntos</span>
+          </div>
+        </div>
+      </section>
     </template>
   </div>
 </template>
@@ -187,6 +237,9 @@ import { ref, computed } from 'vue';
 import { state } from '../store.js';
 import { championImage, profileIconImage, itemImage, calculateKdaRatio, formatDuration } from '../utils.js';
 import { workerRequest } from '../api.js';
+
+// Crie esta variável em qualquer lugar dentro do <script setup>
+const showDebug = ref(false)
 
 const store = state;
 
@@ -231,6 +284,71 @@ function enemyPlayers(match) {
   const allyTeamId = playerEntry?.teamId;
   return participants.filter((p) => p?.teamId !== allyTeamId).slice(0, 5);
 }
+
+function matchFarm(match) {
+  return (match.totalMinionsKilled || 0) + (match.neutralMinionsKilled || 0);
+}
+
+function matchCsMin(match) {
+  const duration = match.gameDuration || 1;
+  return (matchFarm(match) / (duration / 60)).toFixed(1);
+}
+
+function matchKP(match) {
+  const participants = Array.isArray(match.players) ? match.players : [];
+  const playerEntry = participants.find((p) => p?.championName === match.championName);
+  const myTeamId = playerEntry?.teamId;
+  const teamKills = participants
+    .filter((p) => p?.teamId === myTeamId)
+    .reduce((sum, p) => sum + (p.kills || 0), 0);
+  if (!teamKills) return '0%';
+  return Math.round(((match.kills || 0) + (match.assists || 0)) / teamKills * 100) + '%';
+}
+
+function matchBadges(match) {
+  const badges = [];
+  if (match.deaths === 0) badges.push({ label: 'Imortal', color: 'text-yellow-300 border-yellow-600 bg-yellow-950/50' });
+  if (match.firstBloodKill) badges.push({ label: 'Sanguinário', color: 'text-red-400 border-red-700 bg-red-950/50' });
+  if ((match.visionWardsBoughtInGame || 0) >= 3) badges.push({ label: 'Olho de Rapina', color: 'text-purple-300 border-purple-700 bg-purple-950/50' });
+  return badges;
+}
+
+const recentWinRate = computed(() => {
+  const matches = store.searchProfile.matches;
+  if (!matches.length) return 0;
+  return Math.round(matches.filter((m) => m.win).length / matches.length * 100);
+});
+
+const topChampions = computed(() => {
+  const counts = {};
+  for (const m of store.searchProfile.matches) {
+    if (m.championName) counts[m.championName] = (counts[m.championName] || 0) + 1;
+  }
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([name, games]) => ({ name, games }));
+});
+
+const battleCompanions = computed(() => {
+  const myName = store.searchProfile.gameName;
+  const counts = {};
+  for (const match of store.searchProfile.matches) {
+    if (!Array.isArray(match.players)) continue;
+    const me = match.players.find((p) => p?.championName === match.championName);
+    const myTeamId = me?.teamId;
+    if (!myTeamId) continue;
+    const allies = match.players.filter((p) => p?.teamId === myTeamId && p?.gameName !== myName);
+    for (const ally of allies) {
+      const key = ally.gameName || 'Desconhecido';
+      counts[key] = (counts[key] || 0) + 1;
+    }
+  }
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([name, games]) => ({ name, games }));
+});
 
 const emit = defineEmits(['show-overlay', 'hide-overlay', 'show-udyr']);
 
