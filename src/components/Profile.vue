@@ -43,7 +43,6 @@
       </div>
     </div>
 
-    <!-- Loading state -->
     <template v-if="store.searchProfile.loading">
       <div class="flex items-center justify-center gap-3 rounded-xl border border-cyan-800/50 bg-cyan-950/30 px-4 py-3">
         <div class="h-4 w-4 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent"></div>
@@ -53,52 +52,18 @@
         <div class="h-36 animate-pulse rounded-2xl bg-slate-800/60"></div>
         <div class="h-36 animate-pulse rounded-2xl bg-slate-800/60"></div>
       </div>
-      <div class="space-y-3">
-        <div v-for="i in 5" :key="i" class="h-20 animate-pulse rounded-xl bg-slate-800/40"></div>
-      </div>
     </template>
 
-    <!-- Empty state (no profile loaded) -->
     <template v-else-if="!hasProfile">
       <div class="grid gap-4 opacity-50 lg:grid-cols-[1.4fr_0.9fr]">
         <section class="rounded-2xl border border-slate-800/50 bg-slate-900/50 p-4 shadow-xl">
           <div class="flex flex-wrap items-center gap-4 rounded-xl border border-slate-700/30 bg-slate-950/60 p-4">
             <div class="h-24 w-24 flex-shrink-0 rounded-2xl border-2 border-slate-700 bg-slate-800 shadow-xl"></div>
-            <div class="space-y-2">
-              <div class="h-8 w-44 rounded-lg bg-slate-800"></div>
-              <div class="h-6 w-28 rounded-full bg-slate-800/80"></div>
-            </div>
           </div>
-        </section>
-        <section class="flex flex-col justify-center gap-3 rounded-2xl border border-slate-800/50 bg-slate-900/50 p-4 shadow-xl">
-          <div class="mx-auto h-5 w-36 rounded bg-slate-800"></div>
-          <div class="space-y-2 rounded-xl border border-slate-700/30 bg-slate-900/50 p-3 text-center">
-            <div class="mx-auto h-3 w-20 rounded bg-slate-800"></div>
-            <div class="mx-auto h-8 w-28 rounded-lg bg-slate-800"></div>
-            <div class="mx-auto h-4 w-16 rounded bg-slate-800"></div>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div class="space-y-2 rounded-xl border border-slate-700 bg-slate-950/80 p-3"><div class="mx-auto h-2.5 w-16 rounded bg-slate-800"></div><div class="mx-auto h-8 w-10 rounded-lg bg-slate-800"></div></div>
-            <div class="space-y-2 rounded-xl border border-slate-700 bg-slate-950/80 p-3"><div class="mx-auto h-2.5 w-20 rounded bg-slate-800"></div><div class="mx-auto h-8 w-14 rounded-lg bg-slate-800"></div></div>
-          </div>
-          <div class="h-3 overflow-hidden rounded-full bg-slate-800/60 shadow-inner"></div>
         </section>
       </div>
-      <section class="rounded-2xl border border-slate-800/50 bg-slate-900/50 p-5 shadow-xl opacity-40">
-        <div class="mb-4 h-6 w-52 rounded-lg bg-slate-800"></div>
-        <div class="space-y-3">
-          <div v-for="i in 5" :key="i" class="grid gap-3 rounded-xl border border-slate-800/40 bg-slate-950/30 p-3 md:grid-cols-[70px_1fr_160px_180px_280px] md:items-center">
-            <div class="h-16 w-16 rounded-lg border border-slate-700 bg-slate-800"></div>
-            <div class="space-y-2"><div class="h-3 w-20 rounded bg-slate-800"></div><div class="h-2.5 w-14 rounded bg-slate-800"></div><div class="h-2.5 w-16 rounded bg-slate-800"></div></div>
-            <div class="space-y-2"><div class="h-4 w-24 rounded bg-slate-800"></div><div class="h-3 w-16 rounded bg-slate-800"></div></div>
-            <div class="grid grid-cols-4 gap-1"><div v-for="j in 7" :key="j" class="h-8 w-8 rounded border border-slate-700 bg-slate-800/60"></div></div>
-            <div class="grid grid-cols-2 gap-1.5"><div class="h-20 rounded-md bg-slate-800/30"></div><div class="h-20 rounded-md bg-slate-800/30"></div></div>
-          </div>
-        </div>
-      </section>
     </template>
 
-    <!-- Profile loaded -->
     <template v-else>
       <div class="grid gap-4 lg:grid-cols-[1.4fr_0.9fr]">
         <section class="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xl">
@@ -117,99 +82,149 @@
           </div>
         </section>
 
-        <section class="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xl flex flex-col justify-center">
-          <h3 class="mb-3 text-lg font-semibold text-slate-200 text-center">Resumo Competitivo</h3>
-          <div class="mb-3 rounded-xl border border-amber-700/40 bg-gradient-to-r from-amber-900/20 to-slate-950 p-3 text-center">
-            <p class="text-xs uppercase tracking-widest text-amber-300">Elo Atual</p>
-            <p class="text-2xl font-black text-amber-100">{{ rankLabel }}</p>
-            <p class="text-sm font-bold text-amber-300">{{ store.searchProfile.stats?.lp || 0 }} LP</p>
-          </div>
-          <div class="mb-3 grid grid-cols-2 gap-3 text-center">
-            <div class="rounded-xl border border-slate-700 bg-slate-950/80 p-3 shadow-inner">
-              <p class="text-xs font-semibold text-slate-400 uppercase">Vitórias</p>
-              <p class="text-2xl font-black text-blue-400">{{ store.searchProfile.stats.wins }}</p>
+        <section class="rounded-2xl border border-slate-800 bg-[#0d1117] p-5 shadow-xl flex flex-col justify-center">
+          <h3 class="mb-4 text-center font-bold text-slate-300">Resumo Competitivo</h3>
+          
+          <div class="mb-4 rounded-xl border border-amber-900/30 bg-amber-950/20 p-4 text-center">
+            <div class="text-xs font-bold uppercase tracking-wider text-amber-500/70 mb-1">Elo Atual</div>
+            <div class="text-2xl font-black text-amber-500 font-stone">
+              {{ rankLabel }}
             </div>
-            <div class="rounded-xl border border-slate-700 bg-slate-950/80 p-3 shadow-inner">
-              <p class="text-xs font-semibold text-slate-400 uppercase">KDA Geral</p>
-              <p class="text-2xl font-black text-cyan-300">{{ avgKda }}</p>
+            <div class="mt-1 text-sm font-semibold text-amber-500/80">
+              {{ store.searchProfile.stats?.lp || 0 }} LP
             </div>
           </div>
-          <p class="mb-2 text-center text-sm font-medium text-slate-300">Win Rate: <span class="font-bold text-white">{{ winRate.toFixed(1) }}%</span></p>
-          <div class="h-3 overflow-hidden rounded-full bg-slate-800 shadow-inner">
-            <div class="h-full transition-all duration-1000" :class="winColor" :style="{ width: Math.max(0, Math.min(100, winRate)) + '%' }"></div>
+
+          <div class="grid grid-cols-2 gap-3 mb-4">
+            <div class="rounded-xl border border-slate-700 bg-slate-800/50 p-3 text-center">
+              <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Vitórias (Ranked)</div>
+              <div class="text-xl font-black text-blue-400">{{ store.searchProfile.stats.wins }}</div>
+            </div>
+            <div class="rounded-xl border border-slate-700 bg-slate-800/50 p-3 text-center">
+              <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">KDA (20 Partidas)</div>
+              <div class="text-xl font-black text-emerald-400">{{ avgKda }}</div>
+            </div>
+          </div>
+
+          <div class="text-center">
+            <div class="mb-1 text-xs font-bold text-slate-400">Win Rate: <span class="text-slate-200">{{ winRate.toFixed(1) }}%</span></div>
+            <div class="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+              <div class="h-full bg-blue-500 transition-all duration-1000" :style="`width: ${winRate}%`"></div>
+            </div>
           </div>
         </section>
       </div>
 
-      <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
-        <div class="mb-4 flex items-center justify-between">
-          <h3 class="text-xl font-bold text-slate-100">Últimas {{ store.searchProfile.matches.length }} Partidas</h3>
-        </div>
-        <!-- Resumo das últimas partidas -->
-        <div v-if="store.searchProfile.matches.length" class="mb-5 grid grid-cols-1 gap-4 rounded-xl border border-slate-700/50 bg-slate-950/40 p-4 sm:grid-cols-2">
-          <div class="text-center">
-            <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">Winrate Recente</p>
-            <p class="text-3xl font-black" :class="recentWinRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ recentWinRate }}%</p>
-            <p class="text-xs text-slate-500">{{ store.searchProfile.matches.filter(m => m.win).length }}V / {{ store.searchProfile.matches.filter(m => !m.win).length }}D</p>
+        <section v-if="battleCompanions.length" class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+        <h3 class="mb-4 text-lg font-bold text-slate-100">Companheiros de Batalha</h3>
+        <div class="flex flex-wrap gap-3">
+          <div v-for="(comp, i) in battleCompanions" :key="comp.name" class="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-2.5">
+            <span class="text-xs font-black text-slate-500">#{{ i + 1 }}</span>
+            <span class="font-bold text-cyan-300">{{ comp.name }}</span>
+            <span class="text-xs font-semibold text-slate-400">{{ comp.games }} partida{{ comp.games > 1 ? 's' : '' }}</span>
           </div>
-          <div>
-            <p class="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-400">Top Campeões</p>
-            <div class="flex flex-wrap gap-2">
-              <div v-for="champ in topChampions" :key="champ.name" class="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/60 px-2 py-1">
-                <img class="h-6 w-6 rounded-full border border-slate-600" :src="championImage(champ.name)" :alt="champ.name" loading="lazy" />
-                <span class="text-xs font-semibold text-slate-200">{{ champ.name }}</span>
-                <span class="text-xs text-slate-400">{{ champ.games }}x</span>
+        </div>
+      </section>
+
+      <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+        <div class="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <h3 class="text-xl font-bold text-slate-100">Histórico de Partidas</h3>
+          
+          <div class="flex gap-2 overflow-x-auto rounded-lg border border-slate-700 bg-slate-950 p-1">
+            <button v-for="tab in tabs" :key="tab"
+              @click="activeTab = tab"
+              class="whitespace-nowrap rounded-md px-4 py-1.5 text-xs font-bold transition-all"
+              :class="activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
+            >
+              {{ tab }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="filteredMatches.length" class="mb-5 grid grid-cols-1 gap-4 rounded-xl border border-slate-700/50 bg-slate-950/40 p-4 sm:grid-cols-3">
+          
+          <div class="text-center sm:border-r border-slate-800">
+            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Winrate ({{ activeTab }})</p>
+            <p class="text-3xl font-black mt-1" :class="recentWinRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ recentWinRate }}%</p>
+            <p class="text-xs font-medium text-slate-500">{{ filteredMatches.filter(m => m.win).length }}V / {{ filteredMatches.filter(m => !m.win).length }}D</p>
+          </div>
+
+          <div class="text-center sm:border-r border-slate-800 px-2">
+            <p class="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">Rotas Jogadas</p>
+            <div class="flex flex-col items-center justify-center space-y-1.5">
+              <div v-for="(role, index) in roleStats.slice(0, 3)" :key="role.name" 
+                   class="flex w-full max-w-[130px] items-center justify-between rounded bg-slate-900/80 px-2 py-1 border border-slate-800">
+                <div class="flex items-center gap-1.5">
+                  <img :src="getRoleIcon(role.name)" class="h-4 w-4 opacity-80" :alt="role.name" />
+                  <span class="text-xs font-bold" :class="index === 0 ? 'text-amber-400' : 'text-slate-400'">{{ role.name }}</span>
+                </div>
+                <span class="text-[10px] font-bold text-slate-300">{{ role.percentage }}%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="text-center">
+            <p class="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">Top Campeões</p>
+            <div class="flex flex-wrap justify-center gap-2">
+              <div v-for="champ in topChampions" :key="champ.name" class="flex items-center gap-1.5 rounded bg-slate-900/60 px-2 py-1 border border-slate-800">
+                <img class="h-5 w-5 rounded-full border border-slate-600" :src="championImage(champ.name)" :alt="champ.name" />
+                <span class="text-[10px] font-bold text-slate-200">{{ champ.name }}</span>
+                <span class="text-[10px] text-slate-500">{{ champ.games }}x</span>
               </div>
             </div>
           </div>
         </div>
+
         <div class="space-y-3">
-          <p v-if="!store.searchProfile.matches.length" class="text-center text-slate-400 py-8">Nenhum histórico recente encontrado.</p>
+          <p v-if="!filteredMatches.length" class="text-center text-slate-400 py-8 font-semibold">
+            Nenhuma partida encontrada na aba <span class="text-amber-400">"{{ activeTab }}"</span>.
+          </p>
+
           <article
-            v-for="match in store.searchProfile.matches.slice(0, 20)"
-            :key="match.matchId || match.championName"
-            class="mb-3 grid gap-3 rounded-xl border p-3 md:grid-cols-[70px_1fr_160px_180px_280px] md:items-center"
-            :class="match.win ? 'border-blue-800 bg-blue-950/40 text-blue-100' : 'border-red-800 bg-red-950/40 text-red-100'"
+            v-for="match in filteredMatches"
+            :key="match.matchId || match.championName + Math.random()"
+            class="grid gap-3 rounded-xl border p-3 md:grid-cols-[70px_1fr_160px_180px_280px] md:items-center transition hover:brightness-110"
+            :class="match.win ? 'border-blue-800/50 bg-blue-950/20 text-blue-100' : 'border-red-800/50 bg-red-950/20 text-red-100'"
           >
             <img class="h-16 w-16 rounded-lg border border-slate-700 object-cover shadow-md" :src="championImage(match.championName || 'Aatrox')" :alt="match.championName" loading="lazy" />
             <div>
-              <p class="font-bold" :class="match.win ? 'text-blue-400' : 'text-red-400'">{{ match.win ? 'VITÓRIA' : 'DERROTA' }}</p>
-              <p class="text-xs font-semibold uppercase tracking-wide text-slate-300">{{ match.queueType || 'Outro Modo' }}</p>
-              <p class="text-sm text-slate-300">{{ formatDuration(match.gameDuration) }}</p>
+              <p class="font-black" :class="match.win ? 'text-blue-400' : 'text-red-400'">{{ match.win ? 'VITÓRIA' : 'DERROTA' }}</p>
+              <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">{{ match.queueType || 'Outro Modo' }}</p>
+              <p class="text-xs font-semibold text-slate-300">{{ formatDuration(match.gameDuration) }}</p>
               <div v-if="matchBadges(match).length" class="mt-1 flex flex-wrap gap-1">
                 <span v-for="badge in matchBadges(match)" :key="badge.label"
-                  class="rounded border px-1.5 py-0.5 text-[10px] font-bold leading-none"
+                  class="rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
                   :class="badge.color">{{ badge.label }}</span>
               </div>
             </div>
             <div>
-              <p class="text-base font-bold text-white">{{ match.kills }} / {{ match.deaths }} / {{ match.assists }}</p>
-              <p class="text-sm font-medium" :class="Number(calculateKdaRatio(match.kills, match.deaths, match.assists)) >= 4 ? 'text-amber-400' : 'text-slate-300'">
+              <p class="text-base font-black text-white tracking-widest">{{ match.kills }} <span class="text-slate-500">/</span> {{ match.deaths }} <span class="text-slate-500">/</span> {{ match.assists }}</p>
+              <p class="text-xs font-bold" :class="Number(calculateKdaRatio(match.kills, match.deaths, match.assists)) >= 4 ? 'text-amber-400' : 'text-slate-400'">
                 {{ calculateKdaRatio(match.kills, match.deaths, match.assists) }} KDA
               </p>
-              <p class="mt-1 text-xs text-slate-400">{{ matchFarm(match) }} CS <span class="text-slate-500">({{ matchCsMin(match) }}/min)</span></p>
-              <p class="text-xs text-slate-400">KP: <span class="font-semibold text-slate-200">{{ matchKP(match) }}</span></p>
+              <p class="mt-1 text-[11px] font-semibold text-slate-400">{{ matchFarm(match) }} CS <span class="text-slate-500 font-normal">({{ matchCsMin(match) }}/min)</span></p>
+              <p class="text-[11px] font-semibold text-slate-400">KP: <span class="text-slate-200">{{ matchKP(match) }}</span></p>
             </div>
             <div class="grid grid-cols-4 gap-1">
               <template v-for="(itemId, idx) in [match.item0, match.item1, match.item2, match.item3, match.item4, match.item5, match.item6]" :key="idx">
-                <img v-if="itemId" class="h-8 w-8 rounded border border-slate-700 bg-slate-800 shadow" :src="itemImage(itemId)" loading="lazy" />
-                <div v-else class="h-8 w-8 rounded border border-slate-700 bg-slate-800/50"></div>
+                <img v-if="itemId" class="h-7 w-7 rounded border border-slate-700 bg-slate-800 shadow" :src="itemImage(itemId)" loading="lazy" />
+                <div v-else class="h-7 w-7 rounded border border-slate-700 bg-slate-800/30"></div>
               </template>
             </div>
             <div class="grid grid-cols-2 gap-1.5">
-              <div class="rounded-md border border-slate-700/70 bg-slate-950/60 p-1.5">
+              <div class="rounded bg-slate-950/40 p-1.5">
                 <div class="space-y-1">
-                  <div v-for="p in alliedPlayers(match)" :key="p?.gameName" class="grid grid-cols-[18px_1fr] items-center gap-1.5">
-                    <img class="h-[18px] w-[18px] rounded-sm border border-slate-700" :src="championImage(p?.championName || 'Aatrox')" :alt="p?.championName || 'Campeao'" loading="lazy" />
-                    <span class="truncate text-[11px] font-semibold leading-none text-blue-200">{{ p?.gameName || 'Desconhecido' }}</span>
+                  <div v-for="p in alliedPlayers(match)" :key="p?.gameName" class="flex items-center gap-1.5 overflow-hidden">
+                    <img class="h-4 w-4 rounded-sm border border-slate-700 flex-shrink-0" :src="championImage(p?.championName || 'Aatrox')" loading="lazy" />
+                    <span class="truncate text-[10px] font-semibold text-blue-200/80">{{ p?.gameName || 'Desconhecido' }}</span>
                   </div>
                 </div>
               </div>
-              <div class="rounded-md border border-slate-700/70 bg-slate-950/60 p-1.5">
+              <div class="rounded bg-slate-950/40 p-1.5">
                 <div class="space-y-1">
-                  <div v-for="p in enemyPlayers(match)" :key="p?.gameName" class="grid grid-cols-[18px_1fr] items-center gap-1.5">
-                    <img class="h-[18px] w-[18px] rounded-sm border border-slate-700" :src="championImage(p?.championName || 'Aatrox')" :alt="p?.championName || 'Campeao'" loading="lazy" />
-                    <span class="truncate text-[11px] font-semibold leading-none text-red-200">{{ p?.gameName || 'Desconhecido' }}</span>
+                  <div v-for="p in enemyPlayers(match)" :key="p?.gameName" class="flex items-center gap-1.5 overflow-hidden">
+                    <img class="h-4 w-4 rounded-sm border border-slate-700 flex-shrink-0" :src="championImage(p?.championName || 'Aatrox')" loading="lazy" />
+                    <span class="truncate text-[10px] font-semibold text-red-200/80">{{ p?.gameName || 'Desconhecido' }}</span>
                   </div>
                 </div>
               </div>
@@ -217,17 +232,7 @@
           </article>
         </div>
       </section>
-      <!-- Companheiros de Batalha -->
-      <section v-if="battleCompanions.length" class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
-        <h3 class="mb-4 text-lg font-bold text-slate-100">Companheiros de Batalha <span class="text-sm font-normal text-slate-400">(Top aliados recentes)</span></h3>
-        <div class="flex flex-wrap gap-3">
-          <div v-for="(comp, i) in battleCompanions" :key="comp.name" class="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-2.5">
-            <span class="text-xs font-black text-slate-500">#{{ i + 1 }}</span>
-            <span class="font-semibold text-cyan-300">{{ comp.name }}</span>
-            <span class="text-xs text-slate-400">{{ comp.games }} partida{{ comp.games > 1 ? 's' : '' }} juntos</span>
-          </div>
-        </div>
-      </section>
+
     </template>
   </div>
 </template>
@@ -238,9 +243,7 @@ import { state } from '../store.js';
 import { championImage, profileIconImage, itemImage, calculateKdaRatio, formatDuration } from '../utils.js';
 import { workerRequest } from '../api.js';
 
-// Crie esta variável em qualquer lugar dentro do <script setup>
 const showDebug = ref(false)
-
 const store = state;
 
 const summonerInput = ref(
@@ -249,22 +252,116 @@ const summonerInput = ref(
     : ''
 );
 
+// Lógica de Abas
+const activeTab = ref('Todas');
+const tabs = ['Todas', 'Solo/Duo', 'Flex', 'Normal', 'Outros'];
+
+const filteredMatches = computed(() => {
+  const matches = store.searchProfile.matches || [];
+  if (activeTab.value === 'Todas') return matches;
+  
+  return matches.filter(m => {
+    const q = m.queueType;
+    if (activeTab.value === 'Solo/Duo') return q === 'Ranked Solo';
+    if (activeTab.value === 'Flex') return q === 'Ranked Flex';
+    if (activeTab.value === 'Normal') return q === 'Normal Draft' || q === 'Normal Blind';
+    if (activeTab.value === 'Outros') return !['Ranked Solo', 'Ranked Flex', 'Normal Draft', 'Normal Blind'].includes(q);
+    return true;
+  });
+});
+
 const hasProfile = computed(() => Boolean(store.searchProfile.puuid));
 const winRate = computed(() => store.searchProfile.stats.winRate || 0);
-const winColor = computed(() => winRate.value >= 50 ? 'bg-blue-500' : 'bg-red-500');
+
 const avgKda = computed(() => {
   const matches = store.searchProfile.matches || [];
   if (!matches.length) return '0.00';
-  return (
-    (matches.reduce((acc, m) => acc + Number(m.kills || 0) + Number(m.assists || 0), 0)) /
-    Math.max(1, matches.reduce((acc, m) => acc + Number(m.deaths || 0), 0))
-  ).toFixed(2);
+  let totalKills = 0, totalDeaths = 0, totalAssists = 0;
+  matches.forEach(match => {
+    totalKills += Number(match.kills || 0);
+    totalDeaths += Number(match.deaths || 0);
+    totalAssists += Number(match.assists || 0);
+  });
+  const kda = totalDeaths === 0 ? (totalKills + totalAssists) : ((totalKills + totalAssists) / totalDeaths);
+  return kda.toFixed(2);
 });
+
 const rankLabel = computed(() => {
   const stats = store.searchProfile.stats;
   return stats?.tier && stats?.tier !== 'UNRANKED'
     ? `${stats.tier} ${stats.rank || ''}`.trim()
     : 'UNRANKED';
+});
+
+// Busca os ícones metálicos na Riot (Corrigido para a pasta shared-components)
+const getRoleIcon = (roleName) => {
+  const map = {
+    'Top': 'top',
+    'Jungle': 'jungle',
+    'Mid': 'middle',
+    'ADC': 'bottom',
+    'Sup': 'utility'
+  };
+  const position = map[roleName] || 'fill'; 
+  // Caminho correto, testado e à prova de falhas:
+  return `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-shared-components/global/default/position-${position}.png`;
+};
+
+// Modificado para ler do filteredMatches em vez do geral
+const roleStats = computed(() => {
+  const matches = filteredMatches.value;
+  if (!matches.length) return [];
+  const counts = {};
+  matches.forEach(m => {
+    let role = m.teamPosition && m.teamPosition !== 'Invalid' ? m.teamPosition : 'OUTRO';
+    const roleMap = { TOP: 'Top', JUNGLE: 'Jungle', MIDDLE: 'Mid', BOTTOM: 'ADC', UTILITY: 'Sup' };
+    role = roleMap[role] || 'Outro';
+    counts[role] = (counts[role] || 0) + 1;
+  });
+  return Object.entries(counts)
+    .map(([name, count]) => ({
+      name, count, percentage: Math.round((count / matches.length) * 100)
+    }))
+    .sort((a, b) => b.count - a.count);
+});
+
+const recentWinRate = computed(() => {
+  const matches = filteredMatches.value;
+  if (!matches.length) return 0;
+  return Math.round(matches.filter((m) => m.win).length / matches.length * 100);
+});
+
+const topChampions = computed(() => {
+  const matches = filteredMatches.value;
+  const counts = {};
+  for (const m of matches) {
+    if (m.championName) counts[m.championName] = (counts[m.championName] || 0) + 1;
+  }
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([name, games]) => ({ name, games }));
+});
+
+const battleCompanions = computed(() => {
+  const matches = filteredMatches.value;
+  const myName = store.searchProfile.gameName;
+  const counts = {};
+  for (const match of matches) {
+    if (!Array.isArray(match.players)) continue;
+    const me = match.players.find((p) => p?.championName === match.championName);
+    const myTeamId = me?.teamId;
+    if (!myTeamId) continue;
+    const allies = match.players.filter((p) => p?.teamId === myTeamId && p?.gameName !== myName);
+    for (const ally of allies) {
+      const key = ally.gameName || 'Desconhecido';
+      counts[key] = (counts[key] || 0) + 1;
+    }
+  }
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([name, games]) => ({ name, games }));
 });
 
 function isRateLimit(msg) {
@@ -308,47 +405,10 @@ function matchKP(match) {
 function matchBadges(match) {
   const badges = [];
   if (match.deaths === 0) badges.push({ label: 'Imortal', color: 'text-yellow-300 border-yellow-600 bg-yellow-950/50' });
-  if (match.firstBloodKill) badges.push({ label: 'Sanguinário', color: 'text-red-400 border-red-700 bg-red-950/50' });
-  if ((match.visionWardsBoughtInGame || 0) >= 3) badges.push({ label: 'Olho de Rapina', color: 'text-purple-300 border-purple-700 bg-purple-950/50' });
+  if (match.firstBloodKill) badges.push({ label: 'First Blood', color: 'text-red-400 border-red-700 bg-red-950/50' });
+  if ((match.visionWardsBoughtInGame || 0) >= 3) badges.push({ label: 'Visão+', color: 'text-purple-300 border-purple-700 bg-purple-950/50' });
   return badges;
 }
-
-const recentWinRate = computed(() => {
-  const matches = store.searchProfile.matches;
-  if (!matches.length) return 0;
-  return Math.round(matches.filter((m) => m.win).length / matches.length * 100);
-});
-
-const topChampions = computed(() => {
-  const counts = {};
-  for (const m of store.searchProfile.matches) {
-    if (m.championName) counts[m.championName] = (counts[m.championName] || 0) + 1;
-  }
-  return Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([name, games]) => ({ name, games }));
-});
-
-const battleCompanions = computed(() => {
-  const myName = store.searchProfile.gameName;
-  const counts = {};
-  for (const match of store.searchProfile.matches) {
-    if (!Array.isArray(match.players)) continue;
-    const me = match.players.find((p) => p?.championName === match.championName);
-    const myTeamId = me?.teamId;
-    if (!myTeamId) continue;
-    const allies = match.players.filter((p) => p?.teamId === myTeamId && p?.gameName !== myName);
-    for (const ally of allies) {
-      const key = ally.gameName || 'Desconhecido';
-      counts[key] = (counts[key] || 0) + 1;
-    }
-  }
-  return Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([name, games]) => ({ name, games }));
-});
 
 const emit = defineEmits(['show-overlay', 'hide-overlay', 'show-udyr']);
 
@@ -427,5 +487,6 @@ async function handleProfileSearch() {
   emit('hide-overlay');
   emit('show-udyr');
   store.searchProfile.loading = false;
+  activeTab.value = 'Todas'; // Reseta a aba ao buscar um novo jogador
 }
 </script>

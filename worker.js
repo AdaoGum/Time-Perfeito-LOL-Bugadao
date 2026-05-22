@@ -85,9 +85,10 @@ export default {
               }));
 
               return {
-                win: participant.win, // true ou false direto do participante correto
+                win: participant.win, 
                 queueType: queueMap[info.queueId] || "Outro Modo",
                 championName: participant.championName,
+                teamPosition: participant.teamPosition,
                 gameDuration: info.gameDuration,
                 kills: participant.kills,
                 deaths: participant.deaths,

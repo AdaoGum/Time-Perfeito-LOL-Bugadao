@@ -1,15 +1,10 @@
 import { reactive } from 'vue';
 
 export const state = reactive({
-  // Controle de navegação global das abas
   currentTab: 'home',
-
-  // Monitor de Telemetria da API da Riot (Evita o erro de undefined no App.vue)
   telemetry: {
     timestamps: []
   },
-
-  // Dados do perfil unificado buscado (Jogador Global Ativo)
   searchProfile: {
     loading: false,
     error: null,
@@ -21,14 +16,10 @@ export const state = reactive({
     stats: { wins: 0, losses: 0, winRate: 0, tier: 'UNRANKED', rank: '', lp: 0 },
     matches: []
   },
-
-  // Painel de maestrias que as outras telas consultam
   masteryDashboard: {
     allMasteries: [],
     error: null
   },
-
-  // Planeador de equipes (Página da Tribo)
   teamPlanner: {
     queueType: 'solo_duo',
     playerCount: 5,
@@ -49,7 +40,20 @@ export const state = reactive({
       role: i === 0 ? 'Jungle' : i === 1 ? 'Top' : i === 2 ? 'Mid' : i === 3 ? 'ADC' : 'Sup'
     }))
   },
-
+  fogueira: {
+    players: Array.from({ length: 10 }, (_, i) => ({
+      id: i + 1,
+      rawInput: '',
+      name: '',
+      tag: '',
+      elo: 'UNRANKED',
+      eloWeight: 100,
+      loading: false,
+      data: null
+    })),
+    team1: [],
+    team2: []
+  },
   staticData: {
     championList: []
   }

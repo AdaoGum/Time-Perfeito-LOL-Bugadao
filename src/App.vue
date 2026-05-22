@@ -177,15 +177,17 @@ onUnmounted(() => {
   window.removeEventListener('mousemove', onMouseMove);
 });
 
-// Telemetry
+// =========================================================
+// BLOCO DE TELEMETRIA CORRIGIDO E SEGURO CONTRA UNDEFINED
+// =========================================================
 const telemetryTick = ref(0);
-
 let telInterval = null;
 
 function updateTelemetry() {
   const now = Date.now();
   const twoMinsAgo = now - 120000;
-  const ts = store.telemetry.timestamps;
+  // Adicionado fallback caso a store mude
+  const ts = store.telemetry?.timestamps || []; 
   while (ts.length > 0 && ts[0] < twoMinsAgo) ts.shift();
   telemetryTick.value++;
 }
@@ -200,7 +202,7 @@ onUnmounted(() => {
 const telUsage = computed(() => {
   // eslint-disable-next-line no-unused-expressions
   telemetryTick.value;
-  return store.telemetry.timestamps.length;
+  return store.telemetry?.timestamps?.length || 0; // Travado com ?.
 });
 
 const telAvailable = computed(() => 100 - telUsage.value);
@@ -215,7 +217,7 @@ const telAvailableClass = computed(() => {
 const telTimeText = computed(() => {
   // eslint-disable-next-line no-unused-expressions
   telemetryTick.value;
-  const ts = store.telemetry.timestamps;
+  const ts = store.telemetry?.timestamps || []; // Travado com || []
   if (ts.length === 0) return 'Status: Liberado';
   const oldest = ts[0];
   const msLeft = 120000 - (Date.now() - oldest);
@@ -226,7 +228,7 @@ const telTimeText = computed(() => {
 });
 
 const telTimeClass = computed(() => {
-  if (store.telemetry.timestamps.length === 0) {
+  if ((store.telemetry?.timestamps || []).length === 0) { // Travado com || []
     return 'bg-slate-950/50 text-slate-400';
   }
   return 'bg-blue-950/40 text-blue-300 border border-blue-800/50';
