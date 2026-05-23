@@ -34,8 +34,8 @@
         @click="showDebug = !showDebug"
         class="mb-4 flex items-center gap-2 rounded-lg bg-slate-800 px-5 py-2 font-bold text-slate-300 transition-colors hover:bg-slate-700 hover:text-white border border-slate-600 shadow-md"
       >
-        <span v-if="!showDebug">👁️ Mostrar Dados Brutos do Worker</span>
-        <span v-else>🙈 Esconder Dados Brutos</span>
+        <span v-if="!showDebug">+ Mostrar Dados Brutos do Worker</span>
+        <span v-else>- Esconder Dados Brutos</span>
       </button>
 
       <div v-if="showDebug" class="max-h-[600px] overflow-auto rounded-xl bg-[#0d1117] p-5 shadow-inner border border-slate-700">
@@ -66,57 +66,118 @@
 
     <template v-else>
       <div class="grid gap-4 lg:grid-cols-[1.4fr_0.9fr]">
-        <section class="rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xl">
-          <div class="flex flex-wrap items-center gap-4 rounded-xl border border-slate-700/50 bg-slate-950/80 p-4">
-            <img 
-              :src="profileIconImage(store.searchProfile.profileIconId)" 
-              @error="(e) => e.target.src = 'https://ddragon.leagueoflegends.com/cdn/14.22.1/img/profileicon/29.png'"
-              class="h-28 w-28 rounded-full border-4 border-slate-800 shadow-2xl object-cover"
-            >
-            <div>
-              <h2 class="text-3xl font-black text-white drop-shadow-md">
-                {{ store.searchProfile.gameName }}<span class="ml-2 text-lg font-medium text-slate-400">#{{ store.searchProfile.tagLine }}</span>
+        <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl flex flex-col justify-between relative overflow-hidden">
+          <div class="absolute inset-0 bg-gradient-to-tr from-slate-950/20 to-transparent pointer-events-none"></div>
+          
+          <div class="flex flex-col sm:flex-row items-center gap-5 rounded-xl border border-slate-700/50 bg-slate-950/80 p-5 relative z-10">
+            <div class="relative flex-shrink-0">
+              <img 
+                :src="profileIconImage(store.searchProfile.profileIconId)" 
+                @error="(e) => e.target.src = 'https://ddragon.leagueoflegends.com/cdn/14.22.1/img/profileicon/29.png'"
+                class="h-24 w-24 rounded-2xl border-4 border-slate-800 shadow-2xl object-cover"
+              >
+              <span class="absolute -bottom-2 -right-2 bg-blue-600 border-2 border-slate-800 rounded-full px-2.5 py-0.5 text-[10px] font-black text-white shadow-lg">
+                Lv {{ store.searchProfile.summonerLevel || 0 }}
+              </span>
+            </div>
+
+            <div class="text-center sm:text-left flex-1">
+              <h2 class="text-3xl font-black text-white drop-shadow-md tracking-wide">
+                {{ store.searchProfile.gameName }}<span class="ml-1.5 text-lg font-bold text-slate-500">#{{ store.searchProfile.tagLine }}</span>
               </h2>
-              <span class="mt-2 inline-block rounded-full border border-cyan-700 bg-cyan-950/40 px-4 py-1 text-xs font-bold text-cyan-400 shadow-sm">Nível {{ store.searchProfile.summonerLevel || 0 }}</span>
+              <p class="text-xs text-slate-400 mt-1 font-medium">Visualização tática das filas ranqueadas ativas.</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4 mt-4 relative z-10">
+            <div class="flex flex-col items-center justify-center rounded-xl border border-slate-800/80 bg-slate-950/50 p-4 text-center">
+              <img 
+                :src="getLocalRankEmblem(store.searchProfile.statsSolo?.tier)" 
+                class="h-28 w-28 sm:h-32 sm:w-32 object-contain filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)] transition transform hover:scale-105 duration-300 block mb-2"
+                alt="Brasão SoloQ"
+              />
+              <span class="text-[10px] font-black uppercase tracking-wider text-cyan-400">Solo / Duo</span>
+              <span class="text-xs font-bold text-slate-200 mt-0.5">{{ labelSolo }}</span>
+            </div>
+
+            <div class="flex flex-col items-center justify-center rounded-xl border border-slate-800/80 bg-slate-950/50 p-4 text-center">
+              <img 
+                :src="getLocalRankEmblem(store.searchProfile.statsFlex?.tier)" 
+                class="h-28 w-28 sm:h-32 sm:w-32 object-contain filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)] transition transform hover:scale-105 duration-300 block mb-2"
+                alt="Brasão Flex"
+              />
+              <span class="text-[10px] font-black uppercase tracking-wider text-purple-400">Ranked Flex</span>
+              <span class="text-xs font-bold text-slate-200 mt-0.5">{{ labelFlex }}</span>
             </div>
           </div>
         </section>
 
-        <section class="rounded-2xl border border-slate-800 bg-[#0d1117] p-5 shadow-xl flex flex-col justify-center">
-          <h3 class="mb-4 text-center font-bold text-slate-300">Resumo Competitivo</h3>
+<section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl flex flex-col justify-between">
+          <h3 class="mb-3 text-center font-bold text-slate-300">Resumo Competitivo</h3>
           
-          <div class="mb-4 rounded-xl border border-amber-900/30 bg-amber-950/20 p-4 text-center">
-            <div class="text-xs font-bold uppercase tracking-wider text-amber-500/70 mb-1">Elo Atual</div>
-            <div class="text-2xl font-black text-amber-500 font-stone">
-              {{ rankLabel }}
+          <div class="space-y-4">
+            <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 flex items-center justify-between">
+              <div class="text-left">
+                <span class="text-[10px] font-black uppercase tracking-wider text-cyan-400">Solo / Duo</span>
+                <div class="text-2xl font-black text-amber-500 font-stone tracking-wide mt-0.5">{{ labelSolo }}</div>
+              </div>
+              <div class="text-right">
+                <span class="text-xs font-bold text-slate-300">{{ store.searchProfile.statsSolo?.lp || 0 }} LP</span>
+                <div class="text-[11px] font-medium text-slate-400 mt-0.5">{{ store.searchProfile.statsSolo?.wins || 0 }} Vitórias</div>
+              </div>
             </div>
-            <div class="mt-1 text-sm font-semibold text-amber-500/80">
-              {{ store.searchProfile.stats?.lp || 0 }} LP
+
+            <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 flex items-center justify-between">
+              <div class="text-left">
+                <span class="text-[10px] font-black uppercase tracking-wider text-purple-400">Ranked Flex</span>
+                <div class="text-lg font-black text-white leading-tight mt-0.5">{{ labelFlex }}</div>
+              </div>
+              <div class="text-right">
+                <span class="text-xs font-bold text-slate-300">{{ store.searchProfile.statsFlex?.lp || 0 }} LP</span>
+                <div class="text-[11px] font-medium text-slate-400 mt-0.5">{{ store.searchProfile.statsFlex?.wins || 0 }} Vitórias</div>
+              </div>
             </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-3 mb-4">
-            <div class="rounded-xl border border-slate-700 bg-slate-800/50 p-3 text-center">
-              <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Vitórias (Ranked)</div>
-              <div class="text-xl font-black text-blue-400">{{ store.searchProfile.stats.wins }}</div>
+          <div class="mt-4 pt-3 border-t border-slate-800">
+            <div class="grid grid-cols-2 gap-3 mb-4">
+              <div class="rounded-xl border border-slate-700 bg-slate-800/50 p-2.5 text-center">
+                <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400">Total Vitórias</div>
+                <div class="text-lg font-black text-blue-400">
+                  {{ (store.searchProfile.statsSolo?.wins || 0) + (store.searchProfile.statsFlex?.wins || 0) }}
+                </div>
+              </div>
+              <div class="rounded-xl border border-slate-700 bg-slate-800/50 p-2.5 text-center">
+                <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400">KDA (20 Partidas)</div>
+                <div class="text-lg font-black text-emerald-400">{{ avgKda }}</div>
+              </div>
             </div>
-            <div class="rounded-xl border border-slate-700 bg-slate-800/50 p-3 text-center">
-              <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">KDA (20 Partidas)</div>
-              <div class="text-xl font-black text-emerald-400">{{ avgKda }}</div>
-            </div>
-          </div>
 
-          <div class="text-center">
-            <div class="mb-1 text-xs font-bold text-slate-400">Win Rate: <span class="text-slate-200">{{ winRate.toFixed(1) }}%</span></div>
-            <div class="h-2 w-full overflow-hidden rounded-full bg-slate-800">
-              <div class="h-full bg-blue-500 transition-all duration-1000" :style="`width: ${winRate}%`"></div>
+            <div class="text-center mb-2">
+              <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-0.5">
+                <span>Win Rate SoloQ:</span>
+                <span class="text-slate-200">{{ winRateSolo.toFixed(1) }}%</span>
+              </div>
+              <div class="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+                <div class="h-full bg-cyan-500 transition-all duration-1000" :style="`width: ${winRateSolo}%`"></div>
+              </div>
+            </div>
+
+            <div class="text-center">
+              <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-0.5">
+                <span>Win Rate Flex:</span>
+                <span class="text-slate-200">{{ winRateFlex.toFixed(1) }}%</span>
+              </div>
+              <div class="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+                <div class="h-full bg-purple-500 transition-all duration-1000" :style="`width: ${winRateFlex}%`"></div>
+              </div>
             </div>
           </div>
         </section>
       </div>
 
-        <section v-if="battleCompanions.length" class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
-        <h3 class="mb-4 text-lg font-bold text-slate-100">Companheiros de Batalha</h3>
+      <section v-if="battleCompanions.length" class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+        <h3 class="mb-4 text-lg font-bold text-slate-100">Companheiros de Batalha (Top 10)</h3>
         <div class="flex flex-wrap gap-3">
           <div v-for="(comp, i) in battleCompanions" :key="comp.name" class="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-2.5">
             <span class="text-xs font-black text-slate-500">#{{ i + 1 }}</span>
@@ -155,7 +216,7 @@
               <div v-for="(role, index) in roleStats.slice(0, 3)" :key="role.name" 
                    class="flex w-full max-w-[130px] items-center justify-between rounded bg-slate-900/80 px-2 py-1 border border-slate-800">
                 <div class="flex items-center gap-1.5">
-                  <img :src="getRoleIcon(role.name)" class="h-4 w-4 opacity-80" :alt="role.name" />
+                  <img :src="getRoleIcon(role.name)" class="h-4 w-4 brightness-200 contrast-125 opacity-90" :alt="role.name" />
                   <span class="text-xs font-bold" :class="index === 0 ? 'text-amber-400' : 'text-slate-400'">{{ role.name }}</span>
                 </div>
                 <span class="text-[10px] font-bold text-slate-300">{{ role.percentage }}%</span>
@@ -271,7 +332,9 @@ const filteredMatches = computed(() => {
 });
 
 const hasProfile = computed(() => Boolean(store.searchProfile.puuid));
-const winRate = computed(() => store.searchProfile.stats.winRate || 0);
+
+const winRateSolo = computed(() => store.searchProfile.statsSolo?.winRate || 0);
+const winRateFlex = computed(() => store.searchProfile.statsFlex?.winRate || 0);
 
 const avgKda = computed(() => {
   const matches = store.searchProfile.matches || [];
@@ -286,28 +349,43 @@ const avgKda = computed(() => {
   return kda.toFixed(2);
 });
 
-const rankLabel = computed(() => {
-  const stats = store.searchProfile.stats;
-  return stats?.tier && stats?.tier !== 'UNRANKED'
-    ? `${stats.tier} ${stats.rank || ''}`.trim()
-    : 'UNRANKED';
+const labelSolo = computed(() => {
+  const s = store.searchProfile.statsSolo;
+  return s?.tier && s?.tier !== 'UNRANKED' ? `${s.tier} ${s.rank || ''}`.trim() : 'UNRANKED';
 });
 
-// Busca os ícones metálicos na Riot (Corrigido para a pasta shared-components)
+const labelFlex = computed(() => {
+  const f = store.searchProfile.statsFlex;
+  return f?.tier && f?.tier !== 'UNRANKED' ? `${f.tier} ${f.rank || ''}`.trim() : 'UNRANKED';
+});
+
+// 🚀 CORREÇÃO DEFINITIVA: Mapeia a pasta assets que está DENTRO de 'src/'
+const getLocalRankEmblem = (tier) => {
+  if (!tier || tier === 'UNRANKED') {
+    return 'https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-mini-crests/unranked.png';
+  }
+  
+  // Converte DIAMOND -> Diamond, EMERALD -> Emerald
+  const formattedTier = tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase();
+  const fileName = `Rank=${formattedTier}.png`;
+  
+  // Como o Profile.vue está em 'src/components/', subimos um nível (../) para entrar em 'src/' e depois acessamos 'assets/'
+  // O Vite vai processar e compilar essa imagem perfeitamente!
+  return new URL(`../assets/rank-emblem/${fileName}`, import.meta.url).href;
+};
+
 const getRoleIcon = (roleName) => {
   const map = {
     'Top': 'top',
     'Jungle': 'jungle',
-    'Mid': 'middle',
-    'ADC': 'bottom',
+    'Mid': 'mid',
+    'Adc': 'bottom',
     'Sup': 'utility'
   };
   const position = map[roleName] || 'fill'; 
-  // Caminho correto, testado e à prova de falhas:
-  return `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-shared-components/global/default/position-${position}.png`;
+  return `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-parties/global/default/icon-position-${position}-priority.png`;
 };
 
-// Modificado para ler do filteredMatches em vez do geral
 const roleStats = computed(() => {
   const matches = filteredMatches.value;
   if (!matches.length) return [];
@@ -345,14 +423,21 @@ const topChampions = computed(() => {
 
 const battleCompanions = computed(() => {
   const matches = filteredMatches.value;
-  const myName = store.searchProfile.gameName;
+  const myName = (store.searchProfile.gameName || '').toLowerCase().trim();
   const counts = {};
+  
   for (const match of matches) {
     if (!Array.isArray(match.players)) continue;
-    const me = match.players.find((p) => p?.championName === match.championName);
+    
+    const me = match.players.find((p) => (p?.championName || '').toLowerCase() === (match.championName || '').toLowerCase());
     const myTeamId = me?.teamId;
     if (!myTeamId) continue;
-    const allies = match.players.filter((p) => p?.teamId === myTeamId && p?.gameName !== myName);
+    
+    const allies = match.players.filter((p) => {
+      const pName = (p?.gameName || '').toLowerCase().trim();
+      return p?.teamId === myTeamId && pName !== myName && pName !== '';
+    });
+    
     for (const ally of allies) {
       const key = ally.gameName || 'Desconhecido';
       counts[key] = (counts[key] || 0) + 1;
@@ -452,17 +537,13 @@ async function handleProfileSearch() {
       store.searchProfile.tagLine = tagLine;
       store.searchProfile.profileIconId = data.profileIconId || 29;
       store.searchProfile.summonerLevel = data.summonerLevel || 0;
-      store.searchProfile.stats = {
-        wins: Number(data.stats?.wins || 0),
-        losses: Number(data.stats?.losses || 0),
-        winRate: Number(data.stats?.winRate || 0),
-        tier: data.stats?.tier || 'UNRANKED',
-        rank: data.stats?.rank || '',
-        lp: Number(data.stats?.lp || 0)
-      };
+      
+      store.searchProfile.statsSolo = data.statsSolo || { wins: 0, losses: 0, winRate: 0, tier: "UNRANKED", rank: "", lp: 0 };
+      store.searchProfile.statsFlex = data.statsFlex || { wins: 0, losses: 0, winRate: 0, tier: "UNRANKED", rank: "", lp: 0 };
+      
       store.searchProfile.matches = Array.isArray(data.matches) ? data.matches : [];
-
       store.masteryDashboard.error = null;
+      
       const masteryData = await workerRequest('masteries', { puuid: data.puuid, gameName, tagLine });
 
       const fromStaticChamp = (entry) => {
@@ -487,6 +568,6 @@ async function handleProfileSearch() {
   emit('hide-overlay');
   emit('show-udyr');
   store.searchProfile.loading = false;
-  activeTab.value = 'Todas'; // Reseta a aba ao buscar um novo jogador
+  activeTab.value = 'Todas'; 
 }
 </script>

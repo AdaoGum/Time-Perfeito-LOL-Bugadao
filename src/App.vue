@@ -12,14 +12,23 @@
   <div id="card-ripple" class="pointer-events-none fixed z-[55] hidden" style="width:10px;height:10px;border-radius:50%;transform:translate(-50%,-50%) scale(0)"></div>
 
   <!-- CARD PERSISTENTE DO INVOCADOR (Superior Esquerdo) -->
-  <div v-if="store.searchProfile.puuid" class="fixed left-4 top-20 z-40 w-60 bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-2xl flex items-center gap-3">
-    <img :src="`https://ddragon.leagueoflegends.com/cdn/14.3.1/img/profileicon/${store.searchProfile.profileIconId}.png`" class="w-14 h-14 rounded-lg border border-slate-700 shadow-md" />
-    <div class="overflow-hidden space-y-0.5">
-      <h4 class="text-xs font-black text-white truncate">{{ store.searchProfile.gameName }}<span class="text-slate-500 font-medium">#{{ store.searchProfile.tagLine }}</span></h4>
-      <p class="text-[10px] font-bold text-slate-400">Nível {{ store.searchProfile.summonerLevel }}</p>
-      <span class="inline-block text-[9px] font-black tracking-wide text-cyan-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
-        {{ store.searchProfile.stats.tier }} {{ store.searchProfile.stats.rank || '' }}
-      </span>
+  <div v-if="store.searchProfile.puuid" class="fixed left-4 top-20 z-40 w-64 bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-2xl flex items-center gap-3">
+    <img :src="`https://ddragon.leagueoflegends.com/cdn/14.3.1/img/profileicon/${store.searchProfile.profileIconId}.png`" class="w-14 h-14 rounded-lg border border-slate-700 shadow-md object-cover" />
+    <div class="overflow-hidden flex-1 min-w-0">
+      <h4 class="text-xs font-black text-white truncate">
+        {{ store.searchProfile.gameName }}<span class="text-slate-500 font-medium">#{{ store.searchProfile.tagLine }}</span>
+      </h4>
+      <p class="text-[10px] mt-1 font-bold text-slate-400">Nível {{ store.searchProfile.summonerLevel }}</p>
+      
+      <div class="mt-1 flex flex-wrap gap-1.5">
+        <span class="inline-block text-[9px] font-black tracking-wide text-cyan-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800/80 uppercase">
+          Solo/Duo: {{ store.searchProfile.statsSolo?.tier && store.searchProfile.statsSolo?.tier !== 'UNRANKED' ? `${store.searchProfile.statsSolo.tier} ${store.searchProfile.statsSolo.rank || ''}`.trim() : 'UNRANKED' }}
+        </span>
+        
+        <span class="inline-block text-[9px] font-black tracking-wide text-purple-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800/80 uppercase">
+          Flex: {{ store.searchProfile.statsFlex?.tier && store.searchProfile.statsFlex?.tier !== 'UNRANKED' ? `${store.searchProfile.statsFlex.tier} ${store.searchProfile.statsFlex.rank || ''}`.trim() : 'UNRANKED' }}
+        </span>
+      </div>
     </div>
   </div>
 
