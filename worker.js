@@ -38,13 +38,26 @@ export default {
         const accountData = await accountRes.json();
         const playerPuuid = accountData.puuid;
 
-        const summonerRes = await fetch(`${routingBr}/lol/summoner/v4/summoners/by-puuid/${playerPuuid}?api_key=${API_KEY}`);
+        // Detectar shard/plataforma do jogador para usar o host correto (ex: br1, na1)
+        let platformHost = 'br1';
+        try {
+          const shardRes = await fetch(`${routingAmericas}/riot/account/v1/active-shards/by-game/lol/by-puuid/${playerPuuid}?api_key=${API_KEY}`);
+          if (shardRes.ok) {
+            const shardData = await shardRes.json();
+            // resposta típica: { "platform": "BR1", "shard": "BR1", "timestamp": ... }
+            platformHost = (shardData.platform || shardData.shard || 'br1').toString().toLowerCase();
+          }
+        } catch (e) { /* ignore and fallback to br1 */ }
+
+        const routingPlatform = `https://${platformHost}.api.riotgames.com`;
+
+        const summonerRes = await fetch(`${routingPlatform}/lol/summoner/v4/summoners/by-puuid/${playerPuuid}?api_key=${API_KEY}`);
         const summonerData = summonerRes.ok ? await summonerRes.json() : { profileIconId: 29, summonerLevel: 0, id: "" };
 
         // 3. Buscar Elo (Vitórias, Derrotas, Tier e LP)
         let stats = { wins: 0, losses: 0, winRate: 0, tier: "UNRANKED", rank: "", lp: 0 };
         if (summonerData.id) {
-          const leagueRes = await fetch(`${routingBr}/lol/league/v1/entries/by-summoner/${summonerData.id}?api_key=${API_KEY}`);
+          const leagueRes = await fetch(`${routingPlatform}/lol/league/v4/entries/by-summoner/${summonerData.id}?api_key=${API_KEY}`);
           if (leagueRes.ok) {
             const leagueData = await leagueRes.json();
             const soloQueue = leagueData.find(q => q.queueType === "RANKED_SOLO_5x5") || leagueData[0];
@@ -56,6 +69,9 @@ export default {
               stats.rank = soloQueue.rank; // Ex: IV
               stats.lp = soloQueue.leaguePoints; // Ex: 75
             }
+          } else {
+            // anotar status para depuração (não inclui body com potencialmente sensível)
+            console.warn('leagueRes not ok', leagueRes.status);
           }
         }
 

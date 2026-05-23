@@ -11,6 +11,18 @@
   <!-- Card Ripple -->
   <div id="card-ripple" class="pointer-events-none fixed z-[55] hidden" style="width:10px;height:10px;border-radius:50%;transform:translate(-50%,-50%) scale(0)"></div>
 
+  <!-- CARD PERSISTENTE DO INVOCADOR (Superior Esquerdo) -->
+  <div v-if="store.searchProfile.puuid" class="fixed left-4 top-20 z-40 w-60 bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-2xl flex items-center gap-3">
+    <img :src="`https://ddragon.leagueoflegends.com/cdn/14.3.1/img/profileicon/${store.searchProfile.profileIconId}.png`" class="w-14 h-14 rounded-lg border border-slate-700 shadow-md" />
+    <div class="overflow-hidden space-y-0.5">
+      <h4 class="text-xs font-black text-white truncate">{{ store.searchProfile.gameName }}<span class="text-slate-500 font-medium">#{{ store.searchProfile.tagLine }}</span></h4>
+      <p class="text-[10px] font-bold text-slate-400">Nível {{ store.searchProfile.summonerLevel }}</p>
+      <span class="inline-block text-[9px] font-black tracking-wide text-cyan-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
+        {{ store.searchProfile.stats.tier }} {{ store.searchProfile.stats.rank || '' }}
+      </span>
+    </div>
+  </div>
+
   <!-- Telemetry Widget -->
   <div class="fixed right-4 top-20 z-40 w-56 rounded-xl border border-slate-700 bg-slate-900/90 p-3 shadow-2xl backdrop-blur-sm transition-all">
     <div class="mb-2 border-b border-slate-700/50 pb-2 text-center text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -60,6 +72,16 @@
       <h1 class="text-base font-extrabold tracking-tight sm:text-lg md:text-xl">
         <span class="bg-gradient-to-r from-lime-300 via-yellow-300 to-orange-500 bg-clip-text text-transparent">UGA BUGA Infos + Caverna dos Monos + Tribo Perfeita</span>
       </h1>
+      
+      <!-- BUSCA INTEGRADA NA TOP BAR -->
+      <div v-if="store.currentTab !== 'home'" class="hidden md:block w-64">
+        <SearchBar 
+          buttonText="" 
+          @show-overlay="handleShowOverlay"
+          @hide-overlay="handleHideOverlay"
+          @show-udyr="handleShowUdyr"
+        />
+      </div>
       <nav class="flex flex-wrap gap-2">
         <button
           v-for="tab in tabs"
@@ -107,6 +129,7 @@ import Home from './components/Home.vue';
 import Profile from './components/Profile.vue';
 import Mastery from './components/Mastery.vue';
 import Synergy from './components/Synergy.vue';
+import SearchBar from './components/SearchBar.vue';
 
 const store = state;
 
@@ -117,10 +140,10 @@ const showOverlay = ref(false);
 const countdown = ref(3);
 
 const tabs = [
-  { id: 'home', label: '🛡️ TEMPLO' },
-  { id: 'perfil', label: '⚔️ CAÇADA' },
-  { id: 'maestria', label: '🌋 CAVERNA' },
-  { id: 'sinergia', label: '👥 TRIBO' }
+  { id: 'home', label: 'TEMPLO' },
+  { id: 'perfil', label: 'CAÇADA' },
+  { id: 'maestria', label: 'CAVERNA' },
+  { id: 'sinergia', label: 'TRIBO' }
 ];
 
 function switchTab(id) {

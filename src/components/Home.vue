@@ -1,21 +1,18 @@
 <template>
-  <div class="relative mx-auto w-full overflow-hidden rounded-3xl border border-slate-800 min-h-[80vh] p-4 sm:p-8">
-
+<div 
+    class="relative mx-auto w-full overflow-hidden rounded-3xl min-h-[80vh] p-4 sm:p-8 border transition-colors duration-500"
+    :class="activeBg !== 0 ? 'border-slate-800' : 'border-transparent'"
+  >
     <div
       class="absolute inset-0 bg-cover bg-center transition-[opacity] duration-500"
-      :style="{ opacity: activeBg === 0 ? '0.42' : '0', backgroundImage: `url('${UDYR_BASE}Udyr_0.jpg')` }"
+      :style="{ opacity: activeBg === 1 ? '0.6' : '0', backgroundImage: `url('${UDYR_BASE}Udyr_0.jpg')` }"
+    ></div><div
+      class="absolute inset-0 bg-cover bg-center transition-[opacity] duration-500"
+      :style="{ opacity: activeBg === 2 ? '0.6' : '0', backgroundImage: `url('${UDYR_BASE}Udyr_3.jpg')` }"
     ></div>
     <div
       class="absolute inset-0 bg-cover bg-center transition-[opacity] duration-500"
-      :style="{ opacity: activeBg === 1 ? '0.48' : '0', backgroundImage: `url('${UDYR_BASE}Udyr_2.jpg')` }"
-    ></div>
-    <div
-      class="absolute inset-0 bg-cover bg-center transition-[opacity] duration-500"
-      :style="{ opacity: activeBg === 2 ? '0.48' : '0', backgroundImage: `url('${UDYR_BASE}Udyr_3.jpg')` }"
-    ></div>
-    <div
-      class="absolute inset-0 bg-cover bg-center transition-[opacity] duration-500"
-      :style="{ opacity: activeBg === 3 ? '0.48' : '0', backgroundImage: `url('${UDYR_BASE}Udyr_6.jpg')` }"
+      :style="{ opacity: activeBg === 3 ? '0.6' : '0', backgroundImage: `url('${UDYR_BASE}Udyr_6.jpg')` }"
     ></div>
     <div class="absolute inset-0 bg-slate-950/72"></div>
 
@@ -23,6 +20,18 @@
       <h2 class="mb-10 text-center text-3xl font-black tracking-wide text-slate-100 drop-shadow-[0_2px_16px_rgba(6,182,212,0.5)] sm:text-5xl">
         <span class="bg-gradient-to-r from-lime-300 via-yellow-300 to-orange-500 bg-clip-text text-transparent">Selecione Seu Caminho Ancestral</span>
       </h2>
+
+      <!-- CAIXA DE BUSCA NO CENTRO DA HOME -->
+      <div class="mb-10 w-full max-w-md bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-2xl">
+        <SearchBar 
+          buttonText="Começar Jornada" 
+          @show-overlay="c => $emit('show-overlay', c)"
+          @hide-overlay="$emit('hide-overlay')"
+          @show-udyr="$emit('show-udyr')"
+        />
+      </div>
+
+      <!-- CAMINHOS DE NAVEGAÇÃO -->
 
       <div class="grid w-full max-w-[120rem] gap-6 lg:gap-10 md:grid-cols-3 px-4">
 
@@ -67,7 +76,6 @@
           <p class="mt-6 text-base font-semibold text-slate-200">Monte sua composição com sinergia</p>
           <p class="mt-2 text-xs uppercase tracking-widest text-lime-300/80">Planejador · Sinergia · Conforto</p>
         </button>
-
       </div>
     </div>
   </div>
@@ -76,6 +84,11 @@
 <script setup>
 import { ref } from 'vue';
 import { state } from '../store.js';
+import SearchBar from './SearchBar.vue';
+
+const store = state;
+defineEmits(['show-overlay', 'hide-overlay', 'show-udyr']);
+
 
 const UDYR_BASE = 'https://ddragon.leagueoflegends.com/cdn/img/champion/splash/';
 
