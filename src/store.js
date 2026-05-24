@@ -1,9 +1,6 @@
 import { reactive } from 'vue';
 
 export const state = reactive({
-  // Controle de navegação global das abas
-  currentTab: 'home',
-
   // Monitor de Telemetria da API da Riot (Evita o erro de undefined no App.vue)
   telemetry: {
     timestamps: []

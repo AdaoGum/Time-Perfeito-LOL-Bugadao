@@ -37,7 +37,7 @@
 
         <button
           type="button"
-          @click="navigate('perfil')"
+          @click="navigate('/profile')"
           @mouseenter="activeBg = 1"
           @mouseleave="activeBg = 0"
           class="group relative min-h-[320px] w-full overflow-hidden rounded-2xl text-center border border-cyan-500/40 bg-gradient-to-br from-blue-900/80 via-cyan-800/40 to-slate-950 p-8 sm:p-10 text-left shadow-2xl transition duration-300 hover:scale-[1.03] hover:shadow-[0_0_40px_rgba(6,182,212,0.35)]"
@@ -51,7 +51,7 @@
 
         <button
           type="button"
-          @click="navigate('maestria')"
+          @click="navigate('/mastery')"
           @mouseenter="activeBg = 2"
           @mouseleave="activeBg = 0"
           class="group relative min-h-[320px] w-full overflow-hidden rounded-2xl text-center border border-amber-700/50 bg-gradient-to-br from-red-950/90 via-orange-900/40 to-slate-950 p-8 sm:p-10 text-left shadow-2xl transition duration-300 hover:scale-[1.03] hover:shadow-[0_0_40px_rgba(251,146,60,0.3)]"
@@ -65,7 +65,7 @@
 
         <button
           type="button"
-          @click="navigate('sinergia')"
+          @click="navigate('/synergy')"
           @mouseenter="activeBg = 3"
           @mouseleave="activeBg = 0"
           class="group relative min-h-[320px] w-full overflow-hidden rounded-2xl text-center border border-lime-500/40 bg-gradient-to-br from-emerald-900/80 via-cyan-900/40 to-slate-950 p-8 sm:p-10 text-left shadow-2xl transition duration-300 hover:scale-[1.03] hover:shadow-[0_0_40px_rgba(132,204,22,0.3)]"
@@ -83,10 +83,10 @@
 
 <script setup>
 import { ref } from 'vue';
-import { state } from '../store.js';
+import { useRouter } from 'vue-router';
 import SearchBar from './SearchBar.vue';
 
-const store = state;
+const router = useRouter();
 defineEmits(['show-overlay', 'hide-overlay', 'show-udyr']);
 
 
@@ -94,8 +94,7 @@ const UDYR_BASE = 'https://ddragon.leagueoflegends.com/cdn/img/champion/splash/'
 
 const activeBg = ref(0);
 
-function navigate(tab) {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-  state.currentTab = tab;
+function navigate(path) {
+  router.push(path);
 }
 </script>

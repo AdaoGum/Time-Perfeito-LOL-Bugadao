@@ -1,9 +1,9 @@
 <template>
   <!-- Background ancestral -->
   <div class="fixed inset-0 z-0 pointer-events-none select-none" >
-    <img src="https://ddragon.leagueoflegends.com/cdn/img/champion/loading/Udyr_0.jpg" class="absolute inset-0 h-full w-full object-cover object-top opacity-0 transition-opacity duration-1000" />
-    <img src="https://ddragon.leagueoflegends.com/cdn/img/champion/loading/Udyr_3.jpg" class="absolute inset-0 h-full w-full object-cover object-top opacity-0 transition-opacity duration-1000" />
-    <img src="https://ddragon.leagueoflegends.com/cdn/img/champion/loading/Udyr_6.jpg" class="absolute inset-0 h-full w-full object-cover object-top opacity-0 transition-opacity duration-1000" />
+    <img src="https://ddragon.leagueoflegends.com/cdn/img/champion/loading/Udyr_0.jpg" class="absolute inset-0 h-full w-full object-cover object-top transition-opacity duration-1000" :class="route.path === '/profile' ? 'opacity-60' : 'opacity-0'" />
+    <img src="https://ddragon.leagueoflegends.com/cdn/img/champion/loading/Udyr_3.jpg" class="absolute inset-0 h-full w-full object-cover object-top transition-opacity duration-1000" :class="route.path === '/mastery' ? 'opacity-60' : 'opacity-0'" />
+    <img src="https://ddragon.leagueoflegends.com/cdn/img/champion/loading/Udyr_6.jpg" class="absolute inset-0 h-full w-full object-cover object-top transition-opacity duration-1000" :class="route.path === '/synergy' ? 'opacity-60' : 'opacity-0'" />
     <div class="absolute inset-0 bg-slate-950/72"></div>  
   </div>
 
@@ -92,7 +92,7 @@
       </h1>
       
       <!-- BUSCA INTEGRADA NA TOP BAR -->
-      <div v-if="store.currentTab !== 'home'" class="hidden md:block w-64">
+      <div v-if="route.path !== '/'" class="hidden md:block w-64">
         <SearchBar 
           buttonText="" 
           @show-overlay="handleShowOverlay"
@@ -105,9 +105,9 @@
           v-for="tab in tabs"
           :key="tab.id"
           type="button"
-          @click="switchTab(tab.id)"
+          @click="router.push(tab.path)"
           class="px-3 py-1.5 font-cave text-xs sm:text-sm transition-all border-b-4 cursor-pointer"
-          :class="store.currentTab === tab.id
+          :class="route.path === tab.path
             ? 'border-orange-500 text-orange-500 scale-105 font-bold'
             : 'border-stone-900 text-stone-600 hover:text-stone-400'"
         >{{ tab.label }}</button>
@@ -117,19 +117,16 @@
 
   <!-- Main -->
   <main class="mx-auto w-full max-w-7xl px-4 pb-16 pt-24 md:px-6">
-    <Home v-if="store.currentTab === 'home'" />
-    <Profile
-      v-else-if="store.currentTab === 'perfil'"
-      @show-overlay="handleShowOverlay"
-      @hide-overlay="handleHideOverlay"
-      @show-udyr="handleShowUdyr"
-    />
-    <Mastery
-      v-else-if="store.currentTab === 'maestria'"
-      @show-tooltip="handleShowTooltip"
-      @hide-tooltip="handleHideTooltip"
-    />
-    <Synergy v-else-if="store.currentTab === 'sinergia'" />
+    <router-view v-slot="{ Component }">
+      <component
+        :is="Component"
+        @show-overlay="handleShowOverlay"
+        @hide-overlay="handleHideOverlay"
+        @show-udyr="handleShowUdyr"
+        @show-tooltip="handleShowTooltip"
+        @hide-tooltip="handleHideTooltip"
+      />
+    </router-view>
   </main>
 
   <!-- Mastery Tooltip -->
@@ -141,15 +138,14 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { state } from './store.js';
 import { profileIconImage, DDRAGON_VERSION } from './utils.js';
-import Home from './components/Home.vue';
-import Profile from './components/Profile.vue';
-import Mastery from './components/Mastery.vue';
-import Synergy from './components/Synergy.vue';
 import SearchBar from './components/SearchBar.vue';
 
 const store = state;
+const route = useRoute();
+const router = useRouter();
 
 const udyrRunner = ref(null);
 const tooltipEl = ref(null);
@@ -158,16 +154,11 @@ const showOverlay = ref(false);
 const countdown = ref(3);
 
 const tabs = [
-  { id: 'home', label: 'TEMPLO' },
-  { id: 'perfil', label: 'CAÇADA' },
-  { id: 'maestria', label: 'CAVERNA' },
-  { id: 'sinergia', label: 'TRIBO' }
+  { id: 'home', path: '/', label: 'TEMPLO' },
+  { id: 'perfil', path: '/profile', label: 'CAÇADA' },
+  { id: 'maestria', path: '/mastery', label: 'CAVERNA' },
+  { id: 'sinergia', path: '/synergy', label: 'TRIBO' },
 ];
-
-function switchTab(id) {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-  store.currentTab = id;
-}
 
 // Overlay / countdown handlers
 function handleShowOverlay(count = 3) {
