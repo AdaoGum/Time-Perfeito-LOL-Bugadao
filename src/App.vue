@@ -1,6 +1,11 @@
 <template>
   <!-- Background ancestral -->
-  <div class="fixed inset-0 z-0 pointer-events-none select-none" style="background-image:url('./assets/caverna-bg.jpg');background-size:cover;background-position:center;opacity:0.09;filter:sepia(0.5) brightness(0.55) saturate(1.2);"></div>
+  <div class="fixed inset-0 z-0 pointer-events-none select-none" >
+    <img src="https://ddragon.leagueoflegends.com/cdn/img/champion/loading/Udyr_0.jpg" class="absolute inset-0 h-full w-full object-cover object-top opacity-0 transition-opacity duration-1000" />
+    <img src="https://ddragon.leagueoflegends.com/cdn/img/champion/loading/Udyr_3.jpg" class="absolute inset-0 h-full w-full object-cover object-top opacity-0 transition-opacity duration-1000" />
+    <img src="https://ddragon.leagueoflegends.com/cdn/img/champion/loading/Udyr_6.jpg" class="absolute inset-0 h-full w-full object-cover object-top opacity-0 transition-opacity duration-1000" />
+    <div class="absolute inset-0 bg-slate-950/72"></div>  
+  </div>
 
   <!-- Udyr Runner -->
   <div ref="udyrRunner" class="pointer-events-none fixed bottom-0 z-[60] hidden h-64 w-40 overflow-hidden" style="left:-260px">
@@ -13,7 +18,11 @@
 
   <!-- CARD PERSISTENTE DO INVOCADOR (Superior Esquerdo) -->
   <div v-if="store.searchProfile.puuid" class="fixed left-4 top-20 z-40 w-64 bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-2xl flex items-center gap-3">
-    <img :src="`https://ddragon.leagueoflegends.com/cdn/14.3.1/img/profileicon/${store.searchProfile.profileIconId}.png`" class="w-14 h-14 rounded-lg border border-slate-700 shadow-md object-cover" />
+    <img
+      class="w-14 h-14 rounded-lg border border-slate-700 shadow-md object-cover"
+      :src="profileIconImage(store.searchProfile.profileIconId)"
+      @error="(e) => e.target.src = profileIconImage(29)"
+      />
     <div class="overflow-hidden flex-1 min-w-0">
       <h4 class="text-xs font-black text-white truncate">
         {{ store.searchProfile.gameName }}<span class="text-slate-500 font-medium">#{{ store.searchProfile.tagLine }}</span>
@@ -133,7 +142,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { state } from './store.js';
-import { DDRAGON_VERSION } from './utils.js';
+import { profileIconImage, DDRAGON_VERSION } from './utils.js';
 import Home from './components/Home.vue';
 import Profile from './components/Profile.vue';
 import Mastery from './components/Mastery.vue';

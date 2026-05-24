@@ -24,7 +24,7 @@ export default {
 
     if (requestOrigin && !allowedOrigins.includes(requestOrigin)) {
       return new Response(
-        JSON.stringify({ error: "Acesso negado. Esta origem não está autorizada a consumir a API do UgaBuga." }), 
+        JSON.stringify({ error: "Acesso negado. Esta origem não está autorizada a consuming a API do UgaBuga." }), 
         { status: 403, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "https://ugabugatimeperfeito.bugadao.com" } }
       );
     }
@@ -52,9 +52,9 @@ export default {
       puuid = url.searchParams.get("puuid");
     }
 
-    // ----------------------------------------------------------------------
+    // ======================================================================
     // 3. VALIDAÇÃO DA CHAVE DA RIOT
-    // ----------------------------------------------------------------------
+    // ======================================================================
     const API_KEY = env.RIOT_API_KEY;
     if (!API_KEY) {
       return new Response(JSON.stringify({ error: "Chave RIOT_API_KEY ausente nas variáveis de ambiente." }), { status: 401, headers: corsHeaders });
@@ -150,12 +150,14 @@ export default {
             const participant = info.participants.find(p => p.puuid === playerPuuid);
             if (!participant) return null;
 
+            // Mapeia os dados estendidos das equipes (Com Tag e Rota individual)
             const teams = info.participants.map(p => ({
               gameName: p.riotIdGameName || p.summonerName,
               tagLine: p.riotIdTagline,
               championName: p.championName,
               teamId: p.teamId,
-              kills: p.kills
+              kills: p.kills,
+              role: p.teamPosition
             }));
 
             return {
@@ -164,6 +166,7 @@ export default {
               championName: participant.championName,
               teamPosition: participant.teamPosition,
               gameDuration: info.gameDuration,
+              gameStartTimestamp: info.gameStartTimestamp,
               kills: participant.kills,
               deaths: participant.deaths,
               assists: participant.assists,
@@ -201,7 +204,7 @@ export default {
     }
 
     // ======================================================================
-    // ROTA: MAESTRIAS
+    // Rota: Maestrias
     // ======================================================================
     if (action === "masteries") {
       let targetPuuid = puuid;
@@ -220,7 +223,6 @@ export default {
         }
       } catch (e) { }
 
-      // 🛠️ LINHA CORRIGIDA COM SUCESSO AQUI:
       const masteryRes = await fetch(`https://${platformHost}.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/${targetPuuid}?api_key=${API_KEY}`);
       if (!masteryRes.ok) return new Response(JSON.stringify({ error: "Erro Maestrias." }), { status: masteryRes.status, headers: corsHeaders });
       const rawMasteries = await masteryRes.json();

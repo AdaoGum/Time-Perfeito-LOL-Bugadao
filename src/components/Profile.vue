@@ -72,8 +72,8 @@
           <div class="flex flex-col sm:flex-row items-center gap-5 rounded-xl border border-slate-700/50 bg-slate-950/80 p-5 relative z-10">
             <div class="relative flex-shrink-0">
               <img 
-                :src="profileIconImage(store.searchProfile.profileIconId)" 
-                @error="(e) => e.target.src = 'https://ddragon.leagueoflegends.com/cdn/14.22.1/img/profileicon/29.png'"
+                :src="profileIconImage(store.searchProfile.profileIconId)"
+                @error="(e) => e.target.src = profileIconImage(29)"
                 class="h-24 w-24 rounded-2xl border-4 border-slate-800 shadow-2xl object-cover"
               >
               <span class="absolute -bottom-2 -right-2 bg-blue-600 border-2 border-slate-800 rounded-full px-2.5 py-0.5 text-[10px] font-black text-white shadow-lg">
@@ -112,7 +112,7 @@
           </div>
         </section>
 
-<section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl flex flex-col justify-between">
+        <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl flex flex-col justify-between">
           <h3 class="mb-3 text-center font-bold text-slate-300">Resumo Competitivo</h3>
           
           <div class="space-y-4">
@@ -251,7 +251,8 @@
             <div>
               <p class="font-black" :class="match.win ? 'text-blue-400' : 'text-red-400'">{{ match.win ? 'VITÓRIA' : 'DERROTA' }}</p>
               <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">{{ match.queueType || 'Outro Modo' }}</p>
-              <p class="text-xs font-semibold text-slate-300">{{ formatDuration(match.gameDuration) }}</p>
+              <p class="text-[11px] font-medium text-slate-500 mt-0.5">{{ formatGameDate(match.gameStartTimestamp) }}</p>
+              <p class="text-xs font-semibold text-slate-300 mt-0.5">{{ formatDuration(match.gameDuration) }}</p>
               <div v-if="matchBadges(match).length" class="mt-1 flex flex-wrap gap-1">
                 <span v-for="badge in matchBadges(match)" :key="badge.label"
                   class="rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
@@ -272,24 +273,37 @@
                 <div v-else class="h-7 w-7 rounded border border-slate-700 bg-slate-800/30"></div>
               </template>
             </div>
+            
             <div class="grid grid-cols-2 gap-1.5">
               <div class="rounded bg-slate-950/40 p-1.5">
                 <div class="space-y-1">
-                  <div v-for="p in alliedPlayers(match)" :key="p?.gameName" class="flex items-center gap-1.5 overflow-hidden">
-                    <img class="h-4 w-4 rounded-sm border border-slate-700 flex-shrink-0" :src="championImage(p?.championName || 'Aatrox')" loading="lazy" />
-                    <span class="truncate text-[10px] font-semibold text-blue-200/80">{{ p?.gameName || 'Desconhecido' }}</span>
+                  <div v-for="p in alliedPlayers(match)" :key="p?.gameName" class="flex items-center justify-between gap-1 overflow-hidden">
+                    <div class="flex items-center gap-1 min-w-0 flex-1">
+                      <img class="h-4 w-4 rounded-sm border border-slate-700 flex-shrink-0" :src="championImage(p?.championName || 'Aatrox')" loading="lazy" />
+                      <span class="truncate text-[10px] font-semibold text-blue-200/80" :title="`${p?.gameName || 'Desconhecido'}#${p?.tagLine || 'BR1'}`">
+                        {{ p?.gameName || 'Desconhecido' }}<span class="text-slate-500 font-medium text-[9px]">#{{ p?.tagLine || 'BR1' }}</span>
+                      </span>
+                    </div>
+                    <img v-if="p?.role && p.role !== 'Invalid'" :src="getMiniRoleIcon(p.role)" class="h-3 w-3 brightness-150 flex-shrink-0" :title="p.role" />
                   </div>
                 </div>
               </div>
+              
               <div class="rounded bg-slate-950/40 p-1.5">
                 <div class="space-y-1">
-                  <div v-for="p in enemyPlayers(match)" :key="p?.gameName" class="flex items-center gap-1.5 overflow-hidden">
-                    <img class="h-4 w-4 rounded-sm border border-slate-700 flex-shrink-0" :src="championImage(p?.championName || 'Aatrox')" loading="lazy" />
-                    <span class="truncate text-[10px] font-semibold text-red-200/80">{{ p?.gameName || 'Desconhecido' }}</span>
+                  <div v-for="p in enemyPlayers(match)" :key="p?.gameName" class="flex items-center justify-between gap-1 overflow-hidden">
+                    <div class="flex items-center gap-1 min-w-0 flex-1">
+                      <img class="h-4 w-4 rounded-sm border border-slate-700 flex-shrink-0" :src="championImage(p?.championName || 'Aatrox')" loading="lazy" />
+                      <span class="truncate text-[10px] font-semibold text-red-200/80">
+                        {{ p?.gameName || 'Desconhecido' }}<span class="text-slate-500 font-medium text-[9px]">#{{ p?.tagLine || 'BR1' }}</span>
+                      </span>
+                    </div>
+                    <img v-if="p?.role && p.role !== 'Invalid'" :src="getMiniRoleIcon(p.role)" class="h-3 w-3 brightness-150 flex-shrink-0" :title="p.role" />
                   </div>
                 </div>
               </div>
             </div>
+            
           </article>
         </div>
       </section>
@@ -312,6 +326,27 @@ const summonerInput = ref(
     ? `${store.searchProfile.gameName}#${store.searchProfile.tagLine}`
     : ''
 );
+
+// 🚀 NOVA FUNÇÃO: Converte o timestamp da Riot em uma string de data relativa amigável
+function formatGameDate(timestamp) {
+  if (!timestamp) return 'Data desconhecida';
+  const now = Date.now();
+  const diff = now - timestamp;
+  
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+
+  if (minutes < 60) return `Há ${minutes} min`;
+  if (hours < 24) return `Há ${hours} horas`;
+  return `Há ${days} dias`;
+}
+
+function getMiniRoleIcon(position) {
+  const map = { TOP: 'top', JUNGLE: 'jungle', MIDDLE: 'middle', BOTTOM: 'bottom', UTILITY: 'utility' };
+  const role = map[position] || 'fill';
+  return `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-clash/global/default/assets/images/position-selector/positions/icon-position-${role}.png`;
+}
 
 // Lógica de Abas
 const activeTab = ref('Todas');
@@ -359,18 +394,14 @@ const labelFlex = computed(() => {
   return f?.tier && f?.tier !== 'UNRANKED' ? `${f.tier} ${f.rank || ''}`.trim() : 'UNRANKED';
 });
 
-// 🚀 CORREÇÃO DEFINITIVA: Mapeia a pasta assets que está DENTRO de 'src/'
 const getLocalRankEmblem = (tier) => {
   if (!tier || tier === 'UNRANKED') {
     return 'https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-mini-crests/unranked.png';
   }
   
-  // Converte DIAMOND -> Diamond, EMERALD -> Emerald
   const formattedTier = tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase();
   const fileName = `Rank=${formattedTier}.png`;
   
-  // Como o Profile.vue está em 'src/components/', subimos um nível (../) para entrar em 'src/' e depois acessamos 'assets/'
-  // O Vite vai processar e compilar essa imagem perfeitamente!
   return new URL(`../assets/rank-emblem/${fileName}`, import.meta.url).href;
 };
 
@@ -378,7 +409,7 @@ const getRoleIcon = (roleName) => {
   const map = {
     'Top': 'top',
     'Jungle': 'jungle',
-    'Mid': 'mid',
+    'Mid': 'middle',
     'Adc': 'bottom',
     'Sup': 'utility'
   };
