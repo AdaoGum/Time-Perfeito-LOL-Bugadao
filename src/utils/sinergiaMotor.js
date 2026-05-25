@@ -33,7 +33,8 @@ export const FALLBACK_TAGS = {
   utility: 2,
   peel: 2,
   waveclear: 2,
-  damageType: 'AD'
+  damageType: 'AD',
+  roles: []
 };
 
 const DIMENSIONS = ['engage', 'poke', 'frontline', 'burst', 'disengage', 'utility', 'peel', 'waveclear'];
@@ -65,6 +66,14 @@ function toMetric(value, fallback = 0) {
   const parsed = Number(String(value || '').trim().replace(',', '.'));
   if (!Number.isFinite(parsed)) return fallback;
   return clamp(parsed, 0, 5);
+}
+
+function normalizeRoles(value) {
+  return String(value || '')
+    .split(';')
+    .map((role) => role.trim().toUpperCase())
+    .filter(Boolean)
+    .filter((role, index, list) => list.indexOf(role) === index);
 }
 
 function parseSynergyCsv(csvText) {
@@ -103,7 +112,8 @@ function parseSynergyCsv(csvText) {
       disengage: toMetric(record.disengage, 2),
       utility: toMetric(record.utility, 2),
       peel: toMetric(record.peel, 2),
-      waveclear: toMetric(record.waveclear, 2)
+      waveclear: toMetric(record.waveclear, 2),
+      roles: normalizeRoles(record.roles)
     };
   }
 
@@ -155,7 +165,12 @@ function fallbackFromTags(championTags = []) {
 
 export function getChampionMetrics(championName, championTags = []) {
   const metricsFromSheet = CHAMP_TAGS[championName];
-  if (metricsFromSheet) return { ...metricsFromSheet };
+  if (metricsFromSheet) {
+    return {
+      ...metricsFromSheet,
+      roles: Array.isArray(metricsFromSheet.roles) ? [...metricsFromSheet.roles] : []
+    };
+  }
   return fallbackFromTags(championTags);
 }
 

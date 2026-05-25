@@ -238,13 +238,20 @@
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Saguão de Torneio 5v5</p>
-          <p class="text-[11px] text-slate-500">Arraste jogadores entre Time Azul, Time Vermelho e Reserva.</p>
+          <p class="text-[11px] text-slate-500">Use os blocos [+] para adicionar jogadores, buscar perfil ou preencher anônimo com elo manual.</p>
         </div>
-        <button
-          type="button"
-          @click="drawBalancedTeams"
-          class="rounded-lg bg-gradient-to-r from-cyan-600 to-blue-500 px-4 py-2 text-xs font-black uppercase tracking-wider text-white shadow-lg hover:brightness-110"
-        >FESTA DA FOGUEIRA (Sortear)</button>
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            @click="drawBalancedTeams"
+            class="rounded-lg bg-gradient-to-r from-cyan-600 to-blue-500 px-4 py-2 text-xs font-black uppercase tracking-wider text-white shadow-lg hover:brightness-110"
+          >Festa da Fogueira (Sorteio Qualificado)</button>
+          <button
+            type="button"
+            @click="drawRandomTeams"
+            class="rounded-lg bg-gradient-to-r from-orange-600 to-red-500 px-4 py-2 text-xs font-black uppercase tracking-wider text-white shadow-lg hover:brightness-110"
+          >Fogueira Maluca (Sorteio Raiz)</button>
+        </div>
       </div>
 
       <div class="grid gap-4 xl:grid-cols-[1fr_auto_1fr]">
@@ -256,6 +263,7 @@
                 :slot="slot"
                 @search="searchCustomSlot"
                 @clear="clearCustomSlot"
+                @anonymous="setCustomAnonymous"
                 @dragstart="onDragStart"
                 @drop="onDropToSlot"
               />
@@ -273,6 +281,7 @@
                 :slot="slot"
                 @search="searchCustomSlot"
                 @clear="clearCustomSlot"
+                @anonymous="setCustomAnonymous"
                 @dragstart="onDragStart"
                 @drop="onDropToSlot"
               />
@@ -289,6 +298,7 @@
               :slot="slot"
               @search="searchCustomSlot"
               @clear="clearCustomSlot"
+              @anonymous="setCustomAnonymous"
               @dragstart="onDragStart"
               @drop="onDropToSlot"
             />
@@ -366,6 +376,7 @@
 <script setup>
 import { computed, reactive, ref } from 'vue';
 import SearchBar from './SearchBar.vue';
+import CustomSlotCard from './CustomSlotCard.vue';
 import { state } from '../store.js';
 import { workerRequest } from '../api.js';
 import { championImage, profileIconImage, getChampionIdFromName, DDRAGON_VERSION } from '../utils.js';
@@ -605,6 +616,13 @@ function championTags(name) {
   return champ?.tags || [];
 }
 
+function candidateMatchesSlotRole(championName, slotRole, tags = []) {
+  const metrics = getChampionMetrics(championName, tags);
+  const rolesFromSheet = Array.isArray(metrics?.roles) ? metrics.roles : [];
+  if (rolesFromSheet.length) return rolesFromSheet.includes(String(slotRole || '').toUpperCase());
+  return roleFitScore(slotRole, tags) >= 0.45;
+}
+
 function buildCandidatePool(slot, pickedChampions) {
   const pickedSet = new Set(pickedChampions || []);
   const list = [];
@@ -612,10 +630,13 @@ function buildCandidatePool(slot, pickedChampions) {
   if (slot.type === 'real' && (slot.masteries || []).length) {
     for (const entry of slot.masteries.slice(0, 30)) {
       if (!entry?.championName || pickedSet.has(entry.championName)) continue;
+      const tags = championTags(entry.championName);
+      if (!candidateMatchesSlotRole(entry.championName, slot.role, tags)) continue;
       list.push({
         name: entry.championName,
         masteryPoints: Number(entry.championPoints || 0),
-        tags: championTags(entry.championName),
+        tags,
+        metrics: getChampionMetrics(entry.championName, tags),
         usedFallback: false
       });
     }
@@ -627,10 +648,11 @@ function buildCandidatePool(slot, pickedChampions) {
         name: champ.name,
         masteryPoints: 0,
         tags: champ.tags || [],
+        metrics: getChampionMetrics(champ.name, champ.tags || []),
         usedFallback: true
       }))
       .filter((candidate) => !pickedSet.has(candidate.name))
-      .filter((candidate) => roleFitScore(slot.role, candidate.tags) >= 0.45)
+      .filter((candidate) => candidateMatchesSlotRole(candidate.name, slot.role, candidate.tags))
       .sort((a, b) => a.name.localeCompare(b.name));
 
     return fallback;
@@ -858,6 +880,20 @@ function clearCustomSlot(slotId) {
   customSlots[idx] = createCustomSlot(slotId);
 }
 
+function setCustomAnonymous(slotId) {
+  const slot = customSlots.find((item) => item.id === slotId);
+  if (!slot) return;
+  slot.showSearch = false;
+  slot.loading = false;
+  slot.error = null;
+  slot.gameName = 'Invocador Anonimo';
+  slot.tagLine = 'OFFLINE';
+  slot.profileIconId = 29;
+  slot.manualTier = slot.manualTier || 'UNRANKED';
+  slot.manualRank = slot.manualRank || 'IV';
+  slot.manualLp = slot.manualLp || '0';
+}
+
 function onDragStart(slotId) {
   draggedSlotId.value = slotId;
 }
@@ -963,6 +999,31 @@ function drawBalancedTeams() {
   }
 }
 
+function drawRandomTeams() {
+  rerollSeed.value += 1;
+  const allFilled = customSlots.filter((slot) => slot.gameName);
+  if (allFilled.length < 2) return;
+
+  const shuffled = [...allFilled]
+    .map((slot) => ({ slot, seed: Math.random() + rerollSeed.value * 0.01 }))
+    .sort((a, b) => a.seed - b.seed)
+    .map((item) => item.slot);
+
+  const blueFinal = shuffled.slice(0, 5);
+  const redFinal = shuffled.slice(5, 10);
+  const reserveFinal = shuffled.slice(10, 15);
+
+  const ordered = [...blueFinal, ...redFinal, ...reserveFinal];
+  while (ordered.length < 15) {
+    ordered.push(createCustomSlot(ordered.length + 1));
+  }
+
+  for (let i = 0; i < 15; i += 1) {
+    const base = ordered[i] || createCustomSlot(i + 1);
+    customSlots[i] = { ...createCustomSlot(i + 1), ...base, id: i + 1 };
+  }
+}
+
 function fallbackChampionUrl() {
   const fallbackId = encodeURIComponent(getChampionIdFromName('Aatrox'));
   return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${fallbackId}.png`;
@@ -973,90 +1034,4 @@ function onChampionImageError(event) {
   if (!target) return;
   target.src = fallbackChampionUrl();
 }
-
-const CustomSlotCard = {
-  props: {
-    slot: { type: Object, required: true }
-  },
-  emits: ['search', 'clear', 'dragstart', 'drop'],
-  data() {
-    return {
-      ddragonVersion: DDRAGON_VERSION,
-      tierOptions: ['IRON', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'EMERALD', 'DIAMOND', 'MASTER', 'GRANDMASTER', 'CHALLENGER', 'UNRANKED'],
-      rankOptions: ['I', 'II', 'III', 'IV']
-    };
-  },
-  template: `
-    <div
-      class="rounded-xl border border-slate-800 bg-slate-950/70 p-2"
-      :draggable="Boolean(slot.gameName)"
-      @dragstart="$emit('dragstart', slot.id)"
-      @dragover.prevent
-      @drop="$emit('drop', slot.id)"
-    >
-      <div class="flex items-center gap-2">
-        <img
-          class="h-7 w-7 rounded border border-slate-700 object-cover sm:h-8 sm:w-8"
-          :src="slot.gameName ? 'https://ddragon.leagueoflegends.com/cdn/' + ddragonVersion + '/img/profileicon/' + (slot.profileIconId || 29) + '.png' : 'https://ddragon.leagueoflegends.com/cdn/' + ddragonVersion + '/img/profileicon/29.png'"
-          alt="icone"
-        />
-        <div class="min-w-0 flex-1">
-          <p class="truncate text-[11px] font-bold text-slate-200 sm:text-xs">{{ slot.gameName || 'Slot vazio' }}</p>
-          <p class="text-[9px] text-slate-500 sm:text-[10px]">{{ slot.tagLine ? '#' + slot.tagLine : 'Adicione um jogador' }}</p>
-        </div>
-        <button
-          v-if="slot.gameName || slot.showSearch"
-          type="button"
-          class="rounded border border-slate-700 px-1.5 py-0.5 text-[10px] font-bold text-slate-400 hover:text-white"
-          @click="$emit('clear', slot.id)"
-        >X</button>
-        <button
-          v-else
-          type="button"
-          class="rounded border border-amber-700 bg-slate-900 px-2 py-0.5 text-[11px] font-black text-amber-400 hover:bg-slate-800"
-          @click="slot.showSearch = true"
-        >[+]</button>
-      </div>
-
-      <div v-if="slot.gameName || slot.showSearch" class="mt-2 flex gap-1">
-        <input
-          v-model="slot.rawInput"
-          class="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-white placeholder:text-slate-500"
-          placeholder="Nome#TAG"
-        />
-        <button
-          type="button"
-          class="rounded border border-cyan-700 bg-cyan-900/40 px-2 py-1 text-[10px] font-black text-cyan-300 hover:bg-cyan-900/60"
-          @click="$emit('search', slot.id)"
-        >Buscar</button>
-        <button
-          v-if="!slot.gameName"
-          type="button"
-          class="rounded border border-slate-700 px-2 py-1 text-[10px] font-bold text-slate-400 hover:text-white"
-          @click="slot.showSearch = false"
-        >Fechar</button>
-      </div>
-
-      <p v-if="slot.loading" class="mt-1 text-[10px] font-bold text-cyan-300 animate-pulse">Buscando invocador...</p>
-
-      <details class="mt-2 rounded border border-slate-800 bg-slate-900/50 px-2 py-1">
-        <summary class="cursor-pointer text-[10px] font-black uppercase tracking-wide text-slate-400">Ajustes manuais de elo</summary>
-        <div class="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-4">
-          <select v-model="slot.manualTier" class="rounded border border-slate-700 bg-slate-900 px-1 py-1 text-[10px] text-slate-200">
-            <option value="">Tier</option>
-            <option v-for="tier in tierOptions" :key="tier" :value="tier">{{ tier }}</option>
-          </select>
-          <select v-model="slot.manualRank" class="rounded border border-slate-700 bg-slate-900 px-1 py-1 text-[10px] text-slate-200">
-            <option value="">Div</option>
-            <option v-for="rank in rankOptions" :key="rank" :value="rank">{{ rank }}</option>
-          </select>
-          <input v-model="slot.manualLp" class="rounded border border-slate-700 bg-slate-900 px-1 py-1 text-[10px] text-slate-200" placeholder="LP" />
-          <input v-model="slot.manualWinRate" class="rounded border border-slate-700 bg-slate-900 px-1 py-1 text-[10px] text-slate-200" placeholder="WR%" />
-        </div>
-      </details>
-
-      <p v-if="slot.error" class="mt-1 text-[10px] font-bold text-red-400">{{ slot.error }}</p>
-    </div>
-  `
-};
 </script>
