@@ -1,9 +1,21 @@
 <template>
   <!-- Background ancestral -->
-  <div class="fixed inset-0 z-0 pointer-events-none select-none" >
-    <img src="https://ddragon.leagueoflegends.com/cdn/img/champion/loading/Udyr_0.jpg" class="absolute inset-0 h-full w-full object-cover object-top transition-opacity duration-1000" :class="route.path === '/profile' ? 'opacity-60' : 'opacity-0'" />
-    <img src="https://ddragon.leagueoflegends.com/cdn/img/champion/loading/Udyr_3.jpg" class="absolute inset-0 h-full w-full object-cover object-top transition-opacity duration-1000" :class="route.path === '/mastery' ? 'opacity-60' : 'opacity-0'" />
-    <img src="https://ddragon.leagueoflegends.com/cdn/img/champion/loading/Udyr_6.jpg" class="absolute inset-0 h-full w-full object-cover object-top transition-opacity duration-1000" :class="route.path === '/synergy' ? 'opacity-60' : 'opacity-0'" />
+  <div class="fixed inset-0 z-0 pointer-events-none select-none">
+    <div
+      class="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
+      :class="route.path === '/profile' ? 'opacity-60' : 'opacity-0'"
+      style="background-image: url('https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Udyr_0.jpg');"
+    ></div>
+    <div
+      class="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
+      :class="route.path === '/mastery' ? 'opacity-60' : 'opacity-0'"
+      style="background-image: url('https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Udyr_3.jpg');"
+    ></div>
+    <div
+      class="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
+      :class="route.path === '/synergy' ? 'opacity-60' : 'opacity-0'"
+      style="background-image: url('https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Udyr_6.jpg');"
+    ></div>
     <div class="absolute inset-0 bg-slate-950/72"></div>  
   </div>
 

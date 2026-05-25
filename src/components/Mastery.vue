@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-6 rounded-2xl border border-orange-950/30 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-orange-950/20 to-slate-950 p-4">
 
-    <div class="rounded-xl border border-orange-900/30 bg-slate-900/70 p-3">
+    <div class="rounded-xl border border-orange-900/30 bg-slate-900/80 backdrop-blur-sm p-3">
       <form @submit.prevent="handleMasterySearch" class="flex flex-wrap items-center gap-2">
         <input
           v-model="masterySummoner"
@@ -20,7 +20,7 @@
 
     <!-- Has mastery data -->
     <template v-if="top20.length">
-      <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+      <section class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
         <h2 class="mb-1 text-center text-2xl font-black text-slate-100">ESSES SÃO SEUS UGA MONOS SEU BUGA</h2>
         <p class="mb-5 text-xs uppercase tracking-wider text-slate-400">Top 5 de maestria com destaque competitivo</p>
 
@@ -28,7 +28,7 @@
           <article
             v-for="(entry, index) in top5"
             :key="entry.championName"
-            class="relative rounded-xl border bg-slate-950/80 p-3 transition hover:bg-slate-900"
+            class="relative rounded-xl border bg-slate-900/80 backdrop-blur-sm p-3 transition hover:bg-slate-800/80"
             :class="monoStyles[index].ring"
           >
             <span class="absolute -right-3 -top-3 text-2xl">{{ monoStyles[index].icon }}</span>
@@ -47,7 +47,7 @@
         <div class="mt-6 border-t border-slate-800 pt-4">
           <h3 class="mb-3 text-sm font-bold uppercase tracking-wider text-slate-300">Top 15 Seguinte (#6 ao #20)</h3>
           <div class="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-            <article v-for="(entry, idx) in top15" :key="entry.championName" class="rounded-lg border border-slate-700/70 bg-slate-950/70 p-3">
+            <article v-for="(entry, idx) in top15" :key="entry.championName" class="rounded-lg border border-slate-700/70 bg-slate-900/80 backdrop-blur-sm p-3">
               <div class="mb-1 flex items-center justify-between text-[11px] font-bold text-slate-400">
                 <span>#{{ idx + 6 }}</span>
                 <span>M{{ entry.championLevel }}</span>
@@ -67,7 +67,7 @@
         </div>
       </section>
 
-      <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+      <section class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
         <h3 class="mb-4 text-lg font-bold text-slate-200">Outros Campeões ({{ remainder.length }})</h3>
         <div class="grid grid-cols-10 gap-1.5">
           <article
@@ -88,11 +88,11 @@
 
     <!-- Empty state (no data) -->
     <template v-else>
-      <section class="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl opacity-50">
+      <section class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl opacity-50">
         <h2 class="mb-1 text-center text-2xl font-black text-slate-600">ESSES SÃO SEUS UGA MONOS SEU BUGA</h2>
         <p class="mb-5 text-xs uppercase tracking-wider text-slate-600">Top 5 de maestria com destaque competitivo</p>
         <div class="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-          <article v-for="(icon, i) in ['👑','🥈','🥉','⛓️','🪵']" :key="i" class="relative rounded-xl border border-slate-700/50 bg-slate-950/80 p-3">
+          <article v-for="(icon, i) in ['👑','🥈','🥉','⛓️','🪵']" :key="i" class="relative rounded-xl border border-slate-700/50 bg-slate-900/80 backdrop-blur-sm p-3">
             <span class="absolute -right-3 -top-3 text-2xl">{{ icon }}</span>
             <div class="mb-2 text-center"><span class="text-4xl font-black leading-none text-slate-700">#{{ i + 1 }}</span></div>
             <div class="mx-auto h-16 w-16 rounded-lg border-2 border-slate-700 bg-slate-800/80"></div>
@@ -104,7 +104,7 @@
         <div class="mt-6 border-t border-slate-800 pt-4">
           <h3 class="mb-3 text-sm font-bold uppercase tracking-wider text-slate-600">Top 15 Seguinte (#6 ao #20)</h3>
           <div class="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-            <article v-for="i in 15" :key="i" class="rounded-lg border border-slate-700/40 bg-slate-950/50 p-3">
+            <article v-for="i in 15" :key="i" class="rounded-lg border border-slate-700/40 bg-slate-900/80 backdrop-blur-sm p-3">
               <div class="mb-1 flex items-center justify-between text-[11px] font-bold text-slate-700"><span>#{{ i + 5 }}</span><span>M?</span></div>
               <div class="flex items-center gap-2">
                 <div class="h-16 w-16 flex-shrink-0 rounded-md border border-slate-700 bg-slate-800/80"></div>
@@ -115,7 +115,7 @@
           </div>
         </div>
       </section>
-      <section class="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl opacity-30">
+      <section class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl opacity-30">
         <h3 class="mb-4 text-lg font-bold text-slate-600">Outros Campeões</h3>
         <div class="grid grid-cols-10 gap-1.5">
           <div v-for="i in 50" :key="i" class="h-10 w-full rounded-lg border border-slate-800 bg-slate-800/60"></div>

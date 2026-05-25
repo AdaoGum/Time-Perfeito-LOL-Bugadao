@@ -56,8 +56,8 @@
 
     <template v-else-if="!hasProfile">
       <div class="grid gap-4 opacity-50 lg:grid-cols-[1.4fr_0.9fr]">
-        <section class="rounded-2xl border border-slate-800/50 bg-slate-900/50 p-4 shadow-xl">
-          <div class="flex flex-wrap items-center gap-4 rounded-xl border border-slate-700/30 bg-slate-950/60 p-4">
+        <section class="rounded-2xl border border-slate-800/50 bg-slate-900/80 backdrop-blur-sm p-4 shadow-xl">
+          <div class="flex flex-wrap items-center gap-4 rounded-xl border border-slate-700/30 bg-slate-900/80 backdrop-blur-sm p-4">
             <div class="h-24 w-24 flex-shrink-0 rounded-2xl border-2 border-slate-700 bg-slate-800 shadow-xl"></div>
           </div>
         </section>
@@ -66,10 +66,10 @@
 
     <template v-else>
       <div class="grid gap-4 lg:grid-cols-[1.4fr_0.9fr]">
-        <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl flex flex-col justify-between relative overflow-hidden">
+        <section class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl flex flex-col justify-between relative overflow-hidden">
           <div class="absolute inset-0 bg-gradient-to-tr from-slate-950/20 to-transparent pointer-events-none"></div>
           
-          <div class="flex flex-col sm:flex-row items-center gap-5 rounded-xl border border-slate-700/50 bg-slate-950/80 p-5 relative z-10">
+          <div class="flex flex-col sm:flex-row items-center gap-5 rounded-xl border border-slate-700/50 bg-slate-900/80 backdrop-blur-sm p-5 relative z-10">
             <div class="relative flex-shrink-0">
               <img 
                 :src="profileIconImage(store.searchProfile.profileIconId)"
@@ -90,7 +90,7 @@
           </div>
 
           <div class="grid grid-cols-2 gap-4 mt-4 relative z-10">
-            <div class="flex flex-col items-center justify-center rounded-xl border border-slate-800/80 bg-slate-950/50 p-4 text-center">
+            <div class="flex flex-col items-center justify-center rounded-xl border border-slate-800/80 bg-slate-900/80 backdrop-blur-sm p-4 text-center">
               <img 
                 :src="getLocalRankEmblem(store.searchProfile.statsSolo?.tier)" 
                 class="h-28 w-28 sm:h-32 sm:w-32 object-contain filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)] transition transform hover:scale-105 duration-300 block mb-2"
@@ -100,7 +100,7 @@
               <span class="text-xs font-bold text-slate-200 mt-0.5">{{ labelSolo }}</span>
             </div>
 
-            <div class="flex flex-col items-center justify-center rounded-xl border border-slate-800/80 bg-slate-950/50 p-4 text-center">
+            <div class="flex flex-col items-center justify-center rounded-xl border border-slate-800/80 bg-slate-900/80 backdrop-blur-sm p-4 text-center">
               <img 
                 :src="getLocalRankEmblem(store.searchProfile.statsFlex?.tier)" 
                 class="h-28 w-28 sm:h-32 sm:w-32 object-contain filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)] transition transform hover:scale-105 duration-300 block mb-2"
@@ -112,11 +112,11 @@
           </div>
         </section>
 
-        <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl flex flex-col justify-between">
+        <section class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl flex flex-col justify-between">
           <h3 class="mb-3 text-center font-bold text-slate-300">Resumo Competitivo</h3>
           
           <div class="space-y-4">
-            <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 flex items-center justify-between">
+            <div class="rounded-xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-3 flex items-center justify-between">
               <div class="text-left">
                 <span class="text-[10px] font-black uppercase tracking-wider text-cyan-400">Solo / Duo</span>
                 <div class="text-2xl font-black text-amber-500 font-stone tracking-wide mt-0.5">{{ labelSolo }}</div>
@@ -127,7 +127,7 @@
               </div>
             </div>
 
-            <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 flex items-center justify-between">
+            <div class="rounded-xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-3 flex items-center justify-between">
               <div class="text-left">
                 <span class="text-[10px] font-black uppercase tracking-wider text-purple-400">Ranked Flex</span>
                 <div class="text-lg font-black text-white leading-tight mt-0.5">{{ labelFlex }}</div>
@@ -141,13 +141,13 @@
 
           <div class="mt-4 pt-3 border-t border-slate-800">
             <div class="grid grid-cols-2 gap-3 mb-4">
-              <div class="rounded-xl border border-slate-700 bg-slate-800/50 p-2.5 text-center">
+              <div class="rounded-xl border border-slate-700 bg-slate-900/80 backdrop-blur-sm p-2.5 text-center">
                 <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400">Total Vitórias</div>
                 <div class="text-lg font-black text-blue-400">
                   {{ (store.searchProfile.statsSolo?.wins || 0) + (store.searchProfile.statsFlex?.wins || 0) }}
                 </div>
               </div>
-              <div class="rounded-xl border border-slate-700 bg-slate-800/50 p-2.5 text-center">
+              <div class="rounded-xl border border-slate-700 bg-slate-900/80 backdrop-blur-sm p-2.5 text-center">
                 <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400">KDA (20 Partidas)</div>
                 <div class="text-lg font-black text-emerald-400">{{ avgKda }}</div>
               </div>
@@ -176,10 +176,10 @@
         </section>
       </div>
 
-      <section v-if="battleCompanions.length" class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+      <section v-if="battleCompanions.length" class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
         <h3 class="mb-4 text-lg font-bold text-slate-100">Companheiros de Batalha (Top 10)</h3>
         <div class="flex flex-wrap gap-3">
-          <div v-for="(comp, i) in battleCompanions" :key="comp.name" class="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-2.5">
+          <div v-for="(comp, i) in battleCompanions" :key="comp.name" class="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-900/80 backdrop-blur-sm px-4 py-2.5">
             <span class="text-xs font-black text-slate-500">#{{ i + 1 }}</span>
             <span class="font-bold text-cyan-300">{{ comp.name }}</span>
             <span class="text-xs font-semibold text-slate-400">{{ comp.games }} partida{{ comp.games > 1 ? 's' : '' }}</span>
@@ -187,7 +187,7 @@
         </div>
       </section>
 
-      <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+      <section class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
         <div class="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h3 class="text-xl font-bold text-slate-100">Histórico de Partidas</h3>
           
@@ -202,7 +202,7 @@
           </div>
         </div>
 
-        <div v-if="filteredMatches.length" class="mb-5 grid grid-cols-1 gap-4 rounded-xl border border-slate-700/50 bg-slate-950/40 p-4 sm:grid-cols-3">
+        <div v-if="filteredMatches.length" class="mb-5 grid grid-cols-1 gap-4 rounded-xl border border-slate-700/50 bg-slate-900/80 backdrop-blur-sm p-4 sm:grid-cols-3">
           
           <div class="text-center sm:border-r border-slate-800">
             <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Winrate ({{ activeTab }})</p>
@@ -227,7 +227,7 @@
           <div class="text-center">
             <p class="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">Top Campeões</p>
             <div class="flex flex-wrap justify-center gap-2">
-              <div v-for="champ in topChampions" :key="champ.name" class="flex items-center gap-1.5 rounded bg-slate-900/60 px-2 py-1 border border-slate-800">
+              <div v-for="champ in topChampions" :key="champ.name" class="flex items-center gap-1.5 rounded bg-slate-900/80 backdrop-blur-sm px-2 py-1 border border-slate-800">
                 <img class="h-5 w-5 rounded-full border border-slate-600" :src="championImage(champ.name)" :alt="champ.name" />
                 <span class="text-[10px] font-bold text-slate-200">{{ champ.name }}</span>
                 <span class="text-[10px] text-slate-500">{{ champ.games }}x</span>
@@ -275,7 +275,7 @@
             </div>
             
             <div class="grid grid-cols-2 gap-1.5">
-              <div class="rounded bg-slate-950/40 p-1.5">
+              <div class="rounded bg-slate-900/80 backdrop-blur-sm p-1.5">
                 <div class="space-y-1">
                   <div v-for="p in alliedPlayers(match)" :key="p?.gameName" class="flex items-center justify-between gap-1 overflow-hidden">
                     <div class="flex items-center gap-1 min-w-0 flex-1">
@@ -289,7 +289,7 @@
                 </div>
               </div>
               
-              <div class="rounded bg-slate-950/40 p-1.5">
+              <div class="rounded bg-slate-900/80 backdrop-blur-sm p-1.5">
                 <div class="space-y-1">
                   <div v-for="p in enemyPlayers(match)" :key="p?.gameName" class="flex items-center justify-between gap-1 overflow-hidden">
                     <div class="flex items-center gap-1 min-w-0 flex-1">
