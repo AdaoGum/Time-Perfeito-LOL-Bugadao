@@ -3,7 +3,9 @@
  * It is deterministic and focuses on filling empty slots only.
  */
 
-export const CHAMP_TAGS = {
+import synergyCsvRaw from '../data/sinergia-champs.csv?raw';
+
+const DEFAULT_CHAMP_TAGS = {
   Malphite: { engage: 5, poke: 0, frontline: 5, burst: 2, disengage: 1, utility: 2, peel: 3, waveclear: 2, damageType: 'AP' },
   Amumu: { engage: 5, poke: 0, frontline: 4, burst: 2, disengage: 2, utility: 2, peel: 2, waveclear: 2, damageType: 'AP' },
   Orianna: { engage: 4, poke: 3, frontline: 0, burst: 4, disengage: 2, utility: 3, peel: 2, waveclear: 3, damageType: 'AP' },
@@ -53,6 +55,76 @@ const ROLE_PREFERRED_TAGS = {
   SUP: ['Support', 'Tank']
 };
 
+function normalizeDamageType(value) {
+  const normalized = String(value || 'AD').trim().toUpperCase();
+  if (normalized === 'AP' || normalized === 'MIXED') return normalized;
+  return 'AD';
+}
+
+function toMetric(value, fallback = 0) {
+  const parsed = Number(String(value || '').trim().replace(',', '.'));
+  if (!Number.isFinite(parsed)) return fallback;
+  return clamp(parsed, 0, 5);
+}
+
+function parseSynergyCsv(csvText) {
+  const text = String(csvText || '').replace(/\r/g, '');
+  const rows = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'));
+
+  if (!rows.length) return {};
+
+  const headers = rows[0].split(',').map((part) => part.trim());
+  const required = ['champion', 'damageType', ...DIMENSIONS];
+  const hasRequired = required.every((key) => headers.includes(key));
+  if (!hasRequired) return {};
+
+  const table = {};
+  for (const row of rows.slice(1)) {
+    const cells = row.split(',').map((part) => part.trim());
+    if (!cells.length) continue;
+
+    const record = {};
+    for (let i = 0; i < headers.length; i += 1) {
+      record[headers[i]] = cells[i] || '';
+    }
+
+    const champion = String(record.champion || '').trim();
+    if (!champion) continue;
+
+    table[champion] = {
+      damageType: normalizeDamageType(record.damageType),
+      engage: toMetric(record.engage, 2),
+      poke: toMetric(record.poke, 2),
+      frontline: toMetric(record.frontline, 2),
+      burst: toMetric(record.burst, 2),
+      disengage: toMetric(record.disengage, 2),
+      utility: toMetric(record.utility, 2),
+      peel: toMetric(record.peel, 2),
+      waveclear: toMetric(record.waveclear, 2)
+    };
+  }
+
+  return table;
+}
+
+function loadChampionTagsFromSpreadsheet() {
+  try {
+    const parsed = parseSynergyCsv(synergyCsvRaw);
+    if (Object.keys(parsed).length > 0) {
+      return parsed;
+    }
+  } catch (error) {
+    console.warn('Falha ao carregar planilha de sinergia, usando fallback interno:', error?.message || error);
+  }
+
+  return { ...DEFAULT_CHAMP_TAGS };
+}
+
+export const CHAMP_TAGS = loadChampionTagsFromSpreadsheet();
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
@@ -82,7 +154,9 @@ function fallbackFromTags(championTags = []) {
 }
 
 export function getChampionMetrics(championName, championTags = []) {
-  return CHAMP_TAGS[championName] ? { ...CHAMP_TAGS[championName] } : fallbackFromTags(championTags);
+  const metricsFromSheet = CHAMP_TAGS[championName];
+  if (metricsFromSheet) return { ...metricsFromSheet };
+  return fallbackFromTags(championTags);
 }
 
 export function roleFitScore(slotRole, candidateTags = []) {
@@ -258,7 +332,7 @@ export function encontrarMelhorPick(context) {
         conflict,
         damageBalanceFactor: round2(damageBalanceFactor)
       },
-      primaryNeed: DIMENSIONS.sort((a, b) => vetorNecessidade[b] - vetorNecessidade[a])[0] || 'engage',
+      primaryNeed: [...DIMENSIONS].sort((a, b) => vetorNecessidade[b] - vetorNecessidade[a])[0] || 'engage',
       usedFallback: Boolean(candidate?.usedFallback)
     };
 

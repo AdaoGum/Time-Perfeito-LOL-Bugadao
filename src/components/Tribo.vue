@@ -99,6 +99,23 @@
             <span v-if="rec.usedFallback" class="text-amber-300">(fallback)</span>
           </p>
         </div>
+        <div v-if="synergyResult.slotOptions?.length" class="mt-3 space-y-2 rounded border border-slate-700/60 bg-slate-900/40 p-2">
+          <p class="text-[10px] font-black uppercase tracking-wider text-slate-300">Resumo textual das 5 opções por jogador</p>
+          <div
+            v-for="slotInfo in synergyResult.slotOptions"
+            :key="`slot-summary-${slotInfo.slotId}`"
+            class="rounded border border-slate-800 bg-slate-950/50 p-2"
+          >
+            <p class="text-[10px] font-black text-cyan-300">Slot {{ slotInfo.slotId }} • {{ slotInfo.player }} ({{ slotInfo.role }})</p>
+            <p
+              v-for="(option, idx) in slotInfo.options"
+              :key="`slot-summary-opt-${slotInfo.slotId}-${option.name}`"
+              class="mt-1 text-[10px] text-slate-200"
+            >
+              {{ idx + 1 }}. <span class="font-black text-amber-300">{{ option.name }}</span> • {{ option.summary }} • score {{ option.score }}
+            </p>
+          </div>
+        </div>
       </div>
 
       <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
@@ -173,16 +190,26 @@
               </button>
 
               <div class="w-full rounded-lg border border-slate-800 bg-slate-900/50 p-2">
-                <p class="text-[10px] font-black uppercase tracking-wider text-amber-400">Top 10 Maestria</p>
-                <div class="mt-1 flex flex-wrap gap-1">
-                  <span
-                    v-for="entry in slot.masteries.slice(0, 10)"
-                    :key="`${slot.id}-${entry.championId}`"
-                    class="rounded border border-amber-700/40 bg-slate-950 px-1.5 py-0.5 text-[10px] font-bold text-amber-200"
+                <p class="text-[10px] font-black uppercase tracking-wider text-emerald-300">Top 5 por Sinergia</p>
+                <p class="mt-1 text-[10px] text-slate-500">Clique para travar campeão rapidamente.</p>
+                <div class="mt-2 space-y-1" v-if="slot.synergyTop5.length">
+                  <button
+                    v-for="(option, optionIndex) in slot.synergyTop5"
+                    :key="`syn-${slot.id}-${option.name}`"
+                    type="button"
+                    @click="slot.championLocked = option.name"
+                    class="flex w-full items-center gap-2 rounded border border-emerald-800/40 bg-slate-950 px-2 py-1 text-left hover:border-emerald-500/70"
                   >
-                    {{ entry.championName }}
-                  </span>
+                    <span class="w-4 text-[10px] font-black text-emerald-300">{{ optionIndex + 1 }}</span>
+                    <img class="h-6 w-6 rounded" :src="championImage(option.name)" @error="onChampionImageError" :alt="option.name" />
+                    <div class="min-w-0 flex-1">
+                      <p class="truncate text-[10px] font-black text-slate-100">{{ option.name }}</p>
+                      <p class="truncate text-[9px] text-slate-400">{{ option.summary }}</p>
+                    </div>
+                    <span class="text-[10px] font-black text-emerald-200">{{ option.score }}</span>
+                  </button>
                 </div>
+                <p v-else class="mt-2 text-[10px] text-slate-500">Clique em Encontrar Tribo Perfeita para gerar as 5 opções.</p>
               </div>
 
               <div class="grid w-full grid-cols-5 gap-1">
@@ -300,17 +327,20 @@
           placeholder="Filtrar campeão..."
         />
         <div class="max-h-[64vh] overflow-y-auto">
-          <p v-if="currentModalTop10.length" class="mb-2 text-xs font-black uppercase tracking-wider text-amber-400">Top 10 Maestria</p>
+          <p v-if="currentModalSynergyTop5.length" class="mb-2 text-xs font-black uppercase tracking-wider text-emerald-300">Top 5 por Sinergia (Prioridade)</p>
           <div class="mb-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
             <button
-              v-for="champ in filteredTop10"
-              :key="`top-${champ}`"
+              v-for="option in filteredSynergyTop5"
+              :key="`top-${option.name}`"
               type="button"
-              @click="lockChampionFromModal(champ)"
-              class="flex items-center gap-2 rounded-lg border border-amber-700/50 bg-slate-950 px-2 py-1.5 text-left text-xs font-semibold hover:border-amber-400"
+              @click="lockChampionFromModal(option.name)"
+              class="flex items-center gap-2 rounded-lg border border-emerald-700/50 bg-slate-950 px-2 py-1.5 text-left text-xs font-semibold hover:border-emerald-400"
             >
-              <img class="h-7 w-7 rounded" :src="championImage(champ)" @error="onChampionImageError" :alt="champ" />
-              <span class="truncate">{{ champ }}</span>
+              <img class="h-7 w-7 rounded" :src="championImage(option.name)" @error="onChampionImageError" :alt="option.name" />
+              <div class="min-w-0">
+                <p class="truncate font-black text-emerald-100">{{ option.name }}</p>
+                <p class="truncate text-[10px] text-slate-400">{{ option.summary }}</p>
+              </div>
             </button>
           </div>
 
@@ -339,7 +369,7 @@ import SearchBar from './SearchBar.vue';
 import { state } from '../store.js';
 import { workerRequest } from '../api.js';
 import { championImage, profileIconImage, getChampionIdFromName, DDRAGON_VERSION } from '../utils.js';
-import { calcularNecessidadeDoTime, encontrarMelhorPick, roleFitScore, scoreToPercent } from '../utils/sinergiaMotor.js';
+import { calcularNecessidadeDoTime, encontrarMelhorPick, getChampionMetrics, roleFitScore, scoreToPercent } from '../utils/sinergiaMotor.js';
 
 const store = state;
 const viewMode = ref('entry');
@@ -377,23 +407,25 @@ const redMmr = computed(() => redSlots.value.reduce((sum, slot) => sum + mmrWeig
 const mmrDiff = computed(() => Math.abs(blueMmr.value - redMmr.value));
 
 const currentModalSlot = computed(() => rankedSlots.find((slot) => slot.id === championModal.slotId) || null);
-const currentModalTop10 = computed(() => {
+const currentModalSynergyTop5 = computed(() => {
   const slot = currentModalSlot.value;
-  if (!slot || slot.type !== 'real') return [];
-  return slot.masteries.slice(0, 10).map((entry) => entry.championName);
+  if (!slot) return [];
+  return (slot.synergyTop5 || []).slice(0, 5);
 });
 
 const currentModalAllChampions = computed(() => {
   const slot = currentModalSlot.value;
   const allNames = (store.staticData.championList || []).map((champ) => champ.name).sort((a, b) => a.localeCompare(b));
-  if (!slot || slot.type !== 'real') return allNames;
-  const topSet = new Set(currentModalTop10.value);
+  if (!slot) return allNames;
+  const topSet = new Set(currentModalSynergyTop5.value.map((option) => option.name));
   return allNames.filter((name) => !topSet.has(name));
 });
 
-const filteredTop10 = computed(() => {
+const filteredSynergyTop5 = computed(() => {
   const q = championModal.query.trim().toLowerCase();
-  return q ? currentModalTop10.value.filter((name) => name.toLowerCase().includes(q)) : currentModalTop10.value;
+  return q
+    ? currentModalSynergyTop5.value.filter((option) => option.name.toLowerCase().includes(q))
+    : currentModalSynergyTop5.value;
 });
 
 const filteredAllChampions = computed(() => {
@@ -416,7 +448,8 @@ function createRankedSlot(id) {
     statsFlex: { wins: 0, losses: 0, winRate: 0, tier: 'UNRANKED', rank: '', lp: 0 },
     role: roles[id - 1]?.value || 'MID',
     championLocked: '',
-    masteries: []
+    masteries: [],
+    synergyTop5: []
   };
 }
 
@@ -467,6 +500,7 @@ function setAnonymous(slotId) {
   slot.profileIconId = 29;
   slot.championLocked = '';
   slot.masteries = [];
+  slot.synergyTop5 = [];
 }
 
 function onRankedSearchStart(slotId) {
@@ -475,6 +509,7 @@ function onRankedSearchStart(slotId) {
   slot.loading = true;
   slot.error = null;
   slot.showSearch = true;
+  slot.synergyTop5 = [];
 }
 
 async function onRankedSearchSuccess(slotId, profileData) {
@@ -491,6 +526,7 @@ async function onRankedSearchSuccess(slotId, profileData) {
   slot.statsSolo = profileData?.statsSolo || store.searchProfile.statsSolo;
   slot.statsFlex = profileData?.statsFlex || store.searchProfile.statsFlex;
   slot.masteriesLoading = true;
+  slot.synergyTop5 = [];
 
   loadRankedMasteries(slot, profileData)
     .finally(() => {
@@ -603,6 +639,67 @@ function buildCandidatePool(slot, pickedChampions) {
   return list;
 }
 
+const DIMENSION_LABELS = {
+  engage: 'engage',
+  poke: 'poke',
+  frontline: 'frontline',
+  burst: 'burst',
+  disengage: 'desengage',
+  utility: 'utilidade',
+  peel: 'peel',
+  waveclear: 'waveclear'
+};
+
+function damageTypeLabel(type) {
+  if (type === 'AP') return 'dano AP';
+  if (type === 'MIXED') return 'dano misto';
+  return 'dano AD';
+}
+
+function describePickTraits(championName, slotRole, primaryNeed) {
+  const tags = championTags(championName);
+  const metrics = getChampionMetrics(championName, tags);
+  const roleScore = Math.round(roleFitScore(slotRole, tags) * 100);
+
+  const topDimensions = ['engage', 'poke', 'frontline', 'burst', 'disengage', 'utility', 'peel', 'waveclear']
+    .map((key) => ({ key, value: Number(metrics?.[key] || 0) }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 2)
+    .map((item) => DIMENSION_LABELS[item.key] || item.key);
+
+  return `${damageTypeLabel(metrics?.damageType)} • forte em ${topDimensions.join(' + ')} • encaixe na rota ${roleScore}% • cobre ${DIMENSION_LABELS[primaryNeed] || primaryNeed}`;
+}
+
+function buildTopRecommendationsForSlot(slot, pickedChampions, context, limit = 5) {
+  const localPicked = [...pickedChampions];
+  const options = [];
+
+  for (let i = 0; i < limit; i += 1) {
+    const pool = buildCandidatePool(slot, localPicked);
+    if (!pool.length) break;
+
+    const bestPick = encontrarMelhorPick({
+      vetorNecessidade: context.vetorNecessidade,
+      snapshotAtual: context.snapshotAtual,
+      target: context.target,
+      poolCampeoesCandidatos: pool,
+      slotRole: slot.role,
+      pickedChampions: localPicked
+    });
+
+    if (!bestPick?.name) break;
+
+    const summary = describePickTraits(bestPick.name, slot.role, bestPick.primaryNeed);
+    options.push({
+      ...bestPick,
+      summary
+    });
+    localPicked.push(bestPick.name);
+  }
+
+  return options;
+}
+
 function findPerfectTribe() {
   const slots = activeRankedSlots.value;
   const initiallyLocked = slots
@@ -615,25 +712,30 @@ function findPerfectTribe() {
     activeSlotCount: slots.length,
     getTagsByChampion: championTags
   });
+  const slotOptions = [];
 
   for (const slot of slots) {
-    if (slot.championLocked) continue;
+    const basePicks = slot.championLocked
+      ? chosen.filter((champion) => champion !== slot.championLocked)
+      : [...chosen];
 
-    const currentContext = calcularNecessidadeDoTime(chosen, {
+    const currentContext = calcularNecessidadeDoTime(basePicks, {
       activeSlotCount: slots.length,
       getTagsByChampion: championTags
     });
 
-    const pool = buildCandidatePool(slot, chosen);
-    const bestPick = encontrarMelhorPick({
-      vetorNecessidade: currentContext.vetorNecessidade,
-      snapshotAtual: currentContext.snapshotAtual,
-      target: currentContext.target,
-      poolCampeoesCandidatos: pool,
-      slotRole: slot.role,
-      pickedChampions: chosen
+    const top5 = buildTopRecommendationsForSlot(slot, basePicks, currentContext, 5);
+    slot.synergyTop5 = top5;
+    slotOptions.push({
+      slotId: slot.id,
+      player: slot.gameName || `Slot ${slot.id}`,
+      role: slot.role,
+      options: top5
     });
 
+    if (slot.championLocked) continue;
+
+    const bestPick = top5[0];
     if (!bestPick?.name) continue;
 
     slot.championLocked = bestPick.name;
@@ -656,7 +758,8 @@ function findPerfectTribe() {
   synergyResult.value = summarizeRankedSynergy(slots, {
     beforeContext,
     afterContext,
-    recommendations
+    recommendations,
+    slotOptions
   });
   store.teamPlanner.analysisResult = synergyResult.value;
 }
@@ -708,6 +811,7 @@ function summarizeRankedSynergy(slots, details = {}) {
     topTags,
     topNeeds: sortedNeeds,
     recommendations: details.recommendations || [],
+    slotOptions: details.slotOptions || [],
     generatedAt: new Date().toLocaleTimeString('pt-BR')
   };
 }
