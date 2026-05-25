@@ -85,7 +85,7 @@
       </div>
       <nav class="flex flex-wrap gap-2">
         <button
-          v-for="tab in tabs"
+          v-for="tab in topTabs"
           :key="tab.id"
           type="button"
           @click="router.push(tab.path)"
@@ -175,7 +175,7 @@
 
     <nav class="flex-1 space-y-2 overflow-y-auto p-3">
       <button
-        v-for="tab in tabs"
+        v-for="tab in sidebarTabs"
         :key="`side-${tab.id}`"
         type="button"
         @click="goToTab(tab.path)"
@@ -254,11 +254,16 @@ const countdown = ref(3);
 const sidebarSearchOpen = ref(false);
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1440);
 
-const tabs = [
+const topTabs = [
   { id: 'home', path: '/', label: 'TEMPLO' },
   { id: 'perfil', path: '/profile', label: 'CAÇADA' },
   { id: 'maestria', path: '/mastery', label: 'CAVERNA' },
-  { id: 'sinergia', path: '/synergy', label: 'TRIBO' },
+  { id: 'sinergia', path: '/synergy', label: 'LOBBY' },
+];
+
+const sidebarTabs = [
+  ...topTabs,
+  { id: 'saguaoCustom', path: '/saguaoCustom', label: 'SAGUAO' },
 ];
 
 // Overlay / countdown handlers

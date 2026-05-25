@@ -6,22 +6,7 @@
 import synergyCsvRaw from '../data/sinergia-champs.csv?raw';
 
 const DEFAULT_CHAMP_TAGS = {
-  Malphite: { engage: 5, poke: 0, frontline: 5, burst: 2, disengage: 1, utility: 2, peel: 3, waveclear: 2, damageType: 'AP' },
-  Amumu: { engage: 5, poke: 0, frontline: 4, burst: 2, disengage: 2, utility: 2, peel: 2, waveclear: 2, damageType: 'AP' },
-  Orianna: { engage: 4, poke: 3, frontline: 0, burst: 4, disengage: 2, utility: 3, peel: 2, waveclear: 3, damageType: 'AP' },
-  'Miss Fortune': { engage: 3, poke: 3, frontline: 0, burst: 4, disengage: 1, utility: 1, peel: 1, waveclear: 3, damageType: 'AD' },
-  Xerath: { engage: 1, poke: 5, frontline: 0, burst: 4, disengage: 1, utility: 2, peel: 1, waveclear: 4, damageType: 'AP' },
-  Jayce: { engage: 2, poke: 5, frontline: 1, burst: 4, disengage: 2, utility: 1, peel: 1, waveclear: 3, damageType: 'AD' },
-  Nidalee: { engage: 1, poke: 5, frontline: 0, burst: 4, disengage: 2, utility: 1, peel: 1, waveclear: 2, damageType: 'AP' },
-  Varus: { engage: 3, poke: 4, frontline: 0, burst: 3, disengage: 1, utility: 1, peel: 1, waveclear: 2, damageType: 'AD' },
-  Blitzcrank: { engage: 4, poke: 1, frontline: 3, burst: 2, disengage: 1, utility: 3, peel: 2, waveclear: 1, damageType: 'AP' },
-  Ahri: { engage: 3, poke: 3, frontline: 0, burst: 4, disengage: 2, utility: 2, peel: 1, waveclear: 2, damageType: 'AP' },
-  Elise: { engage: 3, poke: 2, frontline: 1, burst: 4, disengage: 1, utility: 2, peel: 1, waveclear: 1, damageType: 'AP' },
-  Lulu: { engage: 1, poke: 2, frontline: 0, burst: 1, disengage: 5, utility: 5, peel: 5, waveclear: 1, damageType: 'AP' },
-  Janna: { engage: 1, poke: 2, frontline: 0, burst: 1, disengage: 5, utility: 4, peel: 5, waveclear: 1, damageType: 'AP' },
-  "Kog'Maw": { engage: 0, poke: 4, frontline: 0, burst: 3, disengage: 0, utility: 1, peel: 0, waveclear: 3, damageType: 'AD' },
-  Vayne: { engage: 1, poke: 1, frontline: 0, burst: 3, disengage: 3, utility: 1, peel: 2, waveclear: 1, damageType: 'AD' },
-  Thresh: { engage: 4, poke: 1, frontline: 3, burst: 1, disengage: 4, utility: 4, peel: 4, waveclear: 1, damageType: 'AD' }
+  Teste: { engage: 0, poke: 0, frontline: 0, burst: 0, disengage: 0, utility: 0, peel: 0, waveclear: 0, damageType: 'AP' },
 };
 
 export const FALLBACK_TAGS = {

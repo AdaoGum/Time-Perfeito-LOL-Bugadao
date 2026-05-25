@@ -3,70 +3,46 @@
     <section class="rounded-2xl bg-slate-900/70 backdrop-blur-md border border-slate-800 p-5 shadow-xl">
       <div class="flex items-center justify-between gap-3">
         <div>
-          <h2 class="text-xl font-black tracking-wide text-amber-300">TRIBO PERFEITA</h2>
-          <p class="text-xs text-slate-400">Escolha a modalidade e monte seu lobby tatico.</p>
+          <h2 class="text-xl font-black tracking-wide text-cyan-300">LOBBY PERFEITO</h2>
+          <p class="text-xs text-slate-400">Escolha o modo da fila e monte seu time sem perder o estilo raiz.</p>
         </div>
         <button
-          v-if="viewMode !== 'entry'"
+          v-if="viewMode !== 'selection'"
           type="button"
-          @click="viewMode = 'entry'"
+          @click="goBackToSelection"
           class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-bold text-slate-300 hover:text-white"
         >Voltar</button>
       </div>
     </section>
 
     <section
-      v-if="viewMode === 'entry'"
+      v-if="viewMode === 'selection'"
       class="rounded-2xl bg-slate-900/70 backdrop-blur-md border border-slate-800 p-6 shadow-xl"
     >
-      <div class="grid gap-4 md:grid-cols-2">
-        <button
-          type="button"
-          @click="selectMode('ranked')"
-          class="group rounded-2xl border border-amber-700/50 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 text-left transition hover:scale-[1.01] hover:border-amber-500"
-        >
-          <p class="text-xs font-black tracking-[0.2em] text-amber-400">MODO RANQUEADO</p>
-          <p class="mt-2 text-2xl font-black text-slate-100">Solo/Duo ou Flex</p>
-          <p class="mt-2 text-sm text-slate-400">Saguão oficial com slots verticais, picks e rota fixa.</p>
-        </button>
-
-        <button
-          type="button"
-          @click="selectMode('custom')"
-          class="group rounded-2xl border border-amber-700/50 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 text-left transition hover:scale-[1.01] hover:border-amber-500"
-        >
-          <p class="text-xs font-black tracking-[0.2em] text-amber-400">PARTIDA CUSTOMIZADA</p>
-          <p class="mt-2 text-2xl font-black text-slate-100">5v5 Classico</p>
-          <p class="mt-2 text-sm text-slate-400">Gerencie dois times, reservas e sorteio balanceado com re-roll.</p>
-        </button>
-      </div>
+      <FilaSelecao
+        mode-label="Lobby"
+        title="Escolha da Fila"
+        description="Selecione o tipo de partida para montar seu time com fluxo ranqueado ou custom 5x5."
+        :mode-options="lobbyModeOptions"
+        @selecionar="onSelectLobbyMode"
+      />
     </section>
 
     <section
       v-if="viewMode === 'ranked'"
-      class="space-y-4 rounded-2xl bg-slate-900/70 backdrop-blur-md border border-slate-800 p-5 shadow-xl"
+      class="space-y-4 rounded-2xl bg-slate-950/70 backdrop-blur-md border border-slate-800/80 p-5 shadow-xl"
     >
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="inline-flex rounded-lg border border-slate-700 bg-slate-950 p-1">
-          <button
-            type="button"
-            @click="queueType = 'solo_duo'"
-            class="rounded-md px-4 py-1.5 text-xs font-black transition"
-            :class="queueType === 'solo_duo' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:text-white'"
-          >Solo/Duo</button>
-          <button
-            type="button"
-            @click="queueType = 'flex'"
-            class="rounded-md px-4 py-1.5 text-xs font-black transition"
-            :class="queueType === 'flex' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:text-white'"
-          >Flex</button>
+        <div class="flex items-center gap-2 border-b border-slate-800/60 pb-2 text-[11px] font-bold tracking-wider text-slate-400">
+          <div class="w-3 h-3 bg-cyan-500 rotate-45 border border-slate-950"></div>
+          <span>SR • RANQUEADA {{ rankedQueueLabel }} • LOBBY</span>
         </div>
 
         <button
           type="button"
           @click="findPerfectTribe"
-          class="rounded-lg bg-gradient-to-r from-amber-600 to-orange-500 px-4 py-2 text-xs font-black uppercase tracking-wider text-white shadow-lg hover:brightness-110"
-        >Encontrar Tribo Perfeita</button>
+          class="rounded-md bg-gradient-to-b from-cyan-600 to-cyan-800 border border-cyan-400/50 px-5 py-2 text-xs font-black uppercase tracking-widest text-white shadow-[0_0_20px_rgba(6,182,212,0.2)] hover:brightness-110"
+        >Encontrar Lobby Perfeito</button>
       </div>
 
       <div v-if="synergyResult" class="rounded-xl border border-emerald-700/50 bg-emerald-950/20 p-3 text-xs">
@@ -209,7 +185,7 @@
                     <span class="text-[10px] font-black text-emerald-200">{{ option.score }}</span>
                   </button>
                 </div>
-                <p v-else class="mt-2 text-[10px] text-slate-500">Clique em Encontrar Tribo Perfeita para gerar as 5 opções.</p>
+                <p v-else class="mt-2 text-[10px] text-slate-500">Clique em Encontrar Lobby Perfeito para gerar as 5 opções.</p>
               </div>
 
               <div class="grid w-full grid-cols-5 gap-1">
@@ -233,31 +209,31 @@
 
     <section
       v-if="viewMode === 'custom'"
-      class="space-y-4 rounded-2xl bg-slate-900/70 backdrop-blur-md border border-slate-800 p-5 shadow-xl"
+      class="space-y-4 rounded-2xl bg-slate-950/80 backdrop-blur-md border border-slate-800 p-5 shadow-2xl"
     >
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Saguão de Torneio 5v5</p>
+          <p class="text-xs font-black uppercase tracking-wider text-slate-400">Saguão Custom 5v5</p>
           <p class="text-[11px] text-slate-500">Use os blocos [+] para adicionar jogadores, buscar perfil ou preencher anônimo com elo manual.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <button
             type="button"
             @click="drawBalancedTeams"
-            class="rounded-lg bg-gradient-to-r from-cyan-600 to-blue-500 px-4 py-2 text-xs font-black uppercase tracking-wider text-white shadow-lg hover:brightness-110"
-          >Festa da Fogueira (Sorteio Qualificado)</button>
+            class="rounded-md bg-gradient-to-b from-yellow-600 to-yellow-700 border border-yellow-500/50 px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-950 shadow-[0_0_15px_rgba(234,179,8,0.15)] hover:brightness-110"
+          >Festa da Fogueira (Sortear)</button>
           <button
             type="button"
             @click="drawRandomTeams"
-            class="rounded-lg bg-gradient-to-r from-orange-600 to-red-500 px-4 py-2 text-xs font-black uppercase tracking-wider text-white shadow-lg hover:brightness-110"
+            class="rounded-md bg-slate-900 border border-slate-700 px-4 py-2 text-xs font-black uppercase tracking-wider text-yellow-500 hover:bg-slate-800"
           >Fogueira Maluca (Sorteio Raiz)</button>
         </div>
       </div>
 
       <div class="grid gap-4 xl:grid-cols-[1fr_auto_1fr]">
-        <div class="space-y-2 rounded-2xl bg-slate-900/70 backdrop-blur-md border border-slate-800 p-2 sm:p-3">
-          <p class="text-xs font-black uppercase tracking-wider text-cyan-300">Time Azul</p>
-          <div class="space-y-1.5 max-h-[50vh] overflow-y-auto pr-1 sm:space-y-2 xl:max-h-none xl:overflow-visible">
+        <div class="space-y-2 rounded-2xl bg-slate-900/70 backdrop-blur-md border border-slate-800 p-3">
+          <p class="text-xs font-black tracking-widest text-blue-400 uppercase mb-1">Lado Azul (Time 1)</p>
+          <div class="space-y-1.5 max-h-[50vh] overflow-y-auto pr-1 divide-y divide-slate-900 xl:max-h-none xl:overflow-visible">
             <div v-for="slot in blueSlots" :key="slot.id">
               <CustomSlotCard
                 :slot="slot"
@@ -273,9 +249,9 @@
 
         <div class="hidden w-px bg-slate-700/70 xl:block"></div>
 
-        <div class="space-y-2 rounded-2xl bg-slate-900/70 backdrop-blur-md border border-slate-800 p-2 sm:p-3">
-          <p class="text-xs font-black uppercase tracking-wider text-red-300">Time Vermelho</p>
-          <div class="space-y-1.5 max-h-[50vh] overflow-y-auto pr-1 sm:space-y-2 xl:max-h-none xl:overflow-visible">
+        <div class="space-y-2 rounded-2xl bg-slate-900/70 backdrop-blur-md border border-slate-800 p-3">
+          <p class="text-xs font-black tracking-widest text-red-400 uppercase mb-1">Lado Vermelho (Time 2)</p>
+          <div class="space-y-1.5 max-h-[50vh] overflow-y-auto pr-1 divide-y divide-slate-900 xl:max-h-none xl:overflow-visible">
             <div v-for="slot in redSlots" :key="slot.id">
               <CustomSlotCard
                 :slot="slot"
@@ -290,8 +266,8 @@
         </div>
       </div>
 
-      <div class="rounded-2xl bg-slate-900/70 backdrop-blur-md border border-slate-800 p-3">
-        <p class="mb-2 text-xs font-black uppercase tracking-wider text-slate-300">Banco de Reservas</p>
+      <div class="rounded-xl bg-slate-950/60 border border-slate-900 p-4">
+        <p class="mb-2 text-[11px] font-black tracking-widest text-slate-400 uppercase">Banco de Reservas / Espectadores</p>
         <div class="grid gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
           <div v-for="slot in reserveSlots" :key="slot.id">
             <CustomSlotCard
@@ -307,11 +283,11 @@
       </div>
 
       <div class="grid gap-3 md:grid-cols-2">
-        <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-xs">
+        <div class="rounded-xl border border-slate-900 bg-slate-950/70 p-3 text-xs">
           <p class="font-black text-cyan-300">MMR Time Azul: {{ blueMmr }}</p>
           <p class="text-slate-400">Jogadores: {{ blueFilledCount }}/5</p>
         </div>
-        <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-xs">
+        <div class="rounded-xl border border-slate-900 bg-slate-950/70 p-3 text-xs">
           <p class="font-black text-red-300">MMR Time Vermelho: {{ redMmr }}</p>
           <p class="text-slate-400">Jogadores: {{ redFilledCount }}/5</p>
         </div>
@@ -377,17 +353,26 @@
 import { computed, reactive, ref } from 'vue';
 import SearchBar from './SearchBar.vue';
 import CustomSlotCard from './CustomSlotCard.vue';
+import FilaSelecao from './FilaSelecao.vue';
 import { state } from '../store.js';
 import { workerRequest } from '../api.js';
 import { championImage, profileIconImage, getChampionIdFromName, DDRAGON_VERSION } from '../utils.js';
 import { calcularNecessidadeDoTime, encontrarMelhorPick, getChampionMetrics, roleFitScore, scoreToPercent } from '../utils/sinergiaMotor.js';
 
 const store = state;
-const viewMode = ref('entry');
+const viewMode = ref('selection');
 const queueType = ref('solo_duo');
 const rerollSeed = ref(0);
 const draggedSlotId = ref(null);
 const synergyResult = ref(null);
+
+const lobbyModeOptions = [
+  { id: 'solo_duo', titulo: 'Ranked Solo/Duo', subtitulo: 'Abra o lobby ranqueado para até 2 jogadores.' },
+  { id: 'flex', titulo: 'Ranked Flex', subtitulo: 'Abra o lobby ranqueado para composição completa.' },
+  { id: 'custom_5x5', titulo: 'Customizada 5x5', subtitulo: 'Monte dois times, reservas e faça sorteio balanceado.' }
+];
+
+const rankedQueueLabel = computed(() => (queueType.value === 'solo_duo' ? 'SOLO/DUO' : 'FLEX'));
 
 const roles = [
   { value: 'TOP', label: 'Top', icon: roleIcon('top') },
@@ -487,8 +472,21 @@ function roleIcon(roleKey) {
   return `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-clash/global/default/assets/images/position-selector/positions/icon-position-${roleKey}.png`;
 }
 
-function selectMode(mode) {
-  viewMode.value = mode;
+function onSelectLobbyMode(mode) {
+  synergyResult.value = null;
+
+  if (mode === 'custom_5x5') {
+    viewMode.value = 'custom';
+    return;
+  }
+
+  queueType.value = mode === 'flex' ? 'flex' : 'solo_duo';
+  viewMode.value = 'ranked';
+}
+
+function goBackToSelection() {
+  closeChampionModal();
+  viewMode.value = 'selection';
 }
 
 function resetRankedSlot(slotId) {
