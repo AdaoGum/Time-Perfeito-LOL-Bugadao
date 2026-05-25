@@ -74,7 +74,10 @@
           <p class="font-black uppercase tracking-wider text-emerald-300">Sinergia do Time</p>
           <p class="font-black text-emerald-200">Score: {{ synergyResult.score }}/100</p>
         </div>
-        <p class="mt-1 text-[11px] text-slate-300">Gerado às {{ synergyResult.generatedAt }} • Aderência por rota: {{ synergyResult.roleMatch }}</p>
+        <p class="mt-1 text-[11px] text-slate-300">
+          Gerado às {{ synergyResult.generatedAt }} • Aderência por rota: {{ synergyResult.roleMatch }}
+          <span class="ml-2 text-emerald-200">({{ synergyResult.scoreBefore }} -> {{ synergyResult.scoreAfter }})</span>
+        </p>
         <div class="mt-2 flex flex-wrap gap-1">
           <span
             v-for="tag in synergyResult.topTags"
@@ -83,6 +86,18 @@
           >
             {{ tag.tag }} ({{ tag.count }})
           </span>
+        </div>
+        <div v-if="synergyResult.recommendations?.length" class="mt-3 space-y-1 rounded border border-slate-700/60 bg-slate-900/40 p-2">
+          <p class="text-[10px] font-black uppercase tracking-wider text-slate-300">Picks automáticos</p>
+          <p
+            v-for="rec in synergyResult.recommendations"
+            :key="`rec-${rec.slotId}`"
+            class="text-[11px] text-slate-200"
+          >
+            Slot {{ rec.slotId }} ({{ rec.role }}): <span class="font-black text-amber-300">{{ rec.champion }}</span>
+            • foco: {{ rec.primaryNeed }} • score: {{ rec.score }}
+            <span v-if="rec.usedFallback" class="text-amber-300">(fallback)</span>
+          </p>
         </div>
       </div>
 
@@ -324,6 +339,7 @@ import SearchBar from './SearchBar.vue';
 import { state } from '../store.js';
 import { workerRequest } from '../api.js';
 import { championImage, profileIconImage, getChampionIdFromName, DDRAGON_VERSION } from '../utils.js';
+import { calcularNecessidadeDoTime, encontrarMelhorPick, roleFitScore, scoreToPercent } from '../utils/sinergiaMotor.js';
 
 const store = state;
 const viewMode = ref('entry');
@@ -553,69 +569,99 @@ function championTags(name) {
   return champ?.tags || [];
 }
 
-function roleDesiredTags(role) {
-  const map = {
-    TOP: ['Fighter', 'Tank'],
-    JUNGLE: ['Fighter', 'Assassin'],
-    MID: ['Mage', 'Assassin'],
-    ADC: ['Marksman'],
-    SUP: ['Support', 'Tank']
-  };
-  return map[role] || [];
+function buildCandidatePool(slot, pickedChampions) {
+  const pickedSet = new Set(pickedChampions || []);
+  const list = [];
+
+  if (slot.type === 'real' && (slot.masteries || []).length) {
+    for (const entry of slot.masteries.slice(0, 30)) {
+      if (!entry?.championName || pickedSet.has(entry.championName)) continue;
+      list.push({
+        name: entry.championName,
+        masteryPoints: Number(entry.championPoints || 0),
+        tags: championTags(entry.championName),
+        usedFallback: false
+      });
+    }
+  }
+
+  if (!list.length) {
+    const fallback = (store.staticData.championList || [])
+      .map((champ) => ({
+        name: champ.name,
+        masteryPoints: 0,
+        tags: champ.tags || [],
+        usedFallback: true
+      }))
+      .filter((candidate) => !pickedSet.has(candidate.name))
+      .filter((candidate) => roleFitScore(slot.role, candidate.tags) >= 0.45)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    return fallback;
+  }
+
+  return list;
 }
 
 function findPerfectTribe() {
   const slots = activeRankedSlots.value;
-  const locked = slots.filter((slot) => slot.championLocked).map((slot) => slot.championLocked);
-  const lockedSet = new Set(locked);
-  const lockedTags = new Set(locked.flatMap((champ) => championTags(champ)));
+  const initiallyLocked = slots
+    .filter((slot) => slot.championLocked)
+    .map((slot) => slot.championLocked);
+
+  const chosen = [...initiallyLocked];
+  const recommendations = [];
+  const beforeContext = calcularNecessidadeDoTime(initiallyLocked, {
+    activeSlotCount: slots.length,
+    getTagsByChampion: championTags
+  });
 
   for (const slot of slots) {
     if (slot.championLocked) continue;
 
-    const poolFromMastery = slot.masteries.map((entry) => entry.championName);
-    const allChampionsPool = (store.staticData.championList || []).map((entry) => entry.name);
-    const basePool = slot.type === 'real' && poolFromMastery.length ? poolFromMastery : allChampionsPool;
+    const currentContext = calcularNecessidadeDoTime(chosen, {
+      activeSlotCount: slots.length,
+      getTagsByChampion: championTags
+    });
 
-    let bestChampion = '';
-    let bestScore = -Infinity;
+    const pool = buildCandidatePool(slot, chosen);
+    const bestPick = encontrarMelhorPick({
+      vetorNecessidade: currentContext.vetorNecessidade,
+      snapshotAtual: currentContext.snapshotAtual,
+      target: currentContext.target,
+      poolCampeoesCandidatos: pool,
+      slotRole: slot.role,
+      pickedChampions: chosen
+    });
 
-    for (const candidate of basePool) {
-      if (!candidate) continue;
-      let score = 0;
-      if (lockedSet.has(candidate)) score -= 100;
+    if (!bestPick?.name) continue;
 
-      const tags = championTags(candidate);
-      const desired = roleDesiredTags(slot.role);
-      if (desired.some((tag) => tags.includes(tag))) score += 30;
-
-      for (const tag of tags) {
-        if (!lockedTags.has(tag)) score += 6;
-      }
-
-      const masteryIndex = basePool.indexOf(candidate);
-      if (masteryIndex >= 0) score += Math.max(0, 20 - masteryIndex);
-      score += Math.random() * 3;
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestChampion = candidate;
-      }
-    }
-
-    if (bestChampion) {
-      slot.championLocked = bestChampion;
-      lockedSet.add(bestChampion);
-      for (const tag of championTags(bestChampion)) {
-        lockedTags.add(tag);
-      }
-    }
+    slot.championLocked = bestPick.name;
+    chosen.push(bestPick.name);
+    recommendations.push({
+      slotId: slot.id,
+      role: slot.role,
+      champion: bestPick.name,
+      primaryNeed: bestPick.primaryNeed,
+      score: bestPick.score,
+      usedFallback: bestPick.usedFallback
+    });
   }
 
-  synergyResult.value = summarizeRankedSynergy(slots);
+  const afterContext = calcularNecessidadeDoTime(chosen, {
+    activeSlotCount: slots.length,
+    getTagsByChampion: championTags
+  });
+
+  synergyResult.value = summarizeRankedSynergy(slots, {
+    beforeContext,
+    afterContext,
+    recommendations
+  });
+  store.teamPlanner.analysisResult = synergyResult.value;
 }
 
-function summarizeRankedSynergy(slots) {
+function summarizeRankedSynergy(slots, details = {}) {
   const picks = slots
     .filter((slot) => slot.championLocked)
     .map((slot) => ({ role: slot.role, champion: slot.championLocked }));
@@ -625,26 +671,43 @@ function summarizeRankedSynergy(slots) {
 
   for (const pick of picks) {
     const tags = championTags(pick.champion);
-    const desired = roleDesiredTags(pick.role);
-    if (desired.some((tag) => tags.includes(tag))) roleMatch += 1;
+    const roleScore = roleFitScore(pick.role, tags);
+    if (roleScore >= 0.7) roleMatch += 1;
 
     for (const tag of tags) {
       tagCount[tag] = (tagCount[tag] || 0) + 1;
     }
   }
 
-  const uniqueTags = Object.keys(tagCount).length;
-  const rawScore = (uniqueTags * 12) + (roleMatch * 15) + (picks.length * 8);
-  const score = Math.max(0, Math.min(100, Math.round(rawScore)));
+  const beforeSnapshot = details.beforeContext?.snapshotAtual || null;
+  const beforeTarget = details.beforeContext?.target || null;
+  const afterSnapshot = details.afterContext?.snapshotAtual || null;
+  const afterTarget = details.afterContext?.target || null;
+
+  const scoreBefore = beforeSnapshot && beforeTarget ? scoreToPercent(beforeSnapshot, beforeTarget) : 0;
+  const scoreAfter = afterSnapshot && afterTarget ? scoreToPercent(afterSnapshot, afterTarget) : 0;
+  const score = Math.max(scoreAfter, scoreBefore);
+
   const topTags = Object.entries(tagCount)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 4)
     .map(([tag, count]) => ({ tag, count }));
 
+  const needs = details.afterContext?.vetorNecessidade || {};
+  const sortedNeeds = Object.entries(needs)
+    .filter(([key]) => ['engage', 'poke', 'frontline', 'burst', 'disengage', 'utility', 'peel', 'waveclear'].includes(key))
+    .sort((a, b) => Number(b[1]) - Number(a[1]))
+    .slice(0, 3)
+    .map(([key]) => key);
+
   return {
     score,
+    scoreBefore,
+    scoreAfter,
     roleMatch,
     topTags,
+    topNeeds: sortedNeeds,
+    recommendations: details.recommendations || [],
     generatedAt: new Date().toLocaleTimeString('pt-BR')
   };
 }
