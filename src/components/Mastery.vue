@@ -35,7 +35,13 @@
             <div class="mb-2 text-center">
               <span class="text-4xl font-black leading-none" :class="monoStyles[index].rank">#{{ index + 1 }}</span>
             </div>
-            <img class="mx-auto h-16 w-16 rounded-lg border-2 border-slate-700 object-cover" :src="championImage(entry.championName)" :alt="entry.championName" loading="lazy" />
+            <img
+              class="mx-auto h-16 w-16 rounded-lg border-2 border-slate-700 object-cover"
+              :src="championImage(entry.championName)"
+              :alt="entry.championName"
+              loading="lazy"
+              @error="onChampionImageError"
+            />
             <p class="mt-2 truncate text-center text-sm font-bold text-white">{{ entry.championName }}</p>
             <p class="text-center text-[10px] font-semibold uppercase text-slate-300">M{{ entry.championLevel }} • {{ Number(entry.championPoints || 0).toLocaleString('pt-BR') }}</p>
             <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800">
@@ -53,7 +59,13 @@
                 <span>M{{ entry.championLevel }}</span>
               </div>
               <div class="flex items-center gap-2">
-                <img class="h-16 w-16 rounded-md border border-slate-700" :src="championImage(entry.championName)" :alt="entry.championName" loading="lazy" />
+                <img
+                  class="h-16 w-16 rounded-md border border-slate-700"
+                  :src="championImage(entry.championName)"
+                  :alt="entry.championName"
+                  loading="lazy"
+                  @error="onChampionImageError"
+                />
                 <div class="min-w-0">
                   <p class="truncate text-sm font-semibold text-slate-100">{{ entry.championName }}</p>
                   <p class="text-[10px] text-slate-400">{{ Number(entry.championPoints || 0).toLocaleString('pt-BR') }} pts</p>
@@ -78,7 +90,12 @@
             @mouseenter="showTooltip($event, entry)"
             @mouseleave="hideTooltip"
           >
-            <img class="h-10 w-10 rounded object-cover opacity-80 transition group-hover:opacity-100" :src="championImage(entry.championName)" loading="lazy" />
+            <img
+              class="h-10 w-10 rounded object-cover opacity-80 transition group-hover:opacity-100"
+              :src="championImage(entry.championName)"
+              loading="lazy"
+              @error="onChampionImageError"
+            />
             <p class="mt-0.5 w-full truncate text-center text-[9px] font-semibold text-slate-300 leading-tight">{{ entry.championName }}</p>
             <span class="text-[9px] font-bold text-amber-400">M{{ entry.championLevel }}</span>
           </article>
@@ -128,7 +145,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { state } from '../store.js';
-import { championImage } from '../utils.js';
+import { championImage, getChampionIdFromName, DDRAGON_VERSION } from '../utils.js';
 import { workerRequest } from '../api.js';
 
 const store = state;
@@ -178,6 +195,29 @@ function hideTooltip() {
   emit('hide-tooltip');
 }
 
+function championFallbackUrl() {
+  const fallbackId = encodeURIComponent(getChampionIdFromName('Aatrox'));
+  return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${fallbackId}.png`;
+}
+
+function onChampionImageError(event) {
+  const target = event?.target;
+  if (!target) return;
+  target.src = championFallbackUrl();
+}
+
+function normalizeMasteries(list) {
+  return (list || []).map((entry) => {
+    const fromStatic = store.staticData.championList.find((champ) => Number(champ.key) === Number(entry?.championId));
+    return {
+      championId: entry?.championId,
+      championName: entry?.championName || fromStatic?.name || 'Aatrox',
+      championLevel: Number(entry?.championLevel || 1),
+      championPoints: Number(entry?.championPoints || 0)
+    };
+  });
+}
+
 async function handleMasterySearch() {
   const summoner = masterySummoner.value?.trim();
   if (!summoner) return;
@@ -189,7 +229,7 @@ async function handleMasterySearch() {
   try {
     const data = await workerRequest('masteries', { gameName, tagLine });
     if (data?.masteries) {
-      store.masteryDashboard.allMasteries = data.masteries;
+      store.masteryDashboard.allMasteries = normalizeMasteries(data.masteries);
     }
   } catch (err) {
     store.masteryDashboard.error = err?.message || 'Erro ao buscar maestrias.';

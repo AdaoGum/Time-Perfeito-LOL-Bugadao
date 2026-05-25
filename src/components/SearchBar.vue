@@ -86,6 +86,22 @@ async function executeSearch() {
     state.searchProfile.tagLine = tagLine;
     state.searchProfile.profileIconId = data.profileIconId || 29;
     state.searchProfile.summonerLevel = data.summonerLevel || 0;
+    state.searchProfile.statsSolo = {
+      wins: Number(data.statsSolo?.wins || 0),
+      losses: Number(data.statsSolo?.losses || 0),
+      winRate: Number(data.statsSolo?.winRate || 0),
+      tier: data.statsSolo?.tier || 'UNRANKED',
+      rank: data.statsSolo?.rank || '',
+      lp: Number(data.statsSolo?.lp || 0)
+    };
+    state.searchProfile.statsFlex = {
+      wins: Number(data.statsFlex?.wins || 0),
+      losses: Number(data.statsFlex?.losses || 0),
+      winRate: Number(data.statsFlex?.winRate || 0),
+      tier: data.statsFlex?.tier || 'UNRANKED',
+      rank: data.statsFlex?.rank || '',
+      lp: Number(data.statsFlex?.lp || 0)
+    };
     state.searchProfile.stats = {
       wins: Number(data.stats?.wins || 0),
       losses: Number(data.stats?.losses || 0),
@@ -97,24 +113,26 @@ async function executeSearch() {
     state.searchProfile.matches = Array.isArray(data.matches) ? data.matches : [];
     state.searchProfile.error = null;
 
-    // Busca maestrias associadas em background para alimentar o ecossistema
-    try {
-      const masteryData = await workerRequest('masteries', { puuid: data.puuid, gameName, tagLine });
-      const fromStaticChamp = (entry) => {
-        if (!entry) return { championName: 'Aatrox', championLevel: 1, championPoints: 0 };
-        const fromStatic = state.staticData.championList.find((champ) => Number(champ.key) === Number(entry.championId));
-        return {
-          championName: entry.championName || fromStatic?.name || 'Aatrox',
-          championLevel: Number(entry.championLevel || 1),
-          championPoints: Number(entry.championPoints || 0)
-        };
-      };
-      state.masteryDashboard.allMasteries = (masteryData.masteries || []).map(fromStaticChamp);
-    } catch (mErr) {
-      console.warn('Erro nas maestrias em background:', mErr);
-    }
-
+    // Libera os consumidores imediatamente (Home/Profile/Tribo) sem bloquear na busca de maestrias.
     emit('search-success', state.searchProfile);
+
+    // Busca maestrias associadas em segundo plano para alimentar o ecossistema.
+    workerRequest('masteries', { puuid: data.puuid, gameName, tagLine })
+      .then((masteryData) => {
+        const fromStaticChamp = (entry) => {
+          if (!entry) return { championName: 'Aatrox', championLevel: 1, championPoints: 0 };
+          const fromStatic = state.staticData.championList.find((champ) => Number(champ.key) === Number(entry.championId));
+          return {
+            championName: entry.championName || fromStatic?.name || 'Aatrox',
+            championLevel: Number(entry.championLevel || 1),
+            championPoints: Number(entry.championPoints || 0)
+          };
+        };
+        state.masteryDashboard.allMasteries = (masteryData.masteries || []).map(fromStaticChamp);
+      })
+      .catch((mErr) => {
+        console.warn('Erro nas maestrias em background:', mErr);
+      });
   } catch (error) {
     localError.value = error.message;
     emit('search-error', error.message);

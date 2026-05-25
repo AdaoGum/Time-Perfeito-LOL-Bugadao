@@ -28,46 +28,6 @@
   <!-- Card Ripple -->
   <div id="card-ripple" class="pointer-events-none fixed z-[55] hidden" style="width:10px;height:10px;border-radius:50%;transform:translate(-50%,-50%) scale(0)"></div>
 
-  <!-- CARD PERSISTENTE DO INVOCADOR (Superior Esquerdo) -->
-  <div v-if="store.searchProfile.puuid" class="fixed left-4 top-20 z-40 w-64 bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-2xl flex items-center gap-3">
-    <img
-      class="w-14 h-14 rounded-lg border border-slate-700 shadow-md object-cover"
-      :src="profileIconImage(store.searchProfile.profileIconId)"
-      @error="(e) => e.target.src = profileIconImage(29)"
-      />
-    <div class="overflow-hidden flex-1 min-w-0">
-      <h4 class="text-xs font-black text-white truncate">
-        {{ store.searchProfile.gameName }}<span class="text-slate-500 font-medium">#{{ store.searchProfile.tagLine }}</span>
-      </h4>
-      <p class="text-[10px] mt-1 font-bold text-slate-400">Nível {{ store.searchProfile.summonerLevel }}</p>
-      
-      <div class="mt-1 flex flex-wrap gap-1.5">
-        <span class="inline-block text-[9px] font-black tracking-wide text-cyan-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800/80 uppercase">
-          Solo/Duo: {{ store.searchProfile.statsSolo?.tier && store.searchProfile.statsSolo?.tier !== 'UNRANKED' ? `${store.searchProfile.statsSolo.tier} ${store.searchProfile.statsSolo.rank || ''}`.trim() : 'UNRANKED' }}
-        </span>
-        
-        <span class="inline-block text-[9px] font-black tracking-wide text-purple-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800/80 uppercase">
-          Flex: {{ store.searchProfile.statsFlex?.tier && store.searchProfile.statsFlex?.tier !== 'UNRANKED' ? `${store.searchProfile.statsFlex.tier} ${store.searchProfile.statsFlex.rank || ''}`.trim() : 'UNRANKED' }}
-        </span>
-      </div>
-    </div>
-  </div>
-
-  <!-- Telemetry Widget -->
-  <div class="fixed right-4 top-20 z-40 w-56 rounded-xl border border-slate-700 bg-slate-900/90 p-3 shadow-2xl backdrop-blur-sm transition-all">
-    <div class="mb-2 border-b border-slate-700/50 pb-2 text-center text-xs font-bold uppercase tracking-wider text-slate-400">
-      Monitor da API (Riot)
-    </div>
-    <div class="flex items-center justify-between text-sm font-semibold">
-      <span class="text-slate-300">Uso (2 min)</span>
-      <span class="text-white">{{ telUsage }} / 100</span>
-    </div>
-    <div class="mt-1 flex items-center justify-between text-sm font-semibold">
-      <span class="text-slate-300">Disponível</span>
-      <span :class="telAvailableClass">{{ telAvailable }}</span>
-    </div>
-    <div class="mt-2 rounded py-1 text-center text-xs font-medium" :class="telTimeClass">{{ telTimeText }}</div>
-  </div>
 
   <!-- Cinematic Overlay -->
   <div
@@ -99,9 +59,20 @@
   <!-- Header -->
   <header class="fixed inset-x-0 top-0 z-40 border-b border-slate-800/80 bg-slate-950/95 backdrop-blur">
     <div class="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-3 md:px-6">
-      <h1 class="text-base font-extrabold tracking-tight sm:text-lg md:text-xl">
-        <span class="bg-gradient-to-r from-lime-300 via-yellow-300 to-orange-500 bg-clip-text text-transparent">UGA BUGA Infos + Caverna dos Monos + Tribo Perfeita</span>
-      </h1>
+      <div class="flex items-center gap-3">
+        <button
+          type="button"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:text-white lg:hidden"
+          @click="store.ui.sidebarMobileOpen = !store.ui.sidebarMobileOpen"
+          aria-label="Abrir menu lateral"
+        >
+          ☰
+        </button>
+
+        <h1 class="text-base font-extrabold tracking-tight sm:text-lg md:text-xl">
+          <span class="bg-gradient-to-r from-lime-300 via-yellow-300 to-orange-500 bg-clip-text text-transparent">UGA BUGA Infos + Caverna dos Monos + Tribo Perfeita</span>
+        </h1>
+      </div>
       
       <!-- BUSCA INTEGRADA NA TOP BAR -->
       <div v-if="route.path !== '/'" class="hidden md:block w-64">
@@ -127,8 +98,124 @@
     </div>
   </header>
 
+  <div
+    v-if="store.ui.sidebarMobileOpen"
+    class="fixed inset-0 z-20 bg-slate-950/60 lg:hidden"
+    @click="store.ui.sidebarMobileOpen = false"
+  ></div>
+
+  <aside
+    class="fixed bottom-0 left-0 top-16 z-30 flex flex-col border-r border-slate-800 bg-slate-950/95 backdrop-blur transition-all duration-300"
+    :class="[
+      store.ui.sidebarCollapsed ? 'w-20' : 'w-72',
+      store.ui.sidebarMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+    ]"
+  >
+    <div class="flex items-center justify-between border-b border-slate-800 px-3 py-3">
+      <span v-if="!store.ui.sidebarCollapsed" class="text-xs font-black uppercase tracking-wider text-slate-400">Spiritual Bar</span>
+      <button
+        type="button"
+        class="inline-flex h-8 w-8 items-center justify-center rounded border border-slate-700 text-slate-300 hover:text-white"
+        @click="toggleSidebarCollapse"
+        :aria-label="store.ui.sidebarCollapsed ? 'Expandir sidebar' : 'Minimizar sidebar'"
+      >
+        {{ store.ui.sidebarCollapsed ? '»' : '«' }}
+      </button>
+    </div>
+
+    <div class="border-b border-slate-800 p-3">
+      <button
+        v-if="store.ui.sidebarCollapsed"
+        type="button"
+        class="mb-2 inline-flex h-8 w-8 items-center justify-center rounded border border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
+        @click="sidebarSearchOpen = !sidebarSearchOpen"
+        aria-label="Abrir busca"
+      >
+        🔍
+      </button>
+
+      <div v-if="!store.ui.sidebarCollapsed || sidebarSearchOpen" class="space-y-2">
+        <p v-if="!store.ui.sidebarCollapsed" class="text-[10px] font-black uppercase tracking-wider text-slate-500">Busca rápida</p>
+        <SearchBar
+          buttonText=""
+          @show-overlay="handleShowOverlay"
+          @hide-overlay="handleHideOverlay"
+          @show-udyr="handleShowUdyr"
+        />
+      </div>
+    </div>
+
+    <div v-if="store.searchProfile.puuid" class="border-b border-slate-800 p-3">
+      <div class="rounded-xl border border-slate-800 bg-slate-900/80 shadow-lg" :class="store.ui.sidebarCollapsed ? 'p-2' : 'p-3'">
+        <div class="flex gap-2" :class="store.ui.sidebarCollapsed ? 'flex-col items-center justify-start' : 'items-center'">
+          <img
+            class="rounded-lg border border-slate-700 object-cover"
+            :class="store.ui.sidebarCollapsed ? 'h-9 w-9' : 'h-10 w-10'"
+            :src="profileIconImage(store.searchProfile.profileIconId)"
+            @error="(e) => e.target.src = profileIconImage(29)"
+          />
+          <div class="min-w-0" :class="store.ui.sidebarCollapsed ? 'w-full text-center -mt-1' : 'flex-1'">
+            <p class="truncate font-black text-slate-100" :class="store.ui.sidebarCollapsed ? 'text-[9px]' : 'text-[11px]'">
+              {{ store.searchProfile.gameName }}<span class="font-medium text-slate-500">#{{ store.searchProfile.tagLine }}</span>
+            </p>
+            <p class="font-bold text-slate-400" :class="store.ui.sidebarCollapsed ? 'text-[8px]' : 'text-[10px]'">Nível {{ store.searchProfile.summonerLevel }}</p>
+          </div>
+        </div>
+        <div v-if="!store.ui.sidebarCollapsed" class="mt-2 space-y-1">
+          <p class="rounded border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-black uppercase text-cyan-400">
+            Solo/Duo: {{ store.searchProfile.statsSolo?.tier && store.searchProfile.statsSolo?.tier !== 'UNRANKED' ? `${store.searchProfile.statsSolo.tier} ${store.searchProfile.statsSolo.rank || ''}`.trim() : 'UNRANKED' }}
+          </p>
+          <p class="rounded border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-black uppercase text-purple-400">
+            Flex: {{ store.searchProfile.statsFlex?.tier && store.searchProfile.statsFlex?.tier !== 'UNRANKED' ? `${store.searchProfile.statsFlex.tier} ${store.searchProfile.statsFlex.rank || ''}`.trim() : 'UNRANKED' }}
+          </p>
+        </div>
+      </div>
+    </div>
+
+
+    <nav class="flex-1 space-y-2 overflow-y-auto p-3">
+      <button
+        v-for="tab in tabs"
+        :key="`side-${tab.id}`"
+        type="button"
+        @click="goToTab(tab.path)"
+        class="flex w-full items-center rounded-lg border px-2 py-2 text-left text-xs font-bold transition"
+        :class="route.path === tab.path
+          ? 'border-orange-500 bg-orange-500/10 text-orange-400'
+          : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-600 hover:text-white'"
+      >
+        <span class="inline-flex h-7 w-7 items-center justify-center rounded border border-slate-700 bg-slate-950 text-[10px] font-black">
+          {{ tab.label.slice(0, 1) }}
+        </span>
+        <span v-if="!store.ui.sidebarCollapsed" class="ml-2 truncate">{{ tab.label }}</span>
+      </button>
+    </nav>
+
+    <div class="border-t border-slate-800 p-3">
+      <div
+        class="rounded-xl border border-slate-700 bg-slate-900/90 p-3 backdrop-blur-sm transition-all"
+        :class="store.ui.sidebarCollapsed ? 'px-2 py-2' : ''"
+      >
+        <div v-if="!store.ui.sidebarCollapsed" class="mb-2 border-b border-slate-700/50 pb-2 text-center text-xs font-bold uppercase tracking-wider text-slate-400">
+          Monitor da API (Riot)
+        </div>
+        <div class="flex items-center justify-between text-sm font-semibold" :class="store.ui.sidebarCollapsed ? 'text-[10px]' : ''">
+          <span class="text-slate-300">{{ store.ui.sidebarCollapsed ? 'Uso' : 'Uso (2 min)' }}</span>
+          <span class="text-white">{{ telUsage }}/100</span>
+        </div>
+        <div v-if="!store.ui.sidebarCollapsed" class="mt-1 flex items-center justify-between text-sm font-semibold">
+          <span class="text-slate-300">Disponível</span>
+          <span :class="telAvailableClass">{{ telAvailable }}</span>
+        </div>
+        <div class="mt-2 rounded py-1 text-center text-xs font-medium" :class="telTimeClass">
+          {{ store.ui.sidebarCollapsed ? telAvailable : telTimeText }}
+        </div>
+      </div>
+    </div>
+  </aside>
+
   <!-- Main -->
-  <main class="mx-auto w-full max-w-7xl px-4 pb-16 pt-24 md:px-6">
+  <main class="w-full px-4 pb-16 pt-24 transition-[margin] duration-300 md:px-6" :style="mainStyle">
     <router-view v-slot="{ Component }">
       <component
         :is="Component"
@@ -149,7 +236,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { state } from './store.js';
 import { profileIconImage, DDRAGON_VERSION } from './utils.js';
@@ -164,6 +251,8 @@ const tooltipEl = ref(null);
 
 const showOverlay = ref(false);
 const countdown = ref(3);
+const sidebarSearchOpen = ref(false);
+const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1440);
 
 const tabs = [
   { id: 'home', path: '/', label: 'TEMPLO' },
@@ -181,6 +270,48 @@ function handleShowOverlay(count = 3) {
 function handleHideOverlay() {
   showOverlay.value = false;
 }
+
+function goToTab(path) {
+  store.ui.sidebarMobileOpen = false;
+  router.push(path);
+}
+
+function toggleSidebarCollapse() {
+  store.ui.sidebarCollapsed = !store.ui.sidebarCollapsed;
+  localStorage.setItem('sidebar-collapsed', String(store.ui.sidebarCollapsed));
+  if (!store.ui.sidebarCollapsed) {
+    sidebarSearchOpen.value = false;
+  }
+}
+
+function updateViewport() {
+  viewportWidth.value = window.innerWidth;
+  if (window.innerWidth >= 1024) {
+    store.ui.sidebarMobileOpen = false;
+  }
+}
+
+const isDesktop = computed(() => viewportWidth.value >= 1024);
+
+const mainStyle = computed(() => {
+  if (!isDesktop.value) {
+    return { marginLeft: '0px', width: '100%' };
+  }
+
+  const leftOffset = store.ui.sidebarCollapsed ? 80 : 288;
+  return {
+    marginLeft: `${leftOffset}px`,
+    width: `calc(100% - ${leftOffset}px)`
+  };
+});
+
+watch(
+  () => route.path,
+  () => {
+    store.ui.sidebarMobileOpen = false;
+    sidebarSearchOpen.value = false;
+  }
+);
 
 // Udyr runner animation
 function handleShowUdyr() {
@@ -216,9 +347,16 @@ function onMouseMove(e) {
 
 onMounted(() => {
   window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('resize', updateViewport);
+  const saved = localStorage.getItem('sidebar-collapsed');
+  if (saved !== null) {
+    store.ui.sidebarCollapsed = saved === 'true';
+  }
+  updateViewport();
 });
 onUnmounted(() => {
   window.removeEventListener('mousemove', onMouseMove);
+  window.removeEventListener('resize', updateViewport);
 });
 
 // =========================================================
