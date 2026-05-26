@@ -3,7 +3,8 @@ import { reactive } from 'vue';
 export const state = reactive({
   // Monitor de Telemetria da API da Riot (Evita o erro de undefined no App.vue)
   telemetry: {
-    timestamps: []
+    timestamps: [],
+    events: []
   },
 
   // Dados do perfil unificado buscado (Jogador Global Ativo)

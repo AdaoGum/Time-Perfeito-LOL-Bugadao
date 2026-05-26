@@ -3,7 +3,7 @@
     <section class="rounded-2xl bg-slate-900/70 backdrop-blur-md border border-slate-800 p-5 shadow-xl">
       <div class="flex items-center justify-between gap-3">
         <div>
-          <h2 class="text-xl font-black tracking-wide text-cyan-300">LOBBY PERFEITO</h2>
+          <h2 class="text-xl font-black tracking-wide text-cyan-300">Tribo PERFEITO</h2>
           <p class="text-xs text-slate-400">Escolha o modo da fila e monte seu time sem perder o estilo raiz.</p>
         </div>
         <button
@@ -42,7 +42,7 @@
           type="button"
           @click="findPerfectTribe"
           class="rounded-md bg-gradient-to-b from-cyan-600 to-cyan-800 border border-cyan-400/50 px-5 py-2 text-xs font-black uppercase tracking-widest text-white shadow-[0_0_20px_rgba(6,182,212,0.2)] hover:brightness-110"
-        >Encontrar Lobby Perfeito</button>
+        >Encontrar Tribo Perfeito</button>
       </div>
 
       <div v-if="synergyResult" class="rounded-xl border border-emerald-700/50 bg-emerald-950/20 p-3 text-xs">
@@ -351,6 +351,7 @@
 
 <script setup>
 import { computed, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import SearchBar from './SearchBar.vue';
 import CustomSlotCard from './CustomSlotCard.vue';
 import FilaSelecao from './FilaSelecao.vue';
@@ -360,6 +361,7 @@ import { championImage, profileIconImage, getChampionIdFromName, DDRAGON_VERSION
 import { calcularNecessidadeDoTime, encontrarMelhorPick, getChampionMetrics, roleFitScore, scoreToPercent } from '../utils/sinergiaMotor.js';
 
 const store = state;
+const router = useRouter();
 const viewMode = ref('selection');
 const queueType = ref('solo_duo');
 const rerollSeed = ref(0);
@@ -476,7 +478,7 @@ function onSelectLobbyMode(mode) {
   synergyResult.value = null;
 
   if (mode === 'custom_5x5') {
-    viewMode.value = 'custom';
+    router.push('/saguaoCustom');
     return;
   }
 

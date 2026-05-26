@@ -47,6 +47,18 @@ const props = defineProps({
   initialValue: {
     type: String,
     default: ''
+  },
+  action: {
+    type: String,
+    default: 'profile_overview'
+  },
+  loadMasteries: {
+    type: Boolean,
+    default: true
+  },
+  syncGlobalStore: {
+    type: Boolean,
+    default: true
   }
 });
 
@@ -78,61 +90,72 @@ async function executeSearch() {
   emit('search-start');
 
   try {
-    const data = await workerRequest('profile_overview', { gameName, tagLine });
-    
-    // Atualiza o Jogador Global Ativo na Store
-    state.searchProfile.puuid = data.puuid || null;
-    state.searchProfile.gameName = gameName;
-    state.searchProfile.tagLine = tagLine;
-    state.searchProfile.profileIconId = data.profileIconId || 29;
-    state.searchProfile.summonerLevel = data.summonerLevel || 0;
-    state.searchProfile.statsSolo = {
-      wins: Number(data.statsSolo?.wins || 0),
-      losses: Number(data.statsSolo?.losses || 0),
-      winRate: Number(data.statsSolo?.winRate || 0),
-      tier: data.statsSolo?.tier || 'UNRANKED',
-      rank: data.statsSolo?.rank || '',
-      lp: Number(data.statsSolo?.lp || 0)
+    const data = await workerRequest(props.action, { gameName, tagLine });
+    const normalizedData = {
+      ...data,
+      gameName: data?.gameName || gameName,
+      tagLine: data?.tagLine || tagLine,
+      profileIconId: data?.profileIconId || 29,
+      summonerLevel: data?.summonerLevel || 0,
+      statsSolo: {
+        wins: Number(data.statsSolo?.wins || 0),
+        losses: Number(data.statsSolo?.losses || 0),
+        winRate: Number(data.statsSolo?.winRate || 0),
+        tier: data.statsSolo?.tier || 'UNRANKED',
+        rank: data.statsSolo?.rank || '',
+        lp: Number(data.statsSolo?.lp || 0)
+      },
+      statsFlex: {
+        wins: Number(data.statsFlex?.wins || 0),
+        losses: Number(data.statsFlex?.losses || 0),
+        winRate: Number(data.statsFlex?.winRate || 0),
+        tier: data.statsFlex?.tier || 'UNRANKED',
+        rank: data.statsFlex?.rank || '',
+        lp: Number(data.statsFlex?.lp || 0)
+      },
+      matches: Array.isArray(data.matches) ? data.matches : []
     };
-    state.searchProfile.statsFlex = {
-      wins: Number(data.statsFlex?.wins || 0),
-      losses: Number(data.statsFlex?.losses || 0),
-      winRate: Number(data.statsFlex?.winRate || 0),
-      tier: data.statsFlex?.tier || 'UNRANKED',
-      rank: data.statsFlex?.rank || '',
-      lp: Number(data.statsFlex?.lp || 0)
-    };
-    state.searchProfile.stats = {
-      wins: Number(data.stats?.wins || 0),
-      losses: Number(data.stats?.losses || 0),
-      winRate: Number(data.stats?.winRate || 0),
-      tier: data.stats?.tier || 'UNRANKED',
-      rank: data.stats?.rank || '',
-      lp: Number(data.stats?.lp || 0)
-    };
-    state.searchProfile.matches = Array.isArray(data.matches) ? data.matches : [];
-    state.searchProfile.error = null;
 
-    // Libera os consumidores imediatamente (Home/Profile/Tribo) sem bloquear na busca de maestrias.
-    emit('search-success', state.searchProfile);
+    if (props.syncGlobalStore) {
+      state.searchProfile.puuid = normalizedData.puuid || null;
+      state.searchProfile.gameName = normalizedData.gameName;
+      state.searchProfile.tagLine = normalizedData.tagLine;
+      state.searchProfile.profileIconId = normalizedData.profileIconId;
+      state.searchProfile.summonerLevel = normalizedData.summonerLevel;
+      state.searchProfile.statsSolo = normalizedData.statsSolo;
+      state.searchProfile.statsFlex = normalizedData.statsFlex;
+      state.searchProfile.stats = {
+        wins: Number(data.stats?.wins || 0),
+        losses: Number(data.stats?.losses || 0),
+        winRate: Number(data.stats?.winRate || 0),
+        tier: data.stats?.tier || 'UNRANKED',
+        rank: data.stats?.rank || '',
+        lp: Number(data.stats?.lp || 0)
+      };
+      state.searchProfile.matches = normalizedData.matches;
+      state.searchProfile.error = null;
+    }
 
-    // Busca maestrias associadas em segundo plano para alimentar o ecossistema.
-    workerRequest('masteries', { puuid: data.puuid, gameName, tagLine })
-      .then((masteryData) => {
-        const fromStaticChamp = (entry) => {
-          if (!entry) return { championName: 'Aatrox', championLevel: 1, championPoints: 0 };
-          const fromStatic = state.staticData.championList.find((champ) => Number(champ.key) === Number(entry.championId));
-          return {
-            championName: entry.championName || fromStatic?.name || 'Aatrox',
-            championLevel: Number(entry.championLevel || 1),
-            championPoints: Number(entry.championPoints || 0)
+    emit('search-success', props.syncGlobalStore ? state.searchProfile : normalizedData);
+
+    if (props.loadMasteries && normalizedData.puuid) {
+      workerRequest('masteries', { puuid: normalizedData.puuid, gameName, tagLine })
+        .then((masteryData) => {
+          const fromStaticChamp = (entry) => {
+            if (!entry) return { championName: 'Aatrox', championLevel: 1, championPoints: 0 };
+            const fromStatic = state.staticData.championList.find((champ) => Number(champ.key) === Number(entry.championId));
+            return {
+              championName: entry.championName || fromStatic?.name || 'Aatrox',
+              championLevel: Number(entry.championLevel || 1),
+              championPoints: Number(entry.championPoints || 0)
+            };
           };
-        };
-        state.masteryDashboard.allMasteries = (masteryData.masteries || []).map(fromStaticChamp);
-      })
-      .catch((mErr) => {
-        console.warn('Erro nas maestrias em background:', mErr);
-      });
+          state.masteryDashboard.allMasteries = (masteryData.masteries || []).map(fromStaticChamp);
+        })
+        .catch((mErr) => {
+          console.warn('Erro nas maestrias em background:', mErr);
+        });
+    }
   } catch (error) {
     localError.value = error.message;
     emit('search-error', error.message);

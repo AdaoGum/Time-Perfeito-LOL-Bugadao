@@ -66,10 +66,12 @@ export default {
     // ======================================================================
     // ROTA: VISÃO GERAL DO PERFIL
     // ======================================================================
-    if (action === "profile_overview" || action === "visão_geral_do_perfil") {
+    if (action === "profile_overview" || action === "visão_geral_do_perfil" || action === "profile_brief") {
       if (!gameName || !tagLine) {
         return new Response(JSON.stringify({ error: "Faltam os parâmetros obrigatórios: gameName e tagLine." }), { status: 400, headers: corsHeaders });
       }
+
+      const includeMatches = action === "profile_overview" || action === "visão_geral_do_perfil";
 
       const accountRes = await fetch(`${routingAmericas}/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}?api_key=${API_KEY}`);
       if (!accountRes.ok) {
@@ -135,58 +137,60 @@ export default {
         }
       }
 
-      const matchIdsRes = await fetch(`${routingAmericas}/lol/match/v5/matches/by-puuid/${playerPuuid}/ids?start=0&count=20&api_key=${API_KEY}`);
       let realMatches = [];
 
-      if (matchIdsRes.ok) {
-        const matchIds = await matchIdsRes.json();
-        const matchPromises = matchIds.map(async (matchId) => {
-          try {
-            const detailRes = await fetch(`${routingAmericas}/lol/match/v5/matches/${matchId}?api_key=${API_KEY}`);
-            if (!detailRes.ok) return null;
-            const detail = await detailRes.json();
-            const info = detail.info;
-            
-            const participant = info.participants.find(p => p.puuid === playerPuuid);
-            if (!participant) return null;
+      if (includeMatches) {
+        const matchIdsRes = await fetch(`${routingAmericas}/lol/match/v5/matches/by-puuid/${playerPuuid}/ids?start=0&count=20&api_key=${API_KEY}`);
 
-            // Mapeia os dados estendidos das equipes (Com Tag e Rota individual)
-            const teams = info.participants.map(p => ({
-              gameName: p.riotIdGameName || p.summonerName,
-              tagLine: p.riotIdTagline,
-              championName: p.championName,
-              teamId: p.teamId,
-              kills: p.kills,
-              role: p.teamPosition
-            }));
+        if (matchIdsRes.ok) {
+          const matchIds = await matchIdsRes.json();
+          const matchPromises = matchIds.map(async (matchId) => {
+            try {
+              const detailRes = await fetch(`${routingAmericas}/lol/match/v5/matches/${matchId}?api_key=${API_KEY}`);
+              if (!detailRes.ok) return null;
+              const detail = await detailRes.json();
+              const info = detail.info;
+              
+              const participant = info.participants.find(p => p.puuid === playerPuuid);
+              if (!participant) return null;
 
-            return {
-              win: participant.win, 
-              queueType: queueMap[info.queueId] || "Outro Modo",
-              championName: participant.championName,
-              teamPosition: participant.teamPosition,
-              gameDuration: info.gameDuration,
-              gameStartTimestamp: info.gameStartTimestamp,
-              kills: participant.kills,
-              deaths: participant.deaths,
-              assists: participant.assists,
-              item0: participant.item0,
-              item1: participant.item1,
-              item2: participant.item2,
-              item3: participant.item3,
-              item4: participant.item4,
-              item5: participant.item5,
-              item6: participant.item6,
-              totalMinionsKilled: participant.totalMinionsKilled,
-              neutralMinionsKilled: participant.neutralMinionsKilled,
-              firstBloodKill: participant.firstBloodKill,
-              visionWardsBoughtInGame: participant.visionWardsBoughtInGame,
-              players: teams
-            };
-          } catch (e) { return null; }
-        });
-        const resolved = await Promise.all(matchPromises);
-        realMatches = resolved.filter(m => m !== null);
+              const teams = info.participants.map(p => ({
+                gameName: p.riotIdGameName || p.summonerName,
+                tagLine: p.riotIdTagline,
+                championName: p.championName,
+                teamId: p.teamId,
+                kills: p.kills,
+                role: p.teamPosition
+              }));
+
+              return {
+                win: participant.win, 
+                queueType: queueMap[info.queueId] || "Outro Modo",
+                championName: participant.championName,
+                teamPosition: participant.teamPosition,
+                gameDuration: info.gameDuration,
+                gameStartTimestamp: info.gameStartTimestamp,
+                kills: participant.kills,
+                deaths: participant.deaths,
+                assists: participant.assists,
+                item0: participant.item0,
+                item1: participant.item1,
+                item2: participant.item2,
+                item3: participant.item3,
+                item4: participant.item4,
+                item5: participant.item5,
+                item6: participant.item6,
+                totalMinionsKilled: participant.totalMinionsKilled,
+                neutralMinionsKilled: participant.neutralMinionsKilled,
+                firstBloodKill: participant.firstBloodKill,
+                visionWardsBoughtInGame: participant.visionWardsBoughtInGame,
+                players: teams
+              };
+            } catch (e) { return null; }
+          });
+          const resolved = await Promise.all(matchPromises);
+          realMatches = resolved.filter(m => m !== null);
+        }
       }
 
       return new Response(JSON.stringify({

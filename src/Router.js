@@ -3,7 +3,7 @@ import Home from './components/Home.vue';
 import Profile from './components/Profile.vue';
 import Mastery from './components/Mastery.vue';
 import Tribo from './components/Tribo.vue';
-import SaguaoCustom from './components/SaguaoCustom.vue';
+import SaguaoCustom from './components/saguaoCustom.vue';
 
 const routes = [
   { path: '/', component: Home },

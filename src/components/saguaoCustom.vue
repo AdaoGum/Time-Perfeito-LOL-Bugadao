@@ -9,7 +9,7 @@
           <img
             class="h-11 w-11 rounded border border-cyan-600/60 bg-slate-950 object-cover shadow-[0_0_18px_rgba(8,145,178,0.35)]"
             src="https://ddragon.leagueoflegends.com/cdn/15.10.1/img/profileicon/29.png"
-            alt="Lobby"
+            alt="Tribo"
           />
           <div>
             <h2 class="text-lg font-black uppercase tracking-wide text-amber-100">Fogueira Custom 5x5</h2>
@@ -40,7 +40,7 @@
         Funções sem repetição por time: TOP, JUNGLE, MID, ADC, SUP. <span class="font-bold text-amber-300">AUTOFILL</span> é coringa e pode repetir.
       </p>
       <p v-if="statusMessage" class="mt-2 rounded border border-amber-700/40 bg-amber-950/40 px-2 py-1 text-[11px] font-bold text-amber-200">
-        {{ statusMessage }}
+        {{ statusMessage }}<span v-if="companionLoading"> • carregando companheiros...</span>
       </p>
 
       <div class="mt-4 grid gap-4 md:grid-cols-2">
@@ -50,7 +50,11 @@
             <div
               v-for="slot in blueSlots"
               :key="`blue-${slot.id}`"
-              class="border-b border-cyan-900/30 last:border-b-0"
+              class="relative border-b border-cyan-900/30 last:border-b-0"
+              draggable="true"
+              @dragstart="onDragStart(slot.id)"
+              @dragover.prevent
+              @drop.prevent="onDrop(slot.id)"
             >
               <div class="flex items-center justify-between gap-2 px-2 py-2 text-xs">
                 <div class="min-w-0 flex items-center gap-2">
@@ -63,16 +67,43 @@
                   <div class="min-w-0">
                     <p class="truncate font-bold text-amber-100">{{ slot.gameName || 'Empty' }}</p>
                     <p class="truncate text-[10px] text-slate-400">{{ slot.tagLine ? `#${slot.tagLine}` : 'Aguardando jogador' }}</p>
+                    <p class="truncate text-[10px] font-black text-cyan-300">{{ formatRankLabel(slot) }} • {{ formatSlotPoints(slot) }} pts</p>
                   </div>
                 </div>
 
-                <div class="flex items-center gap-1">
-                  <select
-                    v-model="slot.role"
-                    class="rounded border border-slate-700 bg-slate-950 px-1 py-1 text-[10px] font-black text-slate-200"
-                  >
-                    <option v-for="role in roleOptions" :key="`blue-role-${slot.id}-${role}`" :value="role">{{ role }}</option>
-                  </select>
+                <div class="flex flex-wrap items-center justify-end gap-1">
+                  <button
+                    v-if="slot.gameName"
+                    type="button"
+                    @click="findCompanionsForSlot(slot.id)"
+                    class="rounded border border-cyan-600/70 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-cyan-200 hover:bg-slate-900"
+                  >Encontrar amigos</button>
+                  <div class="relative">
+                    <button
+                      type="button"
+                      @click="toggleRoleMenu(slot.id)"
+                      class="flex h-8 w-8 items-center justify-center rounded border border-slate-700 bg-slate-950/90 p-1"
+                      :title="getRoleLabel(slot.role)"
+                    >
+                      <img class="h-4 w-4 object-contain" :src="getRoleIcon(slot.role)" :alt="getRoleLabel(slot.role)" />
+                    </button>
+                    <div
+                      v-if="openRoleMenuId === slot.id"
+                      class="absolute right-0 top-full z-30 mt-1 grid w-[106px] grid-cols-3 place-items-center gap-1 rounded border border-slate-700 bg-slate-950 p-1 shadow-2xl"
+                    >
+                      <button
+                        v-for="role in roleOptions"
+                        :key="`blue-role-${slot.id}-${role.value}`"
+                        type="button"
+                        @click="selectRole(slot.id, role.value)"
+                        class="flex h-8 w-8 items-center justify-center rounded border bg-slate-900 p-1"
+                        :class="slot.role === role.value ? 'border-amber-400' : 'border-slate-700'"
+                        :title="role.label"
+                      >
+                        <img class="h-4 w-4 object-contain" :src="getRoleIcon(role.value)" :alt="role.label" />
+                      </button>
+                    </div>
+                  </div>
                   <button
                     v-if="slot.gameName"
                     type="button"
@@ -88,9 +119,12 @@
                 </div>
               </div>
 
-              <div v-if="slot.showSearch" class="space-y-2 px-2 pb-2">
+              <div v-if="slot.showSearch" class="absolute left-2 right-2 top-full z-20 mt-1 space-y-2 rounded border border-cyan-700/70 bg-slate-950 p-2 shadow-2xl shadow-cyan-950/40">
                 <SearchBar
                   buttonText="Buscar"
+                  action="profile_brief"
+                  :load-masteries="false"
+                  :sync-global-store="false"
                   @search-start="onSearchStart(slot.id)"
                   @search-success="(data) => onSearchSuccess(slot.id, data)"
                   @search-error="(msg) => onSearchError(slot.id, msg)"
@@ -120,7 +154,11 @@
             <div
               v-for="slot in redSlots"
               :key="`red-${slot.id}`"
-              class="border-b border-cyan-900/30 last:border-b-0"
+              class="relative border-b border-cyan-900/30 last:border-b-0"
+              draggable="true"
+              @dragstart="onDragStart(slot.id)"
+              @dragover.prevent
+              @drop.prevent="onDrop(slot.id)"
             >
               <div class="flex items-center justify-between gap-2 px-2 py-2 text-xs">
                 <div class="min-w-0 flex items-center gap-2">
@@ -133,16 +171,43 @@
                   <div class="min-w-0">
                     <p class="truncate font-bold text-amber-100">{{ slot.gameName || 'Empty' }}</p>
                     <p class="truncate text-[10px] text-slate-400">{{ slot.tagLine ? `#${slot.tagLine}` : 'Aguardando jogador' }}</p>
+                    <p class="truncate text-[10px] font-black text-cyan-300">{{ formatRankLabel(slot) }} • {{ formatSlotPoints(slot) }} pts</p>
                   </div>
                 </div>
 
-                <div class="flex items-center gap-1">
-                  <select
-                    v-model="slot.role"
-                    class="rounded border border-slate-700 bg-slate-950 px-1 py-1 text-[10px] font-black text-slate-200"
-                  >
-                    <option v-for="role in roleOptions" :key="`red-role-${slot.id}-${role}`" :value="role">{{ role }}</option>
-                  </select>
+                <div class="flex flex-wrap items-center justify-end gap-1">
+                  <button
+                    v-if="slot.gameName"
+                    type="button"
+                    @click="findCompanionsForSlot(slot.id)"
+                    class="rounded border border-cyan-600/70 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-cyan-200 hover:bg-slate-900"
+                  >Encontrar amigos</button>
+                  <div class="relative">
+                    <button
+                      type="button"
+                      @click="toggleRoleMenu(slot.id)"
+                      class="flex h-8 w-8 items-center justify-center rounded border border-slate-700 bg-slate-950/90 p-1"
+                      :title="getRoleLabel(slot.role)"
+                    >
+                      <img class="h-4 w-4 object-contain" :src="getRoleIcon(slot.role)" :alt="getRoleLabel(slot.role)" />
+                    </button>
+                    <div
+                      v-if="openRoleMenuId === slot.id"
+                      class="absolute right-0 top-full z-30 mt-1 grid w-[106px] grid-cols-3 place-items-center gap-1 rounded border border-slate-700 bg-slate-950 p-1 shadow-2xl"
+                    >
+                      <button
+                        v-for="role in roleOptions"
+                        :key="`red-role-${slot.id}-${role.value}`"
+                        type="button"
+                        @click="selectRole(slot.id, role.value)"
+                        class="flex h-8 w-8 items-center justify-center rounded border bg-slate-900 p-1"
+                        :class="slot.role === role.value ? 'border-amber-400' : 'border-slate-700'"
+                        :title="role.label"
+                      >
+                        <img class="h-4 w-4 object-contain" :src="getRoleIcon(role.value)" :alt="role.label" />
+                      </button>
+                    </div>
+                  </div>
                   <button
                     v-if="slot.gameName"
                     type="button"
@@ -158,9 +223,12 @@
                 </div>
               </div>
 
-              <div v-if="slot.showSearch" class="space-y-2 px-2 pb-2">
+              <div v-if="slot.showSearch" class="absolute left-2 right-2 top-full z-20 mt-1 space-y-2 rounded border border-cyan-700/70 bg-slate-950 p-2 shadow-2xl shadow-cyan-950/40">
                 <SearchBar
                   buttonText="Buscar"
+                  action="profile_brief"
+                  :load-masteries="false"
+                  :sync-global-store="false"
                   @search-start="onSearchStart(slot.id)"
                   @search-success="(data) => onSearchSuccess(slot.id, data)"
                   @search-error="(msg) => onSearchError(slot.id, msg)"
@@ -191,14 +259,45 @@
           <div
             v-for="slot in reserveSlots"
             :key="`reserve-${slot.id}`"
-            class="rounded border border-slate-800 bg-slate-900/50 p-2"
+            class="relative rounded border border-slate-800 bg-slate-900/50 p-2"
+            draggable="true"
+            @dragstart="onDragStart(slot.id)"
+            @dragover.prevent
+            @drop.prevent="onDrop(slot.id)"
           >
-            <div class="flex items-center justify-between gap-1">
-              <p class="truncate text-[10px] font-bold text-slate-300">{{ slot.gameName || 'Empty' }}</p>
-              <select v-model="slot.role" class="rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-[9px] font-bold text-slate-200">
-                <option v-for="role in roleOptions" :key="`reserve-role-${slot.id}-${role}`" :value="role">{{ role }}</option>
-              </select>
+            <div>
+              <p class="truncate text-[10px] font-bold text-slate-200">{{ slot.gameName || 'Empty' }}</p>
+              <p class="truncate text-[9px] text-slate-400">{{ slot.tagLine ? `#${slot.tagLine}` : 'Aguardando jogador' }}</p>
             </div>
+            <div class="mt-2 flex items-center gap-2">
+              <div class="relative flex-1">
+                <button
+                  type="button"
+                  @click="toggleRoleMenu(slot.id)"
+                  class="flex h-7 w-full items-center justify-center rounded border border-slate-700 bg-slate-950/90 p-1"
+                  :title="getRoleLabel(slot.role)"
+                >
+                  <img class="h-4 w-4 object-contain" :src="getRoleIcon(slot.role)" :alt="getRoleLabel(slot.role)" />
+                </button>
+                <div
+                  v-if="openRoleMenuId === slot.id"
+                  class="absolute left-0 top-full z-30 mt-1 grid w-[106px] grid-cols-3 place-items-center gap-1 rounded border border-slate-700 bg-slate-950 p-1 shadow-2xl"
+                >
+                  <button
+                    v-for="role in roleOptions"
+                    :key="`reserve-role-${slot.id}-${role.value}`"
+                    type="button"
+                    @click="selectRole(slot.id, role.value)"
+                    class="flex h-7 w-7 items-center justify-center rounded border bg-slate-900 p-1"
+                    :class="slot.role === role.value ? 'border-amber-400' : 'border-slate-700'"
+                    :title="role.label"
+                  >
+                    <img class="h-3.5 w-3.5 object-contain" :src="getRoleIcon(role.value)" :alt="role.label" />
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p class="mt-1 truncate text-[10px] font-black text-cyan-300">{{ formatRankLabel(slot) }} • {{ formatSlotPoints(slot) }} pts</p>
             <div class="mt-1 flex gap-1">
               <button
                 type="button"
@@ -211,9 +310,12 @@
                 class="rounded border border-slate-700 px-1 py-0.5 text-[9px] font-black text-slate-300"
               >A</button>
             </div>
-            <div v-if="slot.showSearch" class="mt-1">
+            <div v-if="slot.showSearch" class="absolute left-2 right-2 top-full z-20 mt-1 rounded border border-cyan-700/70 bg-slate-950 p-2 shadow-2xl shadow-cyan-950/40">
               <SearchBar
                 buttonText="Buscar"
+                action="profile_brief"
+                :load-masteries="false"
+                :sync-global-store="false"
                 @search-start="onSearchStart(slot.id)"
                 @search-success="(data) => onSearchSuccess(slot.id, data)"
                 @search-error="(msg) => onSearchError(slot.id, msg)"
@@ -243,11 +345,22 @@
 <script setup>
 import { computed, reactive, ref } from 'vue';
 import SearchBar from './SearchBar.vue';
+import { workerRequest } from '../api.js';
 import { DDRAGON_VERSION } from '../utils.js';
 
-const roleOptions = ['TOP', 'JUNGLE', 'MID', 'ADC', 'SUP', 'AUTOFILL'];
+const roleOptions = [
+  { value: 'TOP', label: 'TOP' },
+  { value: 'JUNGLE', label: 'JUNGLE' },
+  { value: 'MID', label: 'MID' },
+  { value: 'ADC', label: 'ADC' },
+  { value: 'SUP', label: 'SUP' },
+  { value: 'AUTOFILL', label: 'FILL' }
+];
 const rerollSeed = ref(0);
 const statusMessage = ref('');
+const companionLoading = ref(false);
+const companionProfileCache = new Map();
+const openRoleMenuId = ref(null);
 
 const customSlots = reactive(Array.from({ length: 15 }, (_, i) => createCustomSlot(i + 1)));
 
@@ -280,6 +393,55 @@ function createCustomSlot(id) {
   };
 }
 
+function getRoleIcon(position) {
+  const map = {
+    TOP: 'top',
+    JUNGLE: 'jungle',
+    MID: 'middle',
+    ADC: 'bottom',
+    SUP: 'utility',
+    AUTOFILL: 'fill'
+  };
+  const role = map[String(position || '').toUpperCase()] || 'fill';
+  return `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-clash/global/default/assets/images/position-selector/positions/icon-position-${role}.png`;
+}
+
+function getRoleLabel(position) {
+  return roleOptions.find((role) => role.value === position)?.label || 'FILL';
+}
+
+function toggleRoleMenu(slotId) {
+  openRoleMenuId.value = openRoleMenuId.value === slotId ? null : slotId;
+}
+
+function selectRole(slotId, roleValue) {
+  const slot = customSlots.find((entry) => entry.id === slotId);
+  if (!slot) return;
+  slot.role = roleValue;
+  openRoleMenuId.value = null;
+}
+
+function normalizeText(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function slotKey(gameName, tagLine) {
+  return `${normalizeText(gameName)}#${normalizeText(tagLine || 'BR1')}`;
+}
+
+function formatRankLabel(slot) {
+  const tier = String(slot.manualTier || slot.statsSolo?.tier || 'UNRANKED').toUpperCase();
+  const rank = String(slot.manualRank || slot.statsSolo?.rank || '').toUpperCase();
+  const lp = Number(slot.manualLp || slot.statsSolo?.lp || 0);
+
+  if (!tier || tier === 'UNRANKED') return 'UNRANKED';
+  return `${tier} ${rank || ''}${lp ? ` • ${lp} LP` : ''}`.trim();
+}
+
+function formatSlotPoints(slot) {
+  return mmrWeight(slot);
+}
+
 function profileIconUrl(profileIconId) {
   const iconId = profileIconId || 29;
   return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/profileicon/${iconId}.png`;
@@ -305,10 +467,12 @@ function onSearchSuccess(slotId, profileData) {
   slot.profileIconId = profileData?.profileIconId || 29;
   slot.statsSolo = profileData?.statsSolo || slot.statsSolo;
   slot.statsFlex = profileData?.statsFlex || slot.statsFlex;
-  slot.manualTier = slot.manualTier || slot.statsSolo?.tier || 'UNRANKED';
-  slot.manualRank = slot.manualRank || slot.statsSolo?.rank || 'IV';
+  slot.manualTier = slot.statsSolo?.tier || 'UNRANKED';
+  slot.manualRank = slot.statsSolo?.rank || 'IV';
   slot.manualLp = String(slot.statsSolo?.lp || 0);
-  statusMessage.value = '';
+  slot.role = 'AUTOFILL';
+  openRoleMenuId.value = null;
+  statusMessage.value = `${slot.gameName} carregado no planner.`;
 }
 
 function onSearchError(slotId, message) {
@@ -334,9 +498,160 @@ function setCustomAnonymous(slotId) {
   slot.tagLine = 'OFFLINE';
   slot.summonerLevel = 0;
   slot.profileIconId = 29;
-  slot.manualTier = slot.manualTier || 'UNRANKED';
-  slot.manualRank = slot.manualRank || 'IV';
+  slot.manualTier = 'UNRANKED';
+  slot.manualRank = 'IV';
   slot.manualLp = slot.manualLp || '0';
+  slot.role = 'AUTOFILL';
+  openRoleMenuId.value = null;
+}
+
+function findMyEntry(match, profileData) {
+  const participants = Array.isArray(match?.players) ? match.players : [];
+  const myGameName = normalizeText(profileData?.gameName || profileData?.game_name);
+  const myTagLine = normalizeText(profileData?.tagLine || profileData?.tag_line || 'BR1');
+
+  const direct = participants.find((participant) => {
+    const pGameName = normalizeText(participant?.gameName);
+    const pTagLine = normalizeText(participant?.tagLine || 'BR1');
+    return pGameName && pGameName === myGameName && pTagLine === myTagLine;
+  });
+
+  if (direct) return direct;
+
+  const sameName = participants.find((participant) => normalizeText(participant?.gameName) === myGameName);
+  if (sameName) return sameName;
+
+  const championFallback = participants.find((participant) => {
+    return normalizeText(participant?.championName) === normalizeText(match?.championName);
+  });
+
+  return championFallback || null;
+}
+
+function extractCompanions(profileData) {
+  const matches = Array.isArray(profileData?.matches) ? profileData.matches.slice(0, 20) : [];
+  const counts = new Map();
+
+  for (const match of matches) {
+    const participants = Array.isArray(match?.players) ? match.players : [];
+    const me = findMyEntry(match, profileData);
+    if (!me?.teamId) continue;
+
+    const allies = participants.filter((participant) => {
+      const sameTeam = participant?.teamId === me.teamId;
+      const sameName = normalizeText(participant?.gameName) === normalizeText(profileData?.gameName);
+      return sameTeam && !sameName && participant?.gameName;
+    });
+
+    for (const ally of allies) {
+      const key = slotKey(ally.gameName, ally.tagLine || 'BR1');
+      const current = counts.get(key) || { gameName: ally.gameName, tagLine: ally.tagLine || 'BR1', games: 0, role: ally.role || 'AUTOFILL' };
+      current.games += 1;
+      if (!current.role || current.role === 'AUTOFILL') {
+        current.role = ally.teamPosition || ally.role || 'AUTOFILL';
+      }
+      counts.set(key, current);
+    }
+  }
+
+  return [...counts.values()].sort((a, b) => b.games - a.games);
+}
+
+async function loadCompanionProfile(companion) {
+  const cacheKey = slotKey(companion.gameName, companion.tagLine || 'BR1');
+  if (companionProfileCache.has(cacheKey)) {
+    return companionProfileCache.get(cacheKey);
+  }
+
+  try {
+    const data = await workerRequest('profile_brief', { gameName: companion.gameName, tagLine: companion.tagLine || 'BR1' });
+    const profile = {
+      gameName: data?.gameName || companion.gameName,
+      tagLine: data?.tagLine || companion.tagLine || 'BR1',
+      summonerLevel: Number(data?.summonerLevel || 0),
+      profileIconId: data?.profileIconId || 29,
+      statsSolo: data?.statsSolo || { wins: 0, losses: 0, winRate: 0, tier: 'UNRANKED', rank: '', lp: 0 },
+      statsFlex: data?.statsFlex || { wins: 0, losses: 0, winRate: 0, tier: 'UNRANKED', rank: '', lp: 0 }
+    };
+    companionProfileCache.set(cacheKey, profile);
+    return profile;
+  } catch (error) {
+    const fallbackProfile = {
+      gameName: companion.gameName,
+      tagLine: companion.tagLine || 'BR1',
+      summonerLevel: 0,
+      profileIconId: 29,
+      statsSolo: { wins: 0, losses: 0, winRate: 0, tier: 'UNRANKED', rank: '', lp: 0 },
+      statsFlex: { wins: 0, losses: 0, winRate: 0, tier: 'UNRANKED', rank: '', lp: 0 }
+    };
+    companionProfileCache.set(cacheKey, fallbackProfile);
+    console.warn('Falha ao carregar companheiro:', error?.message || error);
+    return fallbackProfile;
+  }
+}
+
+async function loadPlannerSeedProfile(profileData) {
+  return workerRequest('profile_overview', {
+    gameName: profileData?.gameName,
+    tagLine: profileData?.tagLine || 'BR1'
+  });
+}
+
+async function findCompanionsForSlot(slotId) {
+  const slot = customSlots.find((entry) => entry.id === slotId);
+  if (!slot?.gameName) {
+    statusMessage.value = 'Selecione um jogador antes de procurar os amigos.';
+    return;
+  }
+
+  companionLoading.value = true;
+  statusMessage.value = `Buscando amigos de ${slot.gameName}...`;
+
+  try {
+    const fullProfile = await loadPlannerSeedProfile(slot);
+    await autofillCompanionsFromProfile(fullProfile);
+  } catch (error) {
+    console.warn('Falha ao buscar amigos do slot:', error?.message || error);
+    statusMessage.value = `Nao foi possível buscar os amigos de ${slot.gameName} agora.`;
+  } finally {
+    companionLoading.value = false;
+  }
+}
+
+async function autofillCompanionsFromProfile(profileData) {
+  const companions = extractCompanions(profileData).slice(0, 5);
+  if (!companions.length) {
+    statusMessage.value = 'Nenhum companheiro de batalha encontrado para autopreenchimento.';
+    return;
+  }
+
+  statusMessage.value = 'Buscando os 5 companheiros mais frequentes...';
+
+  try {
+    const profiles = await Promise.all(companions.map((companion) => loadCompanionProfile(companion)));
+    const reserveTargets = reserveSlots.value.slice();
+
+    profiles.forEach((profile, index) => {
+      const slot = reserveTargets[index] || customSlots.find((entry) => !entry.gameName && entry.id > 10) || reserveSlots.value[index];
+      if (!slot) return;
+
+      slot.gameName = profile.gameName;
+      slot.tagLine = profile.tagLine;
+      slot.summonerLevel = profile.summonerLevel;
+      slot.profileIconId = profile.profileIconId;
+      slot.statsSolo = profile.statsSolo;
+      slot.statsFlex = profile.statsFlex;
+      slot.manualTier = profile.statsSolo?.tier || 'UNRANKED';
+      slot.manualRank = profile.statsSolo?.rank || 'IV';
+      slot.manualLp = String(profile.statsSolo?.lp || 0);
+      slot.role = 'AUTOFILL';
+    });
+
+    statusMessage.value = `Planner preenchido com os ${profiles.length} companheiros mais frequentes.`;
+  } catch (error) {
+    console.warn('Falha ao preencher companheiros:', error?.message || error);
+    statusMessage.value = 'Nao foi possível preencher os companheiros agora.';
+  }
 }
 
 function inviteFirstEmpty() {
@@ -346,6 +661,20 @@ function inviteFirstEmpty() {
     return;
   }
   target.showSearch = true;
+}
+
+function onSlotDrop(targetSlotId) {
+  const from = dragSource.value;
+  if (!from || from === targetSlotId) return;
+
+  const fromIdx = customSlots.findIndex((slot) => slot.id === from);
+  const toIdx = customSlots.findIndex((slot) => slot.id === targetSlotId);
+  if (fromIdx === -1 || toIdx === -1) return;
+
+  const snapshot = { ...customSlots[fromIdx] };
+  customSlots[fromIdx] = { ...customSlots[toIdx], id: customSlots[fromIdx].id };
+  customSlots[toIdx] = { ...snapshot, id: customSlots[toIdx].id };
+  dragSource.value = null;
 }
 
 function mmrWeight(slot) {
@@ -489,6 +818,16 @@ function drawRandomTeams() {
   const picked = validSplits[Math.floor(Math.random() * validSplits.length)];
   applyTeams(picked.blueCandidate.slice(0, 5), picked.redCandidate.slice(0, 5), reserves.slice(0, 5));
   statusMessage.value = 'Sorteio aleatório concluído. Clique novamente para outro resultado.';
+}
+
+const dragSource = ref(null);
+
+function onDragStart(slotId) {
+  dragSource.value = slotId;
+}
+
+function onDrop(slotId) {
+  onSlotDrop(slotId);
 }
 
 </script>

@@ -210,6 +210,22 @@
         <div class="mt-2 rounded py-1 text-center text-xs font-medium" :class="telTimeClass">
           {{ store.ui.sidebarCollapsed ? telAvailable : telTimeText }}
         </div>
+        <div v-if="!store.ui.sidebarCollapsed" class="mt-3 space-y-2 border-t border-slate-700/50 pt-3">
+          <div
+            v-for="group in telGroupSummaries"
+            :key="group.key"
+            class="rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1.5"
+          >
+            <div class="flex items-center justify-between text-[10px] font-bold uppercase tracking-wide">
+              <span :class="group.labelClass">{{ group.label }}</span>
+              <span class="text-slate-300">{{ group.usage }} pts</span>
+            </div>
+            <div class="mt-1 flex items-center justify-between text-[10px] text-slate-400">
+              <span>{{ group.requestCount }} req</span>
+              <span>{{ group.timeText }}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </aside>
@@ -258,7 +274,7 @@ const topTabs = [
   { id: 'home', path: '/', label: 'TEMPLO' },
   { id: 'perfil', path: '/profile', label: 'CAÇADA' },
   { id: 'maestria', path: '/mastery', label: 'CAVERNA' },
-  { id: 'sinergia', path: '/synergy', label: 'LOBBY' },
+  { id: 'sinergia', path: '/synergy', label: 'TRIBO' },
 ];
 
 const sidebarTabs = [
@@ -369,13 +385,32 @@ onUnmounted(() => {
 // =========================================================
 const telemetryTick = ref(0);
 let telInterval = null;
+const TELEMETRY_WINDOW_MS = 120000;
+const TELEMETRY_GROUP_META = [
+  { key: 'full-profile', label: 'Perfil Completo', labelClass: 'text-amber-300' },
+  { key: 'light-profile', label: 'Perfil Leve', labelClass: 'text-cyan-300' },
+  { key: 'masteries', label: 'Maestrias', labelClass: 'text-fuchsia-300' },
+  { key: 'other', label: 'Outros', labelClass: 'text-slate-300' }
+];
+
+function formatTelemetryReset(msLeft) {
+  const secsLeft = Math.max(0, Math.ceil(msLeft / 1000));
+  const m = Math.floor(secsLeft / 60);
+  const s = secsLeft % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function pruneTelemetry(now = Date.now()) {
+  const twoMinsAgo = now - TELEMETRY_WINDOW_MS;
+  const ts = store.telemetry?.timestamps || [];
+  while (ts.length > 0 && ts[0] < twoMinsAgo) ts.shift();
+
+  const events = store.telemetry?.events || [];
+  while (events.length > 0 && events[0].at < twoMinsAgo) events.shift();
+}
 
 function updateTelemetry() {
-  const now = Date.now();
-  const twoMinsAgo = now - 120000;
-  // Adicionado fallback caso a store mude
-  const ts = store.telemetry?.timestamps || []; 
-  while (ts.length > 0 && ts[0] < twoMinsAgo) ts.shift();
+  pruneTelemetry();
   telemetryTick.value++;
 }
 
@@ -387,9 +422,12 @@ onUnmounted(() => {
 });
 
 const telUsage = computed(() => {
-  // eslint-disable-next-line no-unused-expressions
   telemetryTick.value;
-  return store.telemetry?.timestamps?.length || 0; // Travado com ?.
+  const events = store.telemetry?.events || [];
+  if (events.length > 0) {
+    return events.reduce((sum, event) => sum + Number(event.cost || 0), 0);
+  }
+  return store.telemetry?.timestamps?.length || 0;
 });
 
 const telAvailable = computed(() => 100 - telUsage.value);
@@ -402,16 +440,12 @@ const telAvailableClass = computed(() => {
 });
 
 const telTimeText = computed(() => {
-  // eslint-disable-next-line no-unused-expressions
   telemetryTick.value;
-  const ts = store.telemetry?.timestamps || []; // Travado com || []
-  if (ts.length === 0) return 'Status: Liberado';
-  const oldest = ts[0];
-  const msLeft = 120000 - (Date.now() - oldest);
-  const secsLeft = Math.max(0, Math.ceil(msLeft / 1000));
-  const m = Math.floor(secsLeft / 60);
-  const s = secsLeft % 60;
-  return `Próximo reset: ${m}:${String(s).padStart(2, '0')}`;
+  const events = store.telemetry?.events || [];
+  if (events.length === 0) return 'Status: Liberado';
+  const oldest = events[0]?.at || Date.now();
+  const msLeft = TELEMETRY_WINDOW_MS - (Date.now() - oldest);
+  return `Reset geral: ${formatTelemetryReset(msLeft)}`;
 });
 
 const telTimeClass = computed(() => {
@@ -419,6 +453,27 @@ const telTimeClass = computed(() => {
     return 'bg-slate-950/50 text-slate-400';
   }
   return 'bg-blue-950/40 text-blue-300 border border-blue-800/50';
+});
+
+const telGroupSummaries = computed(() => {
+  telemetryTick.value;
+  const events = store.telemetry?.events || [];
+
+  return TELEMETRY_GROUP_META.map((meta) => {
+    const groupEvents = events.filter((event) => event.group === meta.key);
+    const usage = groupEvents.reduce((sum, event) => sum + Number(event.cost || 0), 0);
+    const oldest = groupEvents[0]?.at || null;
+    const timeText = oldest
+      ? `Reset: ${formatTelemetryReset(TELEMETRY_WINDOW_MS - (Date.now() - oldest))}`
+      : 'Livre';
+
+    return {
+      ...meta,
+      usage,
+      requestCount: groupEvents.length,
+      timeText
+    };
+  }).filter((group) => group.usage > 0 || group.requestCount > 0);
 });
 
 // Load static Data Dragon data on mount
