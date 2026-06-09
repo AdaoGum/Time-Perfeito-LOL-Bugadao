@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@libsql/client": "^0.17.3",
     "@vitejs/plugin-vue": "^6.0.7",
     "vite": "^8.0.13",
     "vue": "^3.5.34",
