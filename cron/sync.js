@@ -23,7 +23,7 @@ async function queryD1(sql, params = []) {
   if (!response.ok || !data.success) {
     throw new Error(`Erro no D1: ${JSON.stringify(data.errors)}`);
   }
-  return data.result[0]; // Retorna o resultado da query
+  return data.result[0];
 }
 
 // Função auxiliar para buscar dados na Riot com tratamento de limite (429)
@@ -34,7 +34,7 @@ async function fetchFromRiot(endpoint) {
   });
   
   if (response.status === 429) {
-    console.warn("⚠️ Rate limit atingido! Forçando pausa de 2 minutos...");
+    console.warn("⚠️ Rate limit atingido! Forçando pausa de 2 minutos para esfriar a chave...");
     await sleep(125000); 
     return fetchFromRiot(endpoint); 
   }
@@ -44,76 +44,117 @@ async function fetchFromRiot(endpoint) {
 }
 
 async function rodarSincronizacao() {
-  console.log("🚀 Iniciando o trator da madrugada do Uga Buga Analytics...");
+  console.log("🚀 [PRO] Iniciando o super trator de histórico (1000 partidas) no D1...");
   let totalRequestsFeitas = 0;
 
   try {
-    // 1. Pega todos os jogadores que o Worker cadastrou no D1
+    // 1. Pega os jogadores cadastrados
     const dbResult = await queryD1("SELECT puuid, game_name, tag_line FROM jogadores");
     const jogadores = dbResult.results || [];
-    console.log(`📋 Encontrados ${jogadores.length} jogadores para monitorar.`);
+    console.log(`📋 Encontrados ${jogadores.length} jogadores para escavar o histórico.`);
 
     for (const jogador of jogadores) {
-      console.log(`\n🔍 Verificando histórico de: ${jogador.game_name}#${jogador.tag_line}`);
-      
-      // 2. Puxa as últimas 20 partidas do jogador na Riot
-      const matchIds = await fetchFromRiot(`/lol/match/v5/matches/by-puuid/${jogador.puuid}/ids?start=0&count=20`);
-      totalRequestsFeitas++;
+      console.log(`\n⛏️  Escavando até 1000 partidas de: ${jogador.game_name}#${jogador.tag_line}`);
+      let allMatchIds = [];
 
-      for (const matchId of matchIds) {
-        // Pausa de segurança a cada 90 chamadas para não estourar o limite de 100 req / 2 min
+      // 2. Loop de Paginação: Busca blocos de 100 IDs até atingir 1000
+      for (let start = 0; start < 1000; start += 100) {
         if (totalRequestsFeitas >= 90) {
-          console.log("⏳ Quase no limite de requisições. Pausando por 2 minutos para esfriar a chave...");
+          console.log("⏳ Limite estrito chegando. Pausando 2 minutos antes de listar mais IDs...");
           await sleep(125000);
           totalRequestsFeitas = 0;
         }
 
-        // 3. Verifica se a partida já existe no D1
-        const checarPartida = await queryD1("SELECT match_id FROM partidas WHERE match_id = ?", [matchId]);
-        if (checarPartida.results && checarPartida.results.length > 0) {
-          continue; // Já tem no banco, pula!
-        }
-
-        // 4. Se for nova, busca o detalhado na Riot
-        console.log(`📥 Baixando dados da partida nova: ${matchId}`);
-        const matchData = await fetchFromRiot(`/lol/match/v5/matches/${matchId}`);
+        console.log(`📡 Buscando IDs de partidas ${start} até ${start + 100}...`);
+        const chunkIds = await fetchFromRiot(`/lol/match/v5/matches/by-puuid/${jogador.puuid}/ids?start=${start}&count=100`);
         totalRequestsFeitas++;
 
-        // 5. Salva a partida na tabela global do D1
-        await queryD1(
-          "INSERT OR IGNORE INTO partidas (match_id, game_duration, game_creation) VALUES (?, ?, ?)",
-          [matchId, matchData.info.gameDuration, matchData.info.gameCreation]
+        if (!chunkIds || chunkIds.length === 0) {
+          console.log("🏁 O jogador não possui mais partidas antigas neste perfil.");
+          break; 
+        }
+
+        allMatchIds = allMatchIds.concat(chunkIds);
+      }
+
+      console.log(`Total de IDs encontrados para analisar: ${allMatchIds.length}`);
+
+      // 3. FILTRO EM MASSA: Descobre quais dessas partidas já existem no seu D1 de uma vez só
+      const partidasExistentes NoBanco = new Set();
+      
+      // Perguntamos pro D1 em blocos de 50 IDs usando a cláusula SQL IN (?,?,?...)
+      for (let i = 0; i < allMatchIds.length; i += 50) {
+        const chunkVerificacao = allMatchIds.slice(i, i + 50);
+        const placeholders = chunkVerificacao.map(() => '?').join(',');
+        
+        const checarBloco = await queryD1(
+          `SELECT match_id FROM partidas WHERE match_id IN (${placeholders})`,
+          chunkVerificacao
         );
 
-        // 6. Filtra os dados do nosso jogador e salva na tabela de estatísticas
-        const participant = matchData.info.participants.find(p => p.puuid === jogador.puuid);
-        if (participant) {
-          await queryD1(
-            `INSERT OR IGNORE INTO estatisticas_jogador_partida 
-            (puuid, match_id, champion_name, kills, deaths, assists, win, gold_earned, items) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              jogador.puuid,
-              matchId,
-              participant.championName,
-              participant.kills,
-              participant.deaths,
-              participant.assists,
-              participant.win ? 1 : 0,
-              participant.goldEarned,
-              JSON.stringify([participant.item0, participant.item1, participant.item2, participant.item3, participant.item4, participant.item5])
-            ]
-          );
+        if (checarBloco.results) {
+          checarBloco.results.forEach(row => partidasExistentesNoBanco.add(row.match_id));
         }
       }
 
-      // Atualiza a data de checagem do jogador
+      // Filtra a lista mantendo APENAS o que for estritamente inédito para o banco
+      const novasPartidas = allMatchIds.filter(id => !partidasExistentesNoBanco.has(id));
+      console.log(`📊 Estatísticas do banco: ${partidasExistentesNoBanco.size} já salvas | ${novasPartidas.length} novas para baixar.`);
+
+      // 4. DOWNLOAD E SALVAMENTO: Baixa os dados reais apenas das partidas inéditas
+      for (const matchId of novasPartidas) {
+        if (totalRequestsFeitas >= 90) {
+          console.log("⏳ Limite de 100 requisições atingido. Pausando por 2 minutos para não tomar block da Riot...");
+          await sleep(125000);
+          totalRequestsFeitas = 0;
+        }
+
+        console.log(`📥 Baixando e indexando partida nova: ${matchId}`);
+        try {
+          const matchData = await fetchFromRiot(`/lol/match/v5/matches/${matchId}`);
+          totalRequestsFeitas++;
+
+          // Insere os dados globais da partida
+          await queryD1(
+            "INSERT OR IGNORE INTO partidas (match_id, game_duration, game_creation) VALUES (?, ?, ?)",
+            [matchId, matchData.info.gameDuration, matchData.info.gameCreation]
+          );
+
+          // Procura o registro tático do nosso jogador dentro dos 10 da partida
+          const participant = matchData.info.participants.find(p => p.puuid === jogador.puuid);
+          if (participant) {
+            await queryD1(
+              `INSERT OR IGNORE INTO estatisticas_jogador_partida 
+              (puuid, match_id, champion_name, kills, deaths, assists, win, gold_earned, items) 
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                jogador.puuid,
+                matchId,
+                participant.championName,
+                participant.kills,
+                participant.deaths,
+                participant.assists,
+                participant.win ? 1 : 0,
+                participant.goldEarned,
+                JSON.stringify([participant.item0, participant.item1, participant.item2, participant.item3, participant.item4, participant.item5])
+              ]
+            );
+          }
+        } catch (matchError) {
+          console.error(`❌ Falha ao processar dados da partida ${matchId}:`, matchError.message);
+          // Se der erro em uma partida específica, continua o loop para não quebrar o resto do histórico
+          continue; 
+        }
+      }
+
+      // Atualiza a timestamp do jogador indicando que a escavação profunda foi concluída hoje
       await queryD1("UPDATE jogadores SET ultima_atualizacao = CURRENT_TIMESTAMP WHERE puuid = ?", [jogador.puuid]);
+      console.log(`✨ Histórico de ${jogador.game_name} completamente atualizado!`);
     }
 
-    console.log("\n✅ Sincronização concluída com sucesso no Cloudflare D1!");
+    console.log("\n✅ [PRO] Sincronização em massa finalizada com sucesso no D1!");
   } catch (error) {
-    console.error("❌ Falha no trator da madrugada:", error.message);
+    console.error("❌ Falha crítica no trator de volume:", error.message);
   }
 }
 
