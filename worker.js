@@ -115,7 +115,7 @@ export default {
         }
       }
 
-      // 🌟 GRAVAÇÃO AUTOMÁTICA NATIVA NO CLOUDFLARE D1
+      // GRAVAÇÃO AUTOMÁTICA NATIVA NO CLOUDFLARE D1
       try {
         await env.DB.prepare(`
           INSERT INTO jogadores (puuid, game_name, tag_line, tier, rank, lp, win_rate, ultima_atualizacao)
@@ -137,9 +137,9 @@ export default {
 
       if (includeMatches) {
         try {
-          // Tenta ler o histórico direto do cache do D1
+          // Selecionamos a coluna p.participants do banco
           const { results: cachePartidas } = await env.DB.prepare(`
-            SELECT e.*, p.game_duration, p.game_creation 
+            SELECT e.*, p.game_duration, p.game_creation, p.participants 
             FROM estatisticas_jogador_partida e
             JOIN partidas p ON e.match_id = p.match_id
             WHERE e.puuid = ?
@@ -161,11 +161,13 @@ export default {
                 deaths: row.deaths,
                 assists: row.assists,
                 item0: items[0] || 0, item1: items[1] || 0, item2: items[2] || 0, item3: items[3] || 0, item4: items[4] || 0, item5: items[5] || 0, item6: 0,
-                totalMinionsKilled: 0, neutralMinionsKilled: 0, firstBloodKill: false, visionWardsBoughtInGame: 0, players: []
+                totalMinionsKilled: 0, neutralMinionsKilled: 0, firstBloodKill: false, visionWardsBoughtInGame: 0,
+                // Retorna os dados reais dos jogadores cacheados
+                players: row.participants ? JSON.parse(row.participants) : []
               };
             });
             console.log("⚡ Histórico carregado via D1.");
-          } else {
+          } else {           
             // Se o D1 estiver vazio para esse player, busca na Riot
             const matchIdsRes = await fetch(`${routingAmericas}/lol/match/v5/matches/by-puuid/${playerPuuid}/ids?start=0&count=20&api_key=${API_KEY}`);
 
@@ -190,11 +192,12 @@ export default {
                     role: p.teamPosition
                   }));
 
-                  // Salva no D1 em segundo plano
+                    // Salva no D1 em segundo plano
                   ctx.waitUntil((async () => {
                     try {
-                      await env.DB.prepare("INSERT OR IGNORE INTO partidas (match_id, game_duration, game_creation) VALUES (?, ?, ?)")
-                        .bind(matchId, info.gameDuration, info.gameCreation).run();
+                      // Insere a lista completa de jogadores estruturada em formato de texto JSON
+                      await env.DB.prepare("INSERT OR IGNORE INTO partidas (match_id, game_duration, game_creation, participants) VALUES (?, ?, ?, ?)")
+                        .bind(matchId, info.gameDuration, info.gameCreation, JSON.stringify(teams)).run();
                       
                       await env.DB.prepare(`
                         INSERT OR IGNORE INTO estatisticas_jogador_partida 
@@ -238,11 +241,9 @@ export default {
         profileIconId, summonerLevel, statsSolo, statsFlex, matches: realMatches
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-
     // ======================================================================
     // ROTA: MAESTRIAS
     // ======================================================================
-    if (action === "masteries") {
       let targetPuuid = puuid;
       if (!targetPuuid && gameName && tagLine) {
         const accRes = await fetch(`${routingAmericas}/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}?api_key=${API_KEY}`);

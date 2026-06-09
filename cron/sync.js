@@ -34,7 +34,6 @@ async function fetchFromRiot(endpoint) {
 }
 
 async function rodarSincronizacao() {
-  // Carrega o módulo de arquivos nativo do Node de forma segura
   const fs = await import('fs');
 
   console.log("=========================================================");
@@ -43,12 +42,11 @@ async function rodarSincronizacao() {
   let totalRequestsFeitas = 0;
 
   try {
-    // Cria a pasta de logs se ela não existir
     if (!fs.existsSync('logs')) {
       fs.mkdirSync('logs');
     }
 
-    console.log("📡 [D1] Baixando a lista de jogadores monitorados...");
+    console.log("強 [D1] Baixando a lista de jogadores monitorados...");
     const dbResult = await queryD1("SELECT puuid, game_name, tag_line FROM jogadores");
     const jogadores = dbResult.results || [];
     console.log(`📋 [D1] Sucesso! Encontrado(s) ${jogadores.length} jogador(es) para escanear.`);
@@ -58,7 +56,6 @@ async function rodarSincronizacao() {
       console.log(`⛏️  [ALVO] Iniciando escavação de: ${jogador.game_name}#${jogador.tag_line}`);
       console.log(`---------------------------------------------------------`);
       
-      // Cria/Limpa o arquivo .txt específico para este jogador
       const nomeArquivoClean = `${jogador.game_name.replace(/[^a-zA-Z0-9]/g, '_')}_${jogador.tag_line.replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
       const logPath = `logs/${nomeArquivoClean}`;
       
@@ -68,7 +65,6 @@ async function rodarSincronizacao() {
       fs.appendFileSync(logPath, `DATA DA OPERAÇÃO: ${new Date().toLocaleString('pt-BR')}\n`);
       fs.appendFileSync(logPath, `=========================================================\n\n`);
 
-      // Função interna para printar no console E salvar no arquivo txt ao mesmo tempo
       const loggerhibrido = (texto) => {
         console.log(texto);
         fs.appendFileSync(logPath, texto + '\n');
@@ -76,7 +72,6 @@ async function rodarSincronizacao() {
 
       let allMatchIds = [];
 
-      // Coleta de IDs
       for (let start = 0; start < 1000; start += 100) {
         if (totalRequestsFeitas >= 90) {
           loggerhibrido("⏳ [ESFRIANDO CHAVE] Quase no limite de 100 reqs. Pausando 2 min...");
@@ -102,7 +97,6 @@ async function rodarSincronizacao() {
       loggerhibrido(`\n🔹 Total de partidas encontradas na Riot: ${allMatchIds.length}`);
       if (allMatchIds.length === 0) continue;
 
-      // Filtro de duplicadas
       loggerhibrido("📡 [D1] Verificando quais partidas já estão salvas no banco...");
       const partidasExistentesNoBanco = new Set();
       
@@ -142,9 +136,20 @@ async function rodarSincronizacao() {
           const matchData = await fetchFromRiot(`/lol/match/v5/matches/${matchId}`);
           totalRequestsFeitas++;
 
+          // 🌟 MUDANÇA: Estrutura os 10 jogadores aqui igualzinho ao worker do back-end
+          const teams = matchData.info.participants.map(p => ({
+            gameName: p.riotIdGameName || p.summonerName,
+            tagLine: p.riotIdTagline,
+            championName: p.championName,
+            teamId: p.teamId,
+            kills: p.kills,
+            role: p.teamPosition
+          }));
+
+          // 🌟 MUDANÇA: Insere na tabela 'partidas' incluindo os participantes estruturados
           await queryD1(
-            "INSERT OR IGNORE INTO partidas (match_id, game_duration, game_creation) VALUES (?, ?, ?)",
-            [matchId, matchData.info.gameDuration, matchData.info.gameCreation]
+            "INSERT OR IGNORE INTO partidas (match_id, game_duration, game_creation, participants) VALUES (?, ?, ?, ?)",
+            [matchId, matchData.info.gameDuration, matchData.info.gameCreation, JSON.stringify(teams)]
           );
 
           const participant = matchData.info.participants.find(p => p.puuid === jogador.puuid);
@@ -162,10 +167,8 @@ async function rodarSincronizacao() {
           }
           
           processadas++;
-          // Escreve o progresso normal
           loggerhibrido(`   💾 [PROGRESSO: ${processadas}/${novasPartidas.length}] Guardada: ${matchId} | Campeão: ${participant?.championName || 'N/A'}`);
           
-          // 🌟 ADICIONAL EXCLUSIVO DO ARTEFATO: Grava os dados táticos detalhados logo abaixo da linha de progresso no arquivo .txt
           if (participant) {
             fs.appendFileSync(logPath, `      📊 [DADOS TÁTICOS GRAVADOS]:\n`);
             fs.appendFileSync(logPath, `         - Resultado: ${participant.win ? '▶ VITÓRIA' : '❌ DERROTA'}\n`);
