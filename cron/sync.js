@@ -8,7 +8,6 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function queryD1(sql, params = []) {
   const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/query`;
-  
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -17,37 +16,38 @@ async function queryD1(sql, params = []) {
     },
     body: JSON.stringify({ sql, params })
   });
-
   const data = await response.json();
-  if (!response.ok || !data.success) {
-    throw new Error(`Erro no D1: ${JSON.stringify(data.errors)}`);
-  }
+  if (!response.ok || !data.success) throw new Error(`Erro no D1: ${JSON.stringify(data.errors)}`);
   return data.result[0];
 }
 
 async function fetchFromRiot(endpoint) {
   const url = `https://${REGION_ROUTE}.api.riotgames.com${endpoint}`;
-  const response = await fetch(url, {
-    headers: { "X-Riot-Token": RIOT_API_KEY }
-  });
-  
+  const response = await fetch(url, { headers: { "X-Riot-Token": RIOT_API_KEY } });
   if (response.status === 429) {
     console.warn("⚠️ [RIOT LIMIT] Chave esquentou demais! Pausando por 2 minutos para esfriar...");
     await sleep(125000); 
     return fetchFromRiot(endpoint); 
   }
-  
   if (!response.ok) throw new Error(`Erro na Riot API: ${response.status}`);
   return response.json();
 }
 
 async function rodarSincronizacao() {
+  // Carrega o módulo de arquivos nativo do Node de forma segura
+  const fs = await import('fs');
+
   console.log("=========================================================");
   console.log("🚀 [SISTEMA] INICIANDO TRATOR DE HISTÓRICO PROFUNDO (1000)");
   console.log("=========================================================");
   let totalRequestsFeitas = 0;
 
   try {
+    // Cria a pasta de logs se ela não existir
+    if (!fs.existsSync('logs')) {
+      fs.mkdirSync('logs');
+    }
+
     console.log("📡 [D1] Baixando a lista de jogadores monitorados...");
     const dbResult = await queryD1("SELECT puuid, game_name, tag_line FROM jogadores");
     const jogadores = dbResult.results || [];
@@ -57,36 +57,53 @@ async function rodarSincronizacao() {
       console.log(`\n---------------------------------------------------------`);
       console.log(`⛏️  [ALVO] Iniciando escavação de: ${jogador.game_name}#${jogador.tag_line}`);
       console.log(`---------------------------------------------------------`);
+      
+      // Cria/Limpa o arquivo .txt específico para este jogador
+      const nomeArquivoClean = `${jogador.game_name.replace(/[^a-zA-Z0-9]/g, '_')}_${jogador.tag_line.replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
+      const logPath = `logs/${nomeArquivoClean}`;
+      
+      fs.writeFileSync(logPath, `=========================================================\n`);
+      fs.appendFileSync(logPath, `📋 RELATÓRIO DE ESCAVAÇÃO DE HISTÓRICO\n`);
+      fs.appendFileSync(logPath, `JOGADOR: ${jogador.game_name}#${jogador.tag_line}\n`);
+      fs.appendFileSync(logPath, `DATA DA OPERAÇÃO: ${new Date().toLocaleString('pt-BR')}\n`);
+      fs.appendFileSync(logPath, `=========================================================\n\n`);
+
+      // Função interna para printar no console E salvar no arquivo txt ao mesmo tempo
+      const loggerhibrido = (texto) => {
+        console.log(texto);
+        fs.appendFileSync(logPath, texto + '\n');
+      };
+
       let allMatchIds = [];
 
-      // 1. Coleta de IDs em páginas de 100 até atingir 1000
+      // Coleta de IDs
       for (let start = 0; start < 1000; start += 100) {
         if (totalRequestsFeitas >= 90) {
-          console.log("⏳ [ESFRIANDO CHAVE] Quase no limite de 100 reqs. Pausando 2 min...");
+          loggerhibrido("⏳ [ESFRIANDO CHAVE] Quase no limite de 100 reqs. Pausando 2 min...");
           await sleep(125000);
           totalRequestsFeitas = 0;
         }
 
         const numPagina = (start / 100) + 1;
-        console.log(`🔍 [Riot API] Buscando Página ${numPagina}/10 (IDs do índice ${start} ao ${start + 100})...`);
+        loggerhibrido(`🔍 [Riot API] Buscando Página ${numPagina}/10 (IDs do índice ${start} ao ${start + 100})...`);
         
         const chunkIds = await fetchFromRiot(`/lol/match/v5/matches/by-puuid/${jogador.puuid}/ids?start=${start}&count=100`);
         totalRequestsFeitas++;
 
         if (!chunkIds || chunkIds.length === 0) {
-          console.log(`🏁 [FIM DE HISTÓRICO] Riot retornou 0 partidas na página ${numPagina}. Parando coleta de IDs.`);
+          loggerhibrido(`🏁 [FIM DE HISTÓRICO] Riot retornou 0 partidas na página ${numPagina}. Parando coleta de IDs.`);
           break; 
         }
 
-        console.log(`   └─> Sucesso! +${chunkIds.length} IDs capturados.`);
+        loggerhibrido(`   └─> Sucesso! +${chunkIds.length} IDs capturados.`);
         allMatchIds = allMatchIds.concat(chunkIds);
       }
 
-      console.log(`\n📊 [RESUMO COLETA] Total de partidas encontradas na Riot: ${allMatchIds.length}`);
+      loggerhibrido(`\n🔹 Total de partidas encontradas na Riot: ${allMatchIds.length}`);
       if (allMatchIds.length === 0) continue;
 
-      // 2. Filtro de duplicadas em lote no Banco D1
-      console.log("📡 [D1] Verificando quais partidas já estão salvas no banco...");
+      // Filtro de duplicadas
+      loggerhibrido("📡 [D1] Verificando quais partidas já estão salvas no banco...");
       const partidasExistentesNoBanco = new Set();
       
       for (let i = 0; i < allMatchIds.length; i += 50) {
@@ -104,20 +121,19 @@ async function rodarSincronizacao() {
       }
 
       const novasPartidas = allMatchIds.filter(id => !partidasExistentesNoBanco.has(id));
-      console.log(`📈 [BALANÇO] Já gravadas no D1: ${partidasExistentesNoBanco.size} | Inéditas para baixar: ${novasPartidas.length}`);
+      loggerhibrido(`📈 [BALANÇO] Já gravadas no D1: ${partidasExistentesNoBanco.size} | Inéditas para baixar: ${novasPartidas.length}`);
 
       if (novasPartidas.length === 0) {
-        console.log("✨ [OK] O banco já está 100% atualizado com este jogador. Nenhuma ação necessária.");
+        loggerhibrido("✨ [OK] O banco já está 100% atualizado com este jogador. Nenhuma ação necessária.");
         continue;
       }
 
-      // 3. Download e gravação tática das partidas inéditas
-      console.log(`\n📥 [DOWNLOAD] Baixando dados detalhados das ${novasPartidas.length} partidas novas...`);
+      loggerhibrido(`\n📥 [DOWNLOAD] Baixando dados detalhados das ${novasPartidas.length} partidas novas...`);
       let processadas = 0;
 
       for (const matchId of novasPartidas) {
         if (totalRequestsFeitas >= 90) {
-          console.log("⏳ [ESFRIANDO CHAVE] Pausando por 2 minutos para evitar erro 429...");
+          loggerhibrido("⏳ [ESFRIANDO CHAVE] Pausando por 2 minutos para evitar erro 429...");
           await sleep(125000);
           totalRequestsFeitas = 0;
         }
@@ -126,13 +142,11 @@ async function rodarSincronizacao() {
           const matchData = await fetchFromRiot(`/lol/match/v5/matches/${matchId}`);
           totalRequestsFeitas++;
 
-          // Grava a partida global
           await queryD1(
             "INSERT OR IGNORE INTO partidas (match_id, game_duration, game_creation) VALUES (?, ?, ?)",
             [matchId, matchData.info.gameDuration, matchData.info.gameCreation]
           );
 
-          // Filtra o KDA e itens do jogador
           const participant = matchData.info.participants.find(p => p.puuid === jogador.puuid);
           if (participant) {
             await queryD1(
@@ -148,16 +162,26 @@ async function rodarSincronizacao() {
           }
           
           processadas++;
-          console.log(`   💾 [PROGRESSO: ${processadas}/${novasPartidas.length}] Guardada: ${matchId} | Campeão: ${participant?.championName || 'N/A'}`);
+          // Escreve o progresso normal
+          loggerhibrido(`   💾 [PROGRESSO: ${processadas}/${novasPartidas.length}] Guardada: ${matchId} | Campeão: ${participant?.championName || 'N/A'}`);
+          
+          // 🌟 ADICIONAL EXCLUSIVO DO ARTEFATO: Grava os dados táticos detalhados logo abaixo da linha de progresso no arquivo .txt
+          if (participant) {
+            fs.appendFileSync(logPath, `      📊 [DADOS TÁTICOS GRAVADOS]:\n`);
+            fs.appendFileSync(logPath, `         - Resultado: ${participant.win ? '▶ VITÓRIA' : '❌ DERROTA'}\n`);
+            fs.appendFileSync(logPath, `         - KDA Final: ${participant.kills} / ${participant.deaths} / ${participant.assists}\n`);
+            fs.appendFileSync(logPath, `         - Ouro Acumulado: ${participant.goldEarned.toLocaleString('pt-BR')}g\n`);
+            fs.appendFileSync(logPath, `         - Build Final (IDs): [${[participant.item0, participant.item1, participant.item2, participant.item3, participant.item4, participant.item5].join(', ')}]\n`);
+            fs.appendFileSync(logPath, `         -----------------------------------------------------\n`);
+          }
         } catch (matchError) {
-          console.error(`   ❌ Erro ao baixar dados da partida ${matchId}:`, matchError.message);
+          loggerhibrido(`   ❌ Erro ao baixar dados da partida ${matchId}: ${matchError.message}`);
           continue; 
         }
       }
 
-      // Carimba a data final
       await queryD1("UPDATE jogadores SET ultima_atualizacao = CURRENT_TIMESTAMP WHERE puuid = ?", [jogador.puuid]);
-      console.log(`\n🎉 [SUCESSO] Todo o histórico disponível de ${jogador.game_name} foi sincronizado!`);
+      loggerhibrido(`\n🎉 [SUCESSO] Todo o histórico disponível de ${jogador.game_name} foi sincronizado!`);
     }
 
     console.log("\n=========================================================");

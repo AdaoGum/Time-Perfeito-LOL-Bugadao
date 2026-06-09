@@ -3,7 +3,7 @@ name: Riot API Daily Sync Trator
 on:
   schedule:
     - cron: '30 3 * * *' # 3:30 UTC = 00:30 da manhã no horário de Brasília
-  workflow_dispatch: # Libera o botão no site do GitHub para testar manualmente
+  workflow_dispatch:
 
 jobs:
   sync-job:
@@ -24,3 +24,12 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+
+      # ARTEFATOS:
+      - name: Compactar e Fazer Upload dos Arquivos de Log
+        if: always() # Garante que os relatórios subam mesmo se o script der algum erro no meio do caminho
+        uses: actions/upload-artifact@v4
+        with:
+          name: Relatorios-Historico-Jogadores-D1
+          path: logs/
+          retention-days: 7 # Os relatórios ficam guardados no GitHub por 7 dias
