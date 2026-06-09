@@ -6,7 +6,6 @@ const D1_DATABASE_ID = process.env.D1_DATABASE_ID;
 const REGION_ROUTE = 'americas'; 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Função auxiliar para conversar com o Banco D1 da Cloudflare via HTTP
 async function queryD1(sql, params = []) {
   const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/query`;
   
@@ -26,7 +25,6 @@ async function queryD1(sql, params = []) {
   return data.result[0];
 }
 
-// Função auxiliar para buscar dados na Riot com tratamento de limite (429)
 async function fetchFromRiot(endpoint) {
   const url = `https://${REGION_ROUTE}.api.riotgames.com${endpoint}`;
   const response = await fetch(url, {
@@ -34,7 +32,7 @@ async function fetchFromRiot(endpoint) {
   });
   
   if (response.status === 429) {
-    console.warn("⚠️ Rate limit atingido! Forçando pausa de 2 minutos para esfriar a chave...");
+    console.warn("⚠️ [RIOT LIMIT] Chave esquentou demais! Pausando por 2 minutos para esfriar...");
     await sleep(125000); 
     return fetchFromRiot(endpoint); 
   }
@@ -44,45 +42,53 @@ async function fetchFromRiot(endpoint) {
 }
 
 async function rodarSincronizacao() {
-  console.log("🚀 [PRO] Iniciando o super trator de histórico (1000 partidas) no D1...");
+  console.log("=========================================================");
+  console.log("🚀 [SISTEMA] INICIANDO TRATOR DE HISTÓRICO PROFUNDO (1000)");
+  console.log("=========================================================");
   let totalRequestsFeitas = 0;
 
   try {
-    // 1. Pega os jogadores cadastrados
+    console.log("📡 [D1] Baixando a lista de jogadores monitorados...");
     const dbResult = await queryD1("SELECT puuid, game_name, tag_line FROM jogadores");
     const jogadores = dbResult.results || [];
-    console.log(`📋 Encontrados ${jogadores.length} jogadores para escavar o histórico.`);
+    console.log(`📋 [D1] Sucesso! Encontrado(s) ${jogadores.length} jogador(es) para escanear.`);
 
     for (const jogador of jogadores) {
-      console.log(`\n⛏️  Escavando até 1000 partidas de: ${jogador.game_name}#${jogador.tag_line}`);
+      console.log(`\n---------------------------------------------------------`);
+      console.log(`⛏️  [ALVO] Iniciando escavação de: ${jogador.game_name}#${jogador.tag_line}`);
+      console.log(`---------------------------------------------------------`);
       let allMatchIds = [];
 
-      // 2. Loop de Paginação: Busca blocos de 100 IDs até atingir 1000
+      // 1. Coleta de IDs em páginas de 100 até atingir 1000
       for (let start = 0; start < 1000; start += 100) {
         if (totalRequestsFeitas >= 90) {
-          console.log("⏳ Limite estrito chegando. Pausando 2 minutos antes de listar mais IDs...");
+          console.log("⏳ [ESFRIANDO CHAVE] Quase no limite de 100 reqs. Pausando 2 min...");
           await sleep(125000);
           totalRequestsFeitas = 0;
         }
 
-        console.log(`📡 Buscando IDs de partidas ${start} até ${start + 100}...`);
-        const chunkIds = await fetchFromRiot(`/lol/match/v5/matches/by-puuid/${jogador.puuid}/ids?start=start&count=100`);
+        const numPagina = (start / 100) + 1;
+        console.log(`🔍 [Riot API] Buscando Página ${numPagina}/10 (IDs do índice ${start} ao ${start + 100})...`);
+        
+        const chunkIds = await fetchFromRiot(`/lol/match/v5/matches/by-puuid/${jogador.puuid}/ids?start=${start}&count=100`);
         totalRequestsFeitas++;
 
         if (!chunkIds || chunkIds.length === 0) {
-          console.log("🏁 O jogador não possui mais partidas antigas neste perfil.");
+          console.log(`🏁 [FIM DE HISTÓRICO] Riot retornou 0 partidas na página ${numPagina}. Parando coleta de IDs.`);
           break; 
         }
 
+        console.log(`   └─> Sucesso! +${chunkIds.length} IDs capturados.`);
         allMatchIds = allMatchIds.concat(chunkIds);
       }
 
-      console.log(`Total de IDs encontrados para analisar: ${allMatchIds.length}`);
+      console.log(`\n📊 [RESUMO COLETA] Total de partidas encontradas na Riot: ${allMatchIds.length}`);
+      if (allMatchIds.length === 0) continue;
 
-      // 3. FILTRO EM MASSA: Descobre quais dessas partidas já existem no seu D1 de uma vez só
+      // 2. Filtro de duplicadas em lote no Banco D1
+      console.log("📡 [D1] Verificando quais partidas já estão salvas no banco...");
       const partidasExistentesNoBanco = new Set();
       
-      // Perguntamos pro D1 em blocos de 50 IDs usando a cláusula SQL IN (?,?,?...)
       for (let i = 0; i < allMatchIds.length; i += 50) {
         const chunkVerificacao = allMatchIds.slice(i, i + 50);
         const placeholders = chunkVerificacao.map(() => '?').join(',');
@@ -97,30 +103,36 @@ async function rodarSincronizacao() {
         }
       }
 
-      // Filtra a lista mantendo APENAS o que for estritamente inédito para o banco
       const novasPartidas = allMatchIds.filter(id => !partidasExistentesNoBanco.has(id));
-      console.log(`📊 Estatísticas do banco: ${partidasExistentesNoBanco.size} já salvas | ${novasPartidas.length} novas para baixar.`);
+      console.log(`📈 [BALANÇO] Já gravadas no D1: ${partidasExistentesNoBanco.size} | Inéditas para baixar: ${novasPartidas.length}`);
 
-      // 4. DOWNLOAD E SALVAMENTO: Baixa os dados reais apenas das partidas inéditas
+      if (novasPartidas.length === 0) {
+        console.log("✨ [OK] O banco já está 100% atualizado com este jogador. Nenhuma ação necessária.");
+        continue;
+      }
+
+      // 3. Download e gravação tática das partidas inéditas
+      console.log(`\n📥 [DOWNLOAD] Baixando dados detalhados das ${novasPartidas.length} partidas novas...`);
+      let processadas = 0;
+
       for (const matchId of novasPartidas) {
         if (totalRequestsFeitas >= 90) {
-          console.log("⏳ Limite de 100 requisições atingido. Pausando por 2 minutos para não tomar block da Riot...");
+          console.log("⏳ [ESFRIANDO CHAVE] Pausando por 2 minutos para evitar erro 429...");
           await sleep(125000);
           totalRequestsFeitas = 0;
         }
 
-        console.log(`📥 Baixando e indexando partida nova: ${matchId}`);
         try {
           const matchData = await fetchFromRiot(`/lol/match/v5/matches/${matchId}`);
           totalRequestsFeitas++;
 
-          // Insere os dados globais da partida
+          // Grava a partida global
           await queryD1(
             "INSERT OR IGNORE INTO partidas (match_id, game_duration, game_creation) VALUES (?, ?, ?)",
             [matchId, matchData.info.gameDuration, matchData.info.gameCreation]
           );
 
-          // Procura o registro tático do nosso jogador dentro dos 10 da partida
+          // Filtra o KDA e itens do jogador
           const participant = matchData.info.participants.find(p => p.puuid === jogador.puuid);
           if (participant) {
             await queryD1(
@@ -128,32 +140,31 @@ async function rodarSincronizacao() {
               (puuid, match_id, champion_name, kills, deaths, assists, win, gold_earned, items) 
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
-                jogador.puuid,
-                matchId,
-                participant.championName,
-                participant.kills,
-                participant.deaths,
-                participant.assists,
-                participant.win ? 1 : 0,
-                participant.goldEarned,
+                jogador.puuid, matchId, participant.championName, participant.kills, participant.deaths, participant.assists,
+                participant.win ? 1 : 0, participant.goldEarned,
                 JSON.stringify([participant.item0, participant.item1, participant.item2, participant.item3, participant.item4, participant.item5])
               ]
             );
           }
+          
+          processadas++;
+          console.log(`   💾 [PROGRESSO: ${processadas}/${novasPartidas.length}] Guardada: ${matchId} | Campeão: ${participant?.championName || 'N/A'}`);
         } catch (matchError) {
-          console.error(`❌ Falha ao processar dados da partida ${matchId}:`, matchError.message);
+          console.error(`   ❌ Erro ao baixar dados da partida ${matchId}:`, matchError.message);
           continue; 
         }
       }
 
-      // Atualiza a timestamp do jogador indicando que a escavação profunda foi concluída hoje
+      // Carimba a data final
       await queryD1("UPDATE jogadores SET ultima_atualizacao = CURRENT_TIMESTAMP WHERE puuid = ?", [jogador.puuid]);
-      console.log(`✨ Histórico de ${jogador.game_name} completamente atualizado!`);
+      console.log(`\n🎉 [SUCESSO] Todo o histórico disponível de ${jogador.game_name} foi sincronizado!`);
     }
 
-    console.log("\n✅ [PRO] Sincronização em massa finalizada com sucesso no D1!");
+    console.log("\n=========================================================");
+    console.log("✅ [FINALIZADO] O trator encerrou a rodada com sucesso!");
+    console.log("=========================================================");
   } catch (error) {
-    console.error("❌ Falha crítica no trator de volume:", error.message);
+    console.error("\n❌ [FALHA CRÍTICA] O motor engasgou por um erro externo:", error.message);
   }
 }
 

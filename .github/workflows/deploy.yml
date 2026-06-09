@@ -4,6 +4,10 @@ on:
   # O robô vai rodar sempre que você der um push na branch main
   push:
     branches: ['main']
+    # Não dispara o deploy se as mudanças forem apenas nestes arquivos
+    paths-ignore:
+      - 'cron/**'
+      - '.github/workflows/riot-sync.yml'
   
   # Libera o botão na aba Actions para você forçar o deploy a qualquer momento
   workflow_dispatch:
