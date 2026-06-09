@@ -4,6 +4,9 @@ on:
   # O robô vai rodar sempre que você der um push na branch main
   push:
     branches: ['main']
+  
+  # Libera o botão na aba Actions para você forçar o deploy a qualquer momento
+  workflow_dispatch:
 
 # Permissões necessárias para o robô alterar o GitHub Pages
 permissions:
