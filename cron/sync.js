@@ -66,7 +66,7 @@ async function rodarSincronizacao() {
         }
 
         console.log(`📡 Buscando IDs de partidas ${start} até ${start + 100}...`);
-        const chunkIds = await fetchFromRiot(`/lol/match/v5/matches/by-puuid/${jogador.puuid}/ids?start=${start}&count=100`);
+        const chunkIds = await fetchFromRiot(`/lol/match/v5/matches/by-puuid/${jogador.puuid}/ids?start=start&count=100`);
         totalRequestsFeitas++;
 
         if (!chunkIds || chunkIds.length === 0) {
@@ -80,7 +80,7 @@ async function rodarSincronizacao() {
       console.log(`Total de IDs encontrados para analisar: ${allMatchIds.length}`);
 
       // 3. FILTRO EM MASSA: Descobre quais dessas partidas já existem no seu D1 de uma vez só
-      const partidasExistentes NoBanco = new Set();
+      const partidasExistentesNoBanco = new Set();
       
       // Perguntamos pro D1 em blocos de 50 IDs usando a cláusula SQL IN (?,?,?...)
       for (let i = 0; i < allMatchIds.length; i += 50) {
@@ -142,7 +142,6 @@ async function rodarSincronizacao() {
           }
         } catch (matchError) {
           console.error(`❌ Falha ao processar dados da partida ${matchId}:`, matchError.message);
-          // Se der erro em uma partida específica, continua o loop para não quebrar o resto do histórico
           continue; 
         }
       }
