@@ -280,6 +280,7 @@ const topTabs = [
 const sidebarTabs = [
   ...topTabs,
   { id: 'saguaoCustom', path: '/saguaoCustom', label: 'SAGUAO' },
+  { id: 'ancestralidade', path: '/ancestralidade', label: 'ANCESTRALIDADE' },
 ];
 
 // Overlay / countdown handlers

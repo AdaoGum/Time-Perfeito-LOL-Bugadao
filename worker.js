@@ -70,7 +70,6 @@ export default {
 
       const includeMatches = action === "profile_overview" || action === "visão_geral_do_perfil";
 
-      // 1. Busca na Riot
       const accountRes = await fetch(`${routingAmericas}/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}?api_key=${API_KEY}`);
       if (!accountRes.ok) {
         return new Response(JSON.stringify({ error: "Jogador não encontrado." }), { status: accountRes.status, headers: corsHeaders });
@@ -115,11 +114,10 @@ export default {
         }
       }
 
-      // GRAVAÇÃO AUTOMÁTICA NATIVA NO CLOUDFLARE D1
       try {
         await env.DB.prepare(`
-          INSERT INTO jogadores (puuid, game_name, tag_line, tier, rank, lp, win_rate, ultima_atualizacao)
-          VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+          INSERT INTO jogadores (puuid, game_name, tag_line, tier, rank, lp, win_rate, flex_tier, flex_rank, flex_lp, flex_win_rate, ultima_atualizacao)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
           ON CONFLICT(puuid) DO UPDATE SET
             game_name = excluded.game_name,
             tag_line = excluded.tag_line,
@@ -127,8 +125,16 @@ export default {
             rank = excluded.rank,
             lp = excluded.lp,
             win_rate = excluded.win_rate,
+            flex_tier = excluded.flex_tier,
+            flex_rank = excluded.flex_rank,
+            flex_lp = excluded.flex_lp,
+            flex_win_rate = excluded.flex_win_rate,
             ultima_atualizacao = CURRENT_TIMESTAMP
-        `).bind(playerPuuid, exactGameName, exactTagLine, statsSolo.tier, statsSolo.rank, statsSolo.lp, statsSolo.winRate).run();
+        `).bind(
+          playerPuuid, exactGameName, exactTagLine, 
+          statsSolo.tier, statsSolo.rank, statsSolo.lp, statsSolo.winRate,
+          statsFlex.tier, statsFlex.rank, statsFlex.lp, statsFlex.winRate
+        ).run();
       } catch (dbError) {
         console.error("Erro D1:", dbError.message);
       }
@@ -137,7 +143,7 @@ export default {
 
       if (includeMatches) {
         try {
-          // Selecionamos a coluna p.participants do banco
+          // 🌟 MUDANÇA: Agora selecionamos a coluna p.participants do banco
           const { results: cachePartidas } = await env.DB.prepare(`
             SELECT e.*, p.game_duration, p.game_creation, p.participants 
             FROM estatisticas_jogador_partida e
@@ -162,13 +168,12 @@ export default {
                 assists: row.assists,
                 item0: items[0] || 0, item1: items[1] || 0, item2: items[2] || 0, item3: items[3] || 0, item4: items[4] || 0, item5: items[5] || 0, item6: 0,
                 totalMinionsKilled: 0, neutralMinionsKilled: 0, firstBloodKill: false, visionWardsBoughtInGame: 0,
-                // Retorna os dados reais dos jogadores cacheados
+                // 🌟 MUDANÇA: Retorna os dados reais dos jogadores cacheados
                 players: row.participants ? JSON.parse(row.participants) : []
               };
             });
             console.log("⚡ Histórico carregado via D1.");
-          } else {           
-            // Se o D1 estiver vazio para esse player, busca na Riot
+          } else {
             const matchIdsRes = await fetch(`${routingAmericas}/lol/match/v5/matches/by-puuid/${playerPuuid}/ids?start=0&count=20&api_key=${API_KEY}`);
 
             if (matchIdsRes.ok) {
@@ -192,10 +197,9 @@ export default {
                     role: p.teamPosition
                   }));
 
-                    // Salva no D1 em segundo plano
                   ctx.waitUntil((async () => {
                     try {
-                      // Insere a lista completa de jogadores estruturada em formato de texto JSON
+                      // 🌟 MUDANÇA: Insere a lista completa de jogadores estruturada em formato de texto JSON
                       await env.DB.prepare("INSERT OR IGNORE INTO partidas (match_id, game_duration, game_creation, participants) VALUES (?, ?, ?, ?)")
                         .bind(matchId, info.gameDuration, info.gameCreation, JSON.stringify(teams)).run();
                       
@@ -241,9 +245,8 @@ export default {
         profileIconId, summonerLevel, statsSolo, statsFlex, matches: realMatches
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    // ======================================================================
-    // ROTA: MAESTRIAS
-    // ======================================================================
+
+    if (action === "masteries") {
       let targetPuuid = puuid;
       if (!targetPuuid && gameName && tagLine) {
         const accRes = await fetch(`${routingAmericas}/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}?api_key=${API_KEY}`);
@@ -264,6 +267,31 @@ export default {
       if (!masteryRes.ok) return new Response(JSON.stringify({ error: "Erro Maestrias." }), { status: masteryRes.status, headers: corsHeaders });
       const rawMasteries = await masteryRes.json();
       return new Response(JSON.stringify({ masteries: rawMasteries }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ======================================================================
+    // ROTA: ANCESTRALIDADE (DASHBOARD TOTAL DE DADOS)
+    // ======================================================================
+if (action === "admin_all_history") {
+      try {
+        const { results } = await env.DB.prepare(`
+          SELECT 
+            j.game_name, j.tag_line, j.tier, j.rank, j.lp, j.win_rate,
+            j.flex_tier, j.flex_rank, j.flex_lp, j.flex_win_rate, -- 👈 Colunas adicionadas aqui!
+            e.champion_name, e.kills, e.deaths, e.assists, e.win, e.items, e.match_id,
+            p.game_duration, p.game_creation, p.participants 
+          FROM estatisticas_jogador_partida e
+          JOIN jogadores j ON e.puuid = j.puuid
+          JOIN partidas p ON e.match_id = p.match_id
+          ORDER BY p.game_creation DESC
+        `).all();
+        
+        return new Response(JSON.stringify({ success: true, history: results || [] }), { 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+      }
     }
 
     return new Response(JSON.stringify({ error: "Rota inválida." }), { status: 404, headers: corsHeaders });
