@@ -43,7 +43,6 @@
               <span class="text-[10px] text-slate-500">▼</span>
             </button>
 
-            <!-- Menu Suspenso Flutuante -->
             <div 
               v-if="showPlayerDropdown" 
               class="absolute left-0 mt-1 w-full max-h-60 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950 p-2 z-50 shadow-2xl divide-y divide-slate-900"
@@ -79,7 +78,6 @@
               <span class="text-[10px] text-slate-500">▼</span>
             </button>
 
-            <!-- Menu Suspenso Flutuante -->
             <div 
               v-if="showQueueDropdown" 
               class="absolute left-0 mt-1 w-full max-h-60 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950 p-2 z-50 shadow-2xl divide-y divide-slate-900"
@@ -143,7 +141,7 @@
         </div>
       </section>
 
-      <!-- FECHAMENTO DOS DROPDOWNS AO CLICAR FORA (BACKDROP INVISÍVEL) -->
+      <!-- FECHAMENTO DOS DROPDOWNS AO CLICAR FORA -->
       <div v-if="showPlayerDropdown || showQueueDropdown" class="fixed inset-0 z-30" @click="showPlayerDropdown = false; showQueueDropdown = false"></div>
 
       <!-- ELEMENTO DE CARREGAMENTO -->
@@ -151,100 +149,104 @@
         <p class="animate-pulse font-black text-cyan-300 text-sm">Consultando tabelas brutas da nuvem...</p>
       </div>
 
-      <!-- LISTAGEM PAGINADA E FILTRADA -->
-      <div v-else class="space-y-3 relative z-10">
-        <p v-if="!paginatedHistory.length" class="text-center text-slate-500 py-12 font-bold bg-slate-900/40 rounded-xl border border-dashed border-slate-800">
+      <!-- LISTAGEM EM FORMATO GRID COMPACTO (1 COLUNA MOBILE, 2 COLUNAS PC) -->
+      <div v-else class="grid grid-cols-1 xl:grid-cols-2 gap-4 relative z-10">
+        <p v-if="!paginatedHistory.length" class="col-span-full text-center text-slate-500 py-12 font-bold bg-slate-900/40 rounded-xl border border-dashed border-slate-800">
           Nenhum registro bruto corresponde aos filtros aplicados nas colunas.
         </p>
 
         <article
           v-for="row in paginatedHistory"
           :key="row.match_id + '-' + row.game_name"
-          class="grid gap-3 rounded-xl border p-3 lg:grid-cols-[240px_1fr_150px_170px_260px] lg:items-center transition hover:bg-slate-900/40"
-          :class="row.win === 1 ? 'border-blue-900/40 bg-blue-950/10 text-blue-100' : 'border-red-900/40 bg-red-950/10 text-red-100'"
+          class="rounded-2xl border p-4 bg-slate-900/40 backdrop-blur-sm transition hover:bg-slate-900/70 flex flex-col justify-between gap-4 shadow-xl"
+          :class="row.win === 1 ? 'border-blue-900/50 bg-blue-950/10 text-blue-100' : 'border-red-900/50 bg-red-950/10 text-red-100'"
         >
-            <!-- BLOCO 1: DADOS DO JOGADOR NO BANCO (ATUALIZADO DINÂMICO) -->
-            <div class="border-b lg:border-b-0 lg:border-r border-slate-800/60 pb-2 lg:pb-0 pr-2 text-left space-y-1">
-            <!-- Linha 1: Nome Completo -->
-            <p class="font-black text-white truncate text-sm">
-              {{ row.game_name }}<span class="text-slate-500 text-xs font-semibold">#{{ row.tag_line }}</span>
-            </p>
+          <!-- CARD PARTE DE CIMA: INFORMAÇÕES DO JOGADOR + STATUS GLOBAL DA PARTIDA -->
+          <div class="flex flex-wrap items-start justify-between gap-2 border-b border-slate-800/60 pb-2.5">
+            <div class="space-y-0.5">
+              <p class="font-black text-white text-sm">
+                {{ row.game_name }}<span class="text-slate-500 text-xs font-semibold">#{{ row.tag_line }}</span>
+              </p>
+              <p class="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                <span class="text-cyan-400 text-[9px] font-black uppercase tracking-wider">Solo:</span> {{ formatRank(row.tier, row.rank) }}
+                <span class="text-slate-700">|</span>
+                <span class="text-purple-400 text-[9px] font-black uppercase tracking-wider">Flex:</span> {{ formatRank(row.flex_tier, row.flex_rank) }}
+              </p>
+              <p class="text-[10px] font-bold text-slate-400 flex items-center gap-1.5">
+                <span class="text-cyan-400 font-black text-[9px]">WR S:</span> {{ Number(row.win_rate || 0).toFixed(1) }}%
+                <span class="text-slate-700">|</span>
+                <span class="text-purple-400 font-black text-[9px]">WR F:</span> {{ Number(row.flex_win_rate || 0).toFixed(1) }}%
+              </p>
+            </div>
             
-            <!-- Linha 2: Elo da Solo e Elo da Flex reais -->
-            <p class="text-[11px] font-bold text-slate-200 truncate flex items-center gap-1.5">
-              <span class="text-cyan-400 text-[10px] font-black uppercase tracking-wider">Solo:</span> {{ formatRank(row.tier, row.rank) }}
-              <span class="text-slate-600">|</span>
-              <span class="text-purple-400 text-[10px] font-black uppercase tracking-wider">Flex:</span> {{ formatRank(row.flex_tier, row.flex_rank) }}
-            </p>
-
-            <!-- Linha 3: Win Rate do Solo e do Flex reais -->
-            <p class="text-[10px] font-bold text-slate-400 truncate flex items-center gap-1.5">
-              <span class="text-cyan-400 font-black">WR S:</span> {{ Number(row.win_rate || 0).toFixed(1) }}%
-              <span class="text-slate-700">|</span>
-              <span class="text-purple-400 font-black">WR F:</span> {{ Number(row.flex_win_rate || 0).toFixed(1) }}%
-            </p>
-            <p class="text-[9px] text-slate-600 font-medium pt-0.5">ID: {{ row.match_id }}</p>
-          </div>
-
-          <!-- BLOCO 2: DADOS METÁUSTICOS DA PARTIDA -->
-          <div class="flex items-center gap-3">
-            <img class="h-11 w-11 rounded-lg border border-slate-700 object-cover flex-shrink-0" :src="championImage(row.champion_name)" alt="champ" />
-            <div class="min-w-0">
-              <p class="font-black" :class="row.win === 1 ? 'text-blue-400' : 'text-red-400'">
+            <div class="text-right">
+              <p class="font-black text-sm uppercase tracking-wider" :class="row.win === 1 ? 'text-blue-400' : 'text-red-400'">
                 {{ row.win === 1 ? 'VITÓRIA' : 'DERROTA' }}
               </p>
-              <p class="text-[10px] font-bold text-slate-400 uppercase truncate">{{ row.champion_name }}</p>
-              <p class="text-[10px] font-medium text-slate-500 mt-0.5">{{ formatRelativeDate(row.game_creation) }}</p>
+              <p class="text-[10px] font-semibold text-slate-400">{{ formatRelativeDate(row.game_creation) }}</p>
+              <p class="text-[9px] text-slate-600 font-medium font-mono">ID: {{ row.match_id }}</p>
             </div>
           </div>
 
-          <!-- BLOCO 3: KDA E PERFORMANCE DA ROW -->
-          <div>
-            <p class="text-sm font-black text-white tracking-widest">{{ row.kills }} <span class="text-slate-500">/</span> {{ row.deaths }} <span class="text-slate-500">/</span> {{ row.assists }}</p>
-            <p class="text-xs font-bold text-slate-400 mt-0.5">
-              {{ calculateKdaRatio(row.kills, row.deaths, row.assists) }} KDA
-            </p>
-            <p class="text-[10px] font-semibold text-slate-500 mt-0.5">Duração: {{ formatDuration(row.game_duration) }}</p>
-          </div>
+          <!-- CARD PARTE DE BAIXO: DIVIDIDO LINDO EM 2 SUB-COLUNAS (DADOS VS OUTROS JOGADORES) -->
+          <div class="grid grid-cols-1 sm:grid-cols-[1.2fr_1fr] gap-4 items-center">
+            
+            <!-- SUB-COLUNA ESQUERDA: CAMPEÃO, KDA, COMPACT DURATION E ITENS -->
+            <div class="space-y-3">
+              <div class="flex items-center gap-3">
+                <img class="h-12 w-12 rounded-xl border border-slate-700 object-cover shadow-md flex-shrink-0" :src="championImage(row.champion_name)" alt="champ" />
+                <div class="min-w-0">
+                  <p class="text-xs font-black text-slate-200 uppercase tracking-wide truncate">{{ row.champion_name }}</p>
+                  <p class="text-sm font-black text-white tracking-widest mt-0.5">
+                    {{ row.kills }} <span class="text-slate-600">/</span> {{ row.deaths }} <span class="text-slate-600">/</span> {{ row.assists }}
+                  </p>
+                  <p class="text-[11px] font-bold text-slate-400 truncate">
+                    {{ calculateKdaRatio(row.kills, row.deaths, row.assists) }} KDA <span class="text-slate-600 font-normal">•</span> {{ formatDuration(row.game_duration) }}
+                  </p>
+                </div>
+              </div>
 
-          <!-- BLOCO 4: BUILD INDEXADA (ITENS) -->
-          <div class="grid grid-cols-4 gap-1">
-            <template v-for="(itemId, idx) in safeParseJson(row.items, [0,0,0,0,0,0])" :key="idx">
-              <img v-if="itemId" class="h-6 w-6 rounded border border-slate-700 bg-slate-800" :src="itemImage(itemId)" loading="lazy" />
-              <div v-else class="h-6 w-6 rounded border border-slate-800/30 bg-slate-900/40"></div>
-            </template>
-          </div>
-
-          <!-- BLOCO 5: COMPANHEIROS DETALHADOS DA LUTA -->
-          <div class="grid grid-cols-2 gap-1 bg-slate-950/40 rounded p-1.5 border border-slate-900">
-            <!-- TIME ALIADO -->
-            <div class="space-y-0.5 border-r border-slate-900/60 pr-1">
-              <div v-for="p in filterTeam(row, true)" :key="p.gameName" class="flex items-center gap-1 overflow-hidden">
-                <img class="h-3.5 w-3.5 rounded-sm border border-slate-800 flex-shrink-0" :src="championImage(p.championName)" loading="lazy" />
-                <span class="truncate text-[9px] font-bold" :class="isMe(row, p) ? 'text-amber-300 font-black' : 'text-blue-300/80'">
-                  {{ p.gameName }}
-                </span>
+              <!-- ITEMS GRID (COMPACTO) -->
+              <div class="flex flex-wrap gap-1">
+                <template v-for="(itemId, idx) in safeParseJson(row.items, [0,0,0,0,0,0])" :key="idx">
+                  <img v-if="itemId" class="h-6 w-6 rounded border border-slate-700 bg-slate-800 shadow-sm" :src="itemImage(itemId)" loading="lazy" />
+                  <div v-else class="h-6 w-6 rounded border border-slate-800/30 bg-slate-900/40"></div>
+                </template>
               </div>
             </div>
-            <!-- TIME INIMIGO -->
-            <div class="space-y-0.5 pl-1">
-              <div v-for="p in filterTeam(row, false)" :key="p.gameName" class="flex items-center gap-1 overflow-hidden">
-                <img class="h-3.5 w-3.5 rounded-sm border border-slate-800 flex-shrink-0" :src="championImage(p.championName)" loading="lazy" />
-                <span class="truncate text-[9px] font-bold text-red-300/80">
-                  {{ p.gameName }}
-                </span>
+
+            <!-- SUB-COLUNA DIREITA: OS OUTROS 9 JOGADORES DA PARTIDA (PERFEITO EM 2 COLUNAS INTERNAS) -->
+            <div class="grid grid-cols-2 gap-1 bg-slate-950/40 rounded-xl p-2 border border-slate-900/60 h-full content-center">
+              <!-- TIME ALIADO -->
+              <div class="space-y-0.5 border-r border-slate-900/60 pr-1 flex flex-col justify-center">
+                <div v-for="p in filterTeam(row, true)" :key="p.gameName" class="flex items-center gap-1 overflow-hidden">
+                  <img class="h-3.5 w-3.5 rounded-sm border border-slate-800 flex-shrink-0 shadow-sm" :src="championImage(p.championName)" loading="lazy" />
+                  <span class="truncate text-[9px] font-bold" :class="isMe(row, p) ? 'text-amber-300 font-black' : 'text-blue-300/80'">
+                    {{ p.gameName }}
+                  </span>
+                </div>
+              </div>
+              <!-- TIME INIMIGO -->
+              <div class="space-y-0.5 pl-1 flex flex-col justify-center">
+                <div v-for="p in filterTeam(row, false)" :key="p.gameName" class="flex items-center gap-1 overflow-hidden">
+                  <img class="h-3.5 w-3.5 rounded-sm border border-slate-800 flex-shrink-0 shadow-sm" :src="championImage(p.championName)" loading="lazy" />
+                  <span class="truncate text-[9px] font-bold text-red-300/80">
+                    {{ p.gameName }}
+                  </span>
+                </div>
               </div>
             </div>
+
           </div>
         </article>
 
-        <!-- NAVEGADOR DE PÁGINAS INFERIOR -->
-        <div v-if="totalPages > 1" class="flex items-center justify-center gap-4 border-t border-slate-800/80 pt-4 pb-6 relative z-10">
+        <!-- NAVEGADOR DE PÁGINAS INFERIOR (CUPULA CENTRALIZADA) -->
+        <div v-if="totalPages > 1" class="col-span-full flex items-center justify-center gap-4 border-t border-slate-800/80 pt-5 pb-6">
           <button 
             type="button" 
             :disabled="currentPage === 1"
             @click="currentPage--"
-            class="rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-300 transition-all hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            class="rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-300 transition-all hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
           >
             « Anterior
           </button>
@@ -257,7 +259,7 @@
             type="button" 
             :disabled="currentPage === totalPages"
             @click="currentPage++"
-            class="rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-300 transition-all hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            class="rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-300 transition-all hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
           >
             Próxima »
           </button>
@@ -295,7 +297,7 @@ const currentPage = ref(1);
 const itemsPerPage = ref(20);
 const perPageOptions = [20, 50, 75, 100];
 
-// Opções Estruturadas para o Multiselect de Filas[cite: 2]
+// Opções Estruturadas para o Multiselect de Filas
 const queueModesOptions = [
   { value: 'Ranked Solo', label: 'Ranked Solo' },
   { value: 'Ranked Flex', label: 'Ranked Flex' },
@@ -350,21 +352,14 @@ function toggleQueueFilter(queueValue) {
   else selectedQueues.value.push(queueValue);
 }
 
-function clearDates() {
-  filterStartDate.value = '';
-  filterEndDate.value = '';
-}
-
-// 📊 MOTOR ULTRA FILTRADO COM SUPORTE A MULTISELECT SIMULTÂNEO
+// 📊 MOTOR DE FILTRAGEM TOTAL
 const filteredHistory = computed(() => {
   return databaseRows.value.filter(row => {
-    // 1. Filtro Multiselect de Jogadores
     if (selectedPlayers.value.length > 0) {
       const currentKey = `${row.game_name}#${row.tag_line}`;
       if (!selectedPlayers.value.includes(currentKey)) return false;
     }
 
-    // 2. Filtro Multiselect de Tipo de Fila / Partida[cite: 2]
     if (selectedQueues.value.length > 0) {
       const q = row.queueType; 
       const isMatch = selectedQueues.value.some(selected => {
@@ -376,7 +371,6 @@ const filteredHistory = computed(() => {
       if (!isMatch) return false;
     }
 
-    // 3. Filtro de Calendário por Datas
     if (row.game_creation) {
       const rowTime = Number(row.game_creation);
       if (filterStartDate.value) {
@@ -403,7 +397,6 @@ const paginatedHistory = computed(() => {
   return filteredHistory.value.slice(startOffset, endOffset);
 });
 
-// Força retorno à página 1 quando alterar filtros ou volumetria
 watch([filteredHistory, itemsPerPage], () => {
   currentPage.value = 1;
 });

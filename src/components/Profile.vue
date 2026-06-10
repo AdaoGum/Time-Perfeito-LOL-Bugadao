@@ -187,6 +187,7 @@
         </div>
       </section>
 
+      <!-- HISTÓRICO DE PARTIDAS EM FORMATO GRID FLEXÍVEL LADO A LADO -->
       <section class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
         <div class="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h3 class="text-xl font-bold text-slate-100">Histórico de Partidas</h3>
@@ -203,7 +204,6 @@
         </div>
 
         <div v-if="filteredMatches.length" class="mb-5 grid grid-cols-1 gap-4 rounded-xl border border-slate-700/50 bg-slate-900/80 backdrop-blur-sm p-4 sm:grid-cols-3">
-          
           <div class="text-center sm:border-r border-slate-800">
             <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Winrate ({{ activeTab }})</p>
             <p class="text-3xl font-black mt-1" :class="recentWinRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ recentWinRate }}%</p>
@@ -236,78 +236,96 @@
           </div>
         </div>
 
-        <div class="space-y-3">
-          <p v-if="!filteredMatches.length" class="text-center text-slate-400 py-8 font-semibold">
+        <!-- CONTAINER DOS CARDS DE HISTÓRICO ATUALIZADO (1 COLUNA MOBILE, 2 COLUNAS PC) -->
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 relative z-10">
+          <p v-if="!filteredMatches.length" class="col-span-full text-center text-slate-400 py-8 font-semibold">
             Nenhuma partida encontrada na aba <span class="text-amber-400">"{{ activeTab }}"</span>.
           </p>
 
           <article
             v-for="match in filteredMatches"
             :key="match.matchId || match.championName + Math.random()"
-            class="grid gap-3 rounded-xl border p-3 md:grid-cols-[70px_1fr_160px_180px_280px] md:items-center transition hover:brightness-110"
+            class="rounded-2xl border p-4 bg-slate-900/40 backdrop-blur-sm transition hover:brightness-110 flex flex-col justify-between gap-4 shadow-xl"
             :class="match.win ? 'border-blue-800/50 bg-blue-950/20 text-blue-100' : 'border-red-800/50 bg-red-950/20 text-red-100'"
           >
-            <img class="h-16 w-16 rounded-lg border border-slate-700 object-cover shadow-md" :src="championImage(match.championName || 'Aatrox')" :alt="match.championName" loading="lazy" />
-            <div>
-              <p class="font-black" :class="match.win ? 'text-blue-400' : 'text-red-400'">{{ match.win ? 'VITÓRIA' : 'DERROTA' }}</p>
-              <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">{{ match.queueType || 'Outro Modo' }}</p>
-              <p class="text-[11px] font-medium text-slate-500 mt-0.5">{{ formatGameDate(match.gameStartTimestamp) }}</p>
-              <p class="text-xs font-semibold text-slate-300 mt-0.5">{{ formatDuration(match.gameDuration) }}</p>
-              <div v-if="matchBadges(match).length" class="mt-1 flex flex-wrap gap-1">
-                <span v-for="badge in matchBadges(match)" :key="badge.label"
-                  class="rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
-                  :class="badge.color">{{ badge.label }}</span>
-              </div>
-            </div>
-            <div>
-              <p class="text-base font-black text-white tracking-widest">{{ match.kills }} <span class="text-slate-500">/</span> {{ match.deaths }} <span class="text-slate-500">/</span> {{ match.assists }}</p>
-              <p class="text-xs font-bold" :class="Number(calculateKdaRatio(match.kills, match.deaths, match.assists)) >= 4 ? 'text-amber-400' : 'text-slate-400'">
-                {{ calculateKdaRatio(match.kills, match.deaths, match.assists) }} KDA
-              </p>
-              <p class="mt-1 text-[11px] font-semibold text-slate-400">{{ matchFarm(match) }} CS <span class="text-slate-500 font-normal">({{ matchCsMin(match) }}/min)</span></p>
-              <p class="text-[11px] font-semibold text-slate-400">KP: <span class="text-slate-200">{{ matchKP(match) }}</span></p>
-            </div>
-            <div class="grid grid-cols-4 gap-1">
-              <template v-for="(itemId, idx) in [match.item0, match.item1, match.item2, match.item3, match.item4, match.item5, match.item6]" :key="idx">
-                <img v-if="itemId" class="h-7 w-7 rounded border border-slate-700 bg-slate-800 shadow" :src="itemImage(itemId)" loading="lazy" />
-                <div v-else class="h-7 w-7 rounded border border-slate-700 bg-slate-800/30"></div>
-              </template>
-            </div>
-            
-            <div class="grid grid-cols-2 gap-1.5">
-              <div class="rounded bg-slate-900/80 backdrop-blur-sm p-1.5">
-                <div class="space-y-1">
-                  <div v-for="p in alliedPlayers(match)" :key="p?.gameName" class="flex items-center justify-between gap-1 overflow-hidden">
-                    <div class="flex items-center gap-1 min-w-0 flex-1">
-                      <img class="h-4 w-4 rounded-sm border border-slate-700 flex-shrink-0" :src="championImage(p?.championName || 'Aatrox')" loading="lazy" />
-                      <span class="truncate text-[10px] font-semibold text-blue-200/80" :title="`${p?.gameName || 'Desconhecido'}#${p?.tagLine || 'BR1'}`">
-                        {{ p?.gameName || 'Desconhecido' }}<span class="text-slate-500 font-medium text-[9px]">#{{ p?.tagLine || 'BR1' }}</span>
-                      </span>
-                    </div>
-                    <img v-if="p?.role && p.role !== 'Invalid'" :src="getMiniRoleIcon(p.role)" class="h-3 w-3 brightness-150 flex-shrink-0" :title="p.role" />
-                  </div>
+            <!-- CABEÇALHO DO CARD: STATUS GLOBAL DA ROW -->
+            <div class="flex flex-wrap items-start justify-between gap-2 border-b border-slate-800/60 pb-2.5">
+              <div class="space-y-0.5">
+                <p class="font-black text-sm uppercase tracking-wider" :class="match.win ? 'text-blue-400' : 'text-red-400'">
+                  {{ match.win ? 'VITÓRIA' : 'DERROTA' }}
+                </p>
+                <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">{{ match.queueType || 'Outro Modo' }}</p>
+                
+                <div v-if="matchBadges(match).length" class="mt-1 flex flex-wrap gap-1">
+                  <span v-for="badge in matchBadges(match)" :key="badge.label"
+                    class="rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                    :class="badge.color">{{ badge.label }}</span>
                 </div>
               </div>
               
-              <div class="rounded bg-slate-900/80 backdrop-blur-sm p-1.5">
-                <div class="space-y-1">
-                  <div v-for="p in enemyPlayers(match)" :key="p?.gameName" class="flex items-center justify-between gap-1 overflow-hidden">
-                    <div class="flex items-center gap-1 min-w-0 flex-1">
-                      <img class="h-4 w-4 rounded-sm border border-slate-700 flex-shrink-0" :src="championImage(p?.championName || 'Aatrox')" loading="lazy" />
-                      <span class="truncate text-[10px] font-semibold text-red-200/80">
-                        {{ p?.gameName || 'Desconhecido' }}<span class="text-slate-500 font-medium text-[9px]">#{{ p?.tagLine || 'BR1' }}</span>
+              <div class="text-right">
+                <p class="text-[10px] font-semibold text-slate-400">{{ formatGameDate(match.gameStartTimestamp) }}</p>
+                <p class="text-xs font-semibold text-slate-300 mt-0.5">{{ formatDuration(match.gameDuration) }}</p>
+              </div>
+            </div>
+
+            <!-- MEIO/FUNDO DO CARD: DIVIDIDO EM 2 SUB-COLUNAS ADAPTATIVAS -->
+            <div class="grid grid-cols-1 sm:grid-cols-[1.2fr_1fr] gap-4 items-center">
+              
+              <!-- SUB-COLUNA ESQUERDA: CAMPEÃO, KDA, CS E ITENS GRIDS -->
+              <div class="space-y-3">
+                <div class="flex items-center gap-3">
+                  <img class="h-12 w-12 rounded-xl border border-slate-700 object-cover shadow-md flex-shrink-0" :src="championImage(match.championName || 'Aatrox')" :alt="match.championName" loading="lazy" />
+                  <div class="min-w-0">
+                    <p class="text-xs font-black text-slate-200 uppercase tracking-wide truncate">{{ match.championName }}</p>
+                    <p class="text-sm font-black text-white tracking-widest mt-0.5">
+                      {{ match.kills }} <span class="text-slate-600">/</span> {{ match.deaths }} <span class="text-slate-600">/</span> {{ match.assists }}
+                    </p>
+                    <p class="text-[11px] font-bold text-slate-400 truncate">
+                      <span :class="幕 => Number(calculateKdaRatio(match.kills, match.deaths, match.assists)) >= 4 ? 'text-amber-400' : 'text-slate-400'">
+                        {{ calculateKdaRatio(match.kills, match.deaths, match.assists) }} KDA
                       </span>
-                    </div>
-                    <img v-if="p?.role && p.role !== 'Invalid'" :src="getMiniRoleIcon(p.role)" class="h-3 w-3 brightness-150 flex-shrink-0" :title="p.role" />
+                      <span class="text-slate-600 font-normal"> • </span>{{ matchFarm(match) }} CS <span class="text-[10px] font-normal text-slate-500">({{ matchCsMin(match) }}/m)</span>
+                    </p>
+                    <p class="text-[10px] font-semibold text-slate-500 mt-0.5">KP: <span class="text-slate-200">{{ matchKP(match) }}</span></p>
+                  </div>
+                </div>
+
+                <!-- ITEMS COMPACT GRID -->
+                <div class="flex flex-wrap gap-1">
+                  <template v-for="(itemId, idx) in [match.item0, match.item1, match.item2, match.item3, match.item4, match.item5, match.item6]" :key="idx">
+                    <img v-if="itemId" class="h-6 w-6 rounded border border-slate-700 bg-slate-800 shadow-sm" :src="itemImage(itemId)" loading="lazy" />
+                    <div v-else class="h-6 w-6 rounded border border-slate-800/30 bg-slate-900/40"></div>
+                  </template>
+                </div>
+              </div>
+
+              <!-- SUB-COLUNA DIREITA: OS 10 JOGADORES DA INVASÃO (SALIÊNCIA DO NICK PESQUISADO) -->
+              <div class="grid grid-cols-2 gap-1 bg-slate-950/40 rounded-xl p-2 border border-slate-900/60 h-full content-center">
+                <!-- TIME ALIADO -->
+                <div class="space-y-0.5 border-r border-slate-900/60 pr-1 flex flex-col justify-center">
+                  <div v-for="p in alliedPlayers(match)" :key="p?.gameName" class="flex items-center gap-1 overflow-hidden">
+                    <img class="h-3.5 w-3.5 rounded-sm border border-slate-800 flex-shrink-0 shadow-sm" :src="championImage(p?.championName || 'Aatrox')" loading="lazy" />
+                    <span class="truncate text-[9px] font-bold" :class="(p?.gameName || '').toLowerCase().trim() === (store.searchProfile.gameName || '').toLowerCase().trim() ? 'text-amber-300 font-black' : 'text-blue-300/80'">
+                      {{ p?.gameName || 'Desconhecido' }}
+                    </span>
+                  </div>
+                </div>
+                <!-- TIME INIMIGO -->
+                <div class="space-y-0.5 pl-1 flex flex-col justify-center">
+                  <div v-for="p in enemyPlayers(match)" :key="p?.gameName" class="flex items-center gap-1 overflow-hidden">
+                    <img class="h-3.5 w-3.5 rounded-sm border border-slate-800 flex-shrink-0 shadow-sm" :src="championImage(p?.championName || 'Aatrox')" loading="lazy" />
+                    <span class="truncate text-[9px] font-bold text-red-300/80">
+                      {{ p?.gameName || 'Desconhecido' }}
+                    </span>
                   </div>
                 </div>
               </div>
+
             </div>
-            
           </article>
         </div>
       </section>
-
     </template>
   </div>
 </template>
@@ -327,7 +345,6 @@ const summonerInput = ref(
     : ''
 );
 
-// 🚀 NOVA FUNÇÃO: Converte o timestamp da Riot em uma string de data relativa amigável
 function formatGameDate(timestamp) {
   if (!timestamp) return 'Data desconhecida';
   const now = Date.now();
@@ -348,7 +365,6 @@ function getMiniRoleIcon(position) {
   return `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-clash/global/default/assets/images/position-selector/positions/icon-position-${role}.png`;
 }
 
-// Lógica de Abas
 const activeTab = ref('Todas');
 const tabs = ['Todas', 'Solo/Duo', 'Flex', 'Normal', 'Outros'];
 
@@ -480,10 +496,6 @@ const battleCompanions = computed(() => {
     .map(([name, games]) => ({ name, games }));
 });
 
-function isRateLimit(msg) {
-  return msg?.includes('muitas consultas') || msg?.includes('expirou');
-}
-
 function alliedPlayers(match) {
   const participants = Array.isArray(match.players) ? match.players : [];
   const playerEntry = participants.find((p) => p?.championName === match.championName);
@@ -525,8 +537,6 @@ function matchBadges(match) {
   if ((match.visionWardsBoughtInGame || 0) >= 3) badges.push({ label: 'Visão+', color: 'text-purple-300 border-purple-700 bg-purple-950/50' });
   return badges;
 }
-
-const emit = defineEmits(['show-overlay', 'hide-overlay', 'show-udyr']);
 
 async function handleProfileSearch() {
   const summoner = summonerInput.value?.trim();
