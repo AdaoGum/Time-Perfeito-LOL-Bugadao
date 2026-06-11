@@ -2,17 +2,17 @@
   <!-- Background ancestral -->
   <div class="fixed inset-0 z-0 pointer-events-none select-none">
     <div
-      class="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
+      class="absolute inset-0 bg-cover bg-top bg-no-repeat transition-opacity duration-1000"
       :class="route.path === '/profile' ? 'opacity-60' : 'opacity-0'"
       style="background-image: url('https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Udyr_0.jpg');"
     ></div>
     <div
-      class="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
+      class="absolute inset-0 bg-cover bg-top bg-no-repeat transition-opacity duration-1000"
       :class="route.path === '/mastery' ? 'opacity-60' : 'opacity-0'"
       style="background-image: url('https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Udyr_3.jpg');"
     ></div>
     <div
-      class="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000"
+      class="absolute inset-0 bg-cover bg-top bg-no-repeat transition-opacity duration-1000"
       :class="route.path === '/synergy' ? 'opacity-60' : 'opacity-0'"
       style="background-image: url('https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Udyr_6.jpg');"
     ></div>
@@ -58,32 +58,21 @@
 
   <!-- Header -->
   <header class="fixed inset-x-0 top-0 z-40 border-b border-slate-800/80 bg-slate-950/95 backdrop-blur">
-    <div class="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-3 md:px-6">
-      <div class="flex items-center gap-3">
-        <button
-          type="button"
-          class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:text-white lg:hidden"
-          @click="store.ui.sidebarMobileOpen = !store.ui.sidebarMobileOpen"
-          aria-label="Abrir menu lateral"
-        >
-          ☰
-        </button>
+    <div class="relative mx-auto flex w-full max-w-7xl items-center gap-4 px-4 py-3 md:px-6">
+      <button
+        type="button"
+        class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:text-white lg:hidden"
+        @click="store.ui.sidebarMobileOpen = !store.ui.sidebarMobileOpen"
+        aria-label="Abrir menu lateral"
+      >
+        <i class="fa-solid fa-bars"></i>
+      </button>
 
-        <h1 class="text-base font-extrabold tracking-tight sm:text-lg md:text-xl">
-          <span class="bg-gradient-to-r from-lime-300 via-yellow-300 to-orange-500 bg-clip-text text-transparent">UGA BUGA Infos + Caverna dos Monos + Tribo Perfeita</span>
-        </h1>
-      </div>
-      
-      <!-- BUSCA INTEGRADA NA TOP BAR -->
-      <div v-if="route.path !== '/'" class="hidden md:block w-64">
-        <SearchBar 
-          buttonText="" 
-          @show-overlay="handleShowOverlay"
-          @hide-overlay="handleHideOverlay"
-          @show-udyr="handleShowUdyr"
-        />
-      </div>
-      <nav class="flex flex-wrap gap-2">
+      <h1 class="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 whitespace-nowrap text-sm font-extrabold tracking-tight md:block md:text-base lg:text-lg">
+        <span class="bg-gradient-to-r from-lime-300 via-yellow-300 to-orange-500 bg-clip-text text-transparent">UGA BUGA Infos + Caverna dos Monos + Tribo Perfeita</span>
+      </h1>
+
+      <nav class="ml-auto flex flex-wrap gap-2">
         <button
           v-for="tab in topTabs"
           :key="tab.id"
@@ -91,9 +80,12 @@
           @click="router.push(tab.path)"
           class="px-3 py-1.5 font-cave text-xs sm:text-sm transition-all border-b-4 cursor-pointer"
           :class="route.path === tab.path
-            ? 'border-orange-500 text-orange-500 scale-105 font-bold'
-            : 'border-stone-900 text-stone-600 hover:text-stone-400'"
-        >{{ tab.label }}</button>
+            ? `${tab.border} scale-105 font-bold`
+            : 'border-transparent opacity-60 hover:opacity-100'"
+        >
+          <span v-if="tab.gradient" class="bg-gradient-to-r from-lime-300 via-yellow-300 to-orange-500 bg-clip-text text-transparent">{{ tab.label }}</span>
+          <span v-else :class="tab.text">{{ tab.label }}</span>
+        </button>
       </nav>
     </div>
   </header>
@@ -105,37 +97,39 @@
   ></div>
 
   <aside
-    class="fixed bottom-0 left-0 top-16 z-30 flex flex-col border-r border-slate-800 bg-slate-950/95 backdrop-blur transition-all duration-300"
+    class="fixed bottom-0 left-0 top-16 z-30 flex flex-col overflow-hidden border-r border-slate-800 bg-slate-950/95 backdrop-blur transition-all duration-300"
     :class="[
-      store.ui.sidebarCollapsed ? 'w-20' : 'w-72',
+      effectiveCollapsed ? 'w-20' : 'w-72',
       store.ui.sidebarMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
     ]"
+    @mouseenter="sidebarHovered = true"
+    @mouseleave="sidebarHovered = false"
   >
-    <div class="flex items-center justify-between border-b border-slate-800 px-3 py-3">
-      <span v-if="!store.ui.sidebarCollapsed" class="text-xs font-black uppercase tracking-wider text-slate-400">Spiritual Bar</span>
+    <div class="flex shrink-0 items-center justify-between border-b border-slate-800 px-3 py-3">
+      <span v-if="!effectiveCollapsed" class="text-xs font-black uppercase tracking-wider text-slate-400">Spiritual Bar</span>
       <button
         type="button"
         class="inline-flex h-8 w-8 items-center justify-center rounded border border-slate-700 text-slate-300 hover:text-white"
         @click="toggleSidebarCollapse"
-        :aria-label="store.ui.sidebarCollapsed ? 'Expandir sidebar' : 'Minimizar sidebar'"
+        :aria-label="store.ui.sidebarCollapsed ? 'Fixar sidebar aberta' : 'Minimizar sidebar'"
       >
-        {{ store.ui.sidebarCollapsed ? '»' : '«' }}
+        <i class="fa-solid" :class="store.ui.sidebarCollapsed ? 'fa-thumbtack' : 'fa-angles-left'"></i>
       </button>
     </div>
 
-    <div class="border-b border-slate-800 p-3">
+    <div class="shrink-0 border-b border-slate-800 p-3">
       <button
-        v-if="store.ui.sidebarCollapsed"
+        v-if="effectiveCollapsed"
         type="button"
         class="mb-2 inline-flex h-8 w-8 items-center justify-center rounded border border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
         @click="sidebarSearchOpen = !sidebarSearchOpen"
         aria-label="Abrir busca"
       >
-        🔍
+        <i class="fa-solid fa-magnifying-glass"></i>
       </button>
 
-      <div v-if="!store.ui.sidebarCollapsed || sidebarSearchOpen" class="space-y-2">
-        <p v-if="!store.ui.sidebarCollapsed" class="text-[10px] font-black uppercase tracking-wider text-slate-500">Busca rápida</p>
+      <div v-if="!effectiveCollapsed || sidebarSearchOpen" class="space-y-2">
+        <p v-if="!effectiveCollapsed" class="text-[10px] font-black uppercase tracking-wider text-slate-500">Busca rápida</p>
         <SearchBar
           buttonText=""
           @show-overlay="handleShowOverlay"
@@ -145,23 +139,23 @@
       </div>
     </div>
 
-    <div v-if="store.searchProfile.puuid" class="border-b border-slate-800 p-3">
-      <div class="rounded-xl border border-slate-800 bg-slate-900/80 shadow-lg" :class="store.ui.sidebarCollapsed ? 'p-2' : 'p-3'">
-        <div class="flex gap-2" :class="store.ui.sidebarCollapsed ? 'flex-col items-center justify-start' : 'items-center'">
+    <div v-if="store.searchProfile.puuid" class="shrink-0 border-b border-slate-800 p-3">
+      <div class="rounded-xl border border-slate-800 bg-slate-900/80 shadow-lg" :class="effectiveCollapsed ? 'p-2' : 'p-3'">
+        <div class="flex gap-2" :class="effectiveCollapsed ? 'flex-col items-center justify-start' : 'items-center'">
           <img
             class="rounded-lg border border-slate-700 object-cover"
-            :class="store.ui.sidebarCollapsed ? 'h-9 w-9' : 'h-10 w-10'"
+            :class="effectiveCollapsed ? 'h-9 w-9' : 'h-10 w-10'"
             :src="profileIconImage(store.searchProfile.profileIconId)"
             @error="(e) => e.target.src = profileIconImage(29)"
           />
-          <div class="min-w-0" :class="store.ui.sidebarCollapsed ? 'w-full text-center -mt-1' : 'flex-1'">
-            <p class="truncate font-black text-slate-100" :class="store.ui.sidebarCollapsed ? 'text-[9px]' : 'text-[11px]'">
+          <div class="min-w-0" :class="effectiveCollapsed ? 'w-full text-center -mt-1' : 'flex-1'">
+            <p class="truncate font-black text-slate-100" :class="effectiveCollapsed ? 'text-[9px]' : 'text-[11px]'">
               {{ store.searchProfile.gameName }}<span class="font-medium text-slate-500">#{{ store.searchProfile.tagLine }}</span>
             </p>
-            <p class="font-bold text-slate-400" :class="store.ui.sidebarCollapsed ? 'text-[8px]' : 'text-[10px]'">Nível {{ store.searchProfile.summonerLevel }}</p>
+            <p class="font-bold text-slate-400" :class="effectiveCollapsed ? 'text-[8px]' : 'text-[10px]'">Nível {{ store.searchProfile.summonerLevel }}</p>
           </div>
         </div>
-        <div v-if="!store.ui.sidebarCollapsed" class="mt-2 space-y-1">
+        <div v-if="!effectiveCollapsed" class="mt-2 space-y-1">
           <p class="rounded border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-black uppercase text-cyan-400">
             Solo/Duo: {{ store.searchProfile.statsSolo?.tier && store.searchProfile.statsSolo?.tier !== 'UNRANKED' ? `${store.searchProfile.statsSolo.tier} ${store.searchProfile.statsSolo.rank || ''}`.trim() : 'UNRANKED' }}
           </p>
@@ -173,44 +167,47 @@
     </div>
 
 
-    <nav class="flex-1 space-y-2 overflow-y-auto p-3">
+    <nav class="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden p-3">
       <button
         v-for="tab in sidebarTabs"
         :key="`side-${tab.id}`"
         type="button"
         @click="goToTab(tab.path)"
-        class="flex w-full items-center rounded-lg border px-2 py-2 text-left text-xs font-bold transition"
-        :class="route.path === tab.path
-          ? 'border-orange-500 bg-orange-500/10 text-orange-400'
-          : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-600 hover:text-white'"
+        class="flex w-full items-center rounded-lg border py-2 text-xs font-bold transition"
+        :class="[
+          effectiveCollapsed ? 'justify-center px-0' : 'justify-start px-2 text-left',
+          route.path === tab.path
+            ? tab.active
+            : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-600 hover:text-white'
+        ]"
       >
-        <span class="inline-flex h-7 w-7 items-center justify-center rounded border border-slate-700 bg-slate-950 text-[10px] font-black">
-          {{ tab.label.slice(0, 1) }}
+        <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-slate-700 bg-slate-950 text-sm">
+          <i class="fa-solid" :class="tab.icon"></i>
         </span>
-        <span v-if="!store.ui.sidebarCollapsed" class="ml-2 truncate">{{ tab.label }}</span>
+        <span v-if="!effectiveCollapsed" class="ml-2 truncate">{{ tab.label }}</span>
       </button>
     </nav>
 
-    <div class="border-t border-slate-800 p-3">
+    <div class="shrink-0 border-t border-slate-800 p-3">
       <div
         class="rounded-xl border border-slate-700 bg-slate-900/90 p-3 backdrop-blur-sm transition-all"
-        :class="store.ui.sidebarCollapsed ? 'px-2 py-2' : ''"
+        :class="effectiveCollapsed ? 'px-2 py-2' : ''"
       >
-        <div v-if="!store.ui.sidebarCollapsed" class="mb-2 border-b border-slate-700/50 pb-2 text-center text-xs font-bold uppercase tracking-wider text-slate-400">
+        <div v-if="!effectiveCollapsed" class="mb-2 border-b border-slate-700/50 pb-2 text-center text-xs font-bold uppercase tracking-wider text-slate-400">
           Monitor da API (Riot)
         </div>
-        <div class="flex items-center justify-between text-sm font-semibold" :class="store.ui.sidebarCollapsed ? 'text-[10px]' : ''">
-          <span class="text-slate-300">{{ store.ui.sidebarCollapsed ? 'Uso' : 'Uso (2 min)' }}</span>
+        <div class="flex items-center font-semibold" :class="effectiveCollapsed ? 'flex-col gap-0.5 text-center text-[10px]' : 'justify-between text-sm'">
+          <span class="text-slate-300">{{ effectiveCollapsed ? 'Uso' : 'Uso (2 min)' }}</span>
           <span class="text-white">{{ telUsage }}/100</span>
         </div>
-        <div v-if="!store.ui.sidebarCollapsed" class="mt-1 flex items-center justify-between text-sm font-semibold">
+        <div v-if="!effectiveCollapsed" class="mt-1 flex items-center justify-between text-sm font-semibold">
           <span class="text-slate-300">Disponível</span>
           <span :class="telAvailableClass">{{ telAvailable }}</span>
         </div>
         <div class="mt-2 rounded py-1 text-center text-xs font-medium" :class="telTimeClass">
-          {{ store.ui.sidebarCollapsed ? telAvailable : telTimeText }}
+          {{ effectiveCollapsed ? telAvailable : telTimeText }}
         </div>
-        <div v-if="!store.ui.sidebarCollapsed" class="mt-3 space-y-2 border-t border-slate-700/50 pt-3">
+        <div v-if="!effectiveCollapsed" class="mt-3 space-y-2 border-t border-slate-700/50 pt-3">
           <div
             v-for="group in telGroupSummaries"
             :key="group.key"
@@ -226,22 +223,61 @@
             </div>
           </div>
         </div>
+
+        <!-- Toggle de dados brutos do worker (funciona aberto e minimizado) -->
+        <button
+          type="button"
+          @click="showWorkerDebug = !showWorkerDebug"
+          class="mt-2 flex w-full items-center justify-center gap-1 rounded border border-slate-700 bg-slate-950 py-1 text-slate-300 transition hover:border-slate-500 hover:text-white"
+          :class="[
+            effectiveCollapsed ? 'text-xs' : 'text-[11px] font-bold',
+            showWorkerDebug ? 'border-cyan-700 text-cyan-300' : ''
+          ]"
+          :title="showWorkerDebug ? 'Esconder dados brutos do worker' : 'Mostrar dados brutos do worker'"
+        >
+          <template v-if="effectiveCollapsed"><i class="fa-solid" :class="showWorkerDebug ? 'fa-xmark' : 'fa-code'"></i></template>
+          <template v-else><i class="fa-solid" :class="showWorkerDebug ? 'fa-eye-slash' : 'fa-code'"></i>{{ showWorkerDebug ? 'Esconder dados brutos' : 'Dados brutos do worker' }}</template>
+        </button>
       </div>
     </div>
   </aside>
 
+  <!-- Painel flutuante: Dados Brutos do Worker -->
+  <div
+    v-if="showWorkerDebug"
+    class="fixed bottom-4 left-4 z-[60] flex max-h-[60vh] w-[min(92vw,34rem)] flex-col rounded-xl border border-slate-700 bg-[#0d1117] shadow-2xl"
+  >
+    <div class="flex shrink-0 items-center justify-between border-b border-slate-800 px-4 py-2">
+      <span class="text-xs font-black uppercase tracking-wider text-slate-400">Dados Brutos do Worker</span>
+      <button
+        type="button"
+        class="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-700 text-slate-400 hover:text-white"
+        @click="showWorkerDebug = false"
+        aria-label="Fechar dados brutos"
+      >✕</button>
+    </div>
+    <div class="overflow-auto p-4">
+      <pre class="text-xs font-mono text-green-400">{{ JSON.stringify(store.searchProfile, null, 2) }}</pre>
+    </div>
+  </div>
+
   <!-- Main -->
   <main class="w-full px-4 pb-16 pt-24 transition-[margin] duration-300 md:px-6" :style="mainStyle">
-    <router-view v-slot="{ Component }">
-      <component
-        :is="Component"
-        @show-overlay="handleShowOverlay"
-        @hide-overlay="handleHideOverlay"
-        @show-udyr="handleShowUdyr"
-        @show-tooltip="handleShowTooltip"
-        @hide-tooltip="handleHideTooltip"
-      />
-    </router-view>
+    <div
+      class="min-h-[80vh] rounded-3xl border-2 p-4 transition-colors duration-700 sm:p-6"
+      :class="pageThemeBorder"
+    >
+      <router-view v-slot="{ Component }">
+        <component
+          :is="Component"
+          @show-overlay="handleShowOverlay"
+          @hide-overlay="handleHideOverlay"
+          @show-udyr="handleShowUdyr"
+          @show-tooltip="handleShowTooltip"
+          @hide-tooltip="handleHideTooltip"
+        />
+      </router-view>
+    </div>
   </main>
 
   <!-- Mastery Tooltip -->
@@ -268,19 +304,24 @@ const tooltipEl = ref(null);
 const showOverlay = ref(false);
 const countdown = ref(3);
 const sidebarSearchOpen = ref(false);
+const showWorkerDebug = ref(false);
+const sidebarHovered = ref(false);
+
+// No modo minimizado, a barra expande visualmente enquanto o mouse estiver sobre ela.
+// O estado real (store.ui.sidebarCollapsed) continua governando o pin, a margem do main e o localStorage.
+const effectiveCollapsed = computed(() => store.ui.sidebarCollapsed && !sidebarHovered.value);
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1440);
 
 const topTabs = [
-  { id: 'home', path: '/', label: 'TEMPLO' },
-  { id: 'perfil', path: '/profile', label: 'CAÇADA' },
-  { id: 'maestria', path: '/mastery', label: 'CAVERNA' },
-  { id: 'sinergia', path: '/synergy', label: 'TRIBO' },
+  { id: 'home', path: '/', label: 'TEMPLO', icon: 'fa-fire', gradient: true, border: 'border-orange-500', active: 'border-orange-500 bg-orange-500/10 text-orange-300' },
+  { id: 'perfil', path: '/profile', label: 'CAÇADA', icon: 'fa-paw', text: 'text-cyan-400', border: 'border-cyan-500', active: 'border-cyan-500 bg-cyan-500/10 text-cyan-400' },
+  { id: 'maestria', path: '/mastery', label: 'CAVERNA', icon: 'fa-trophy', text: 'text-amber-400', border: 'border-amber-500', active: 'border-amber-500 bg-amber-500/10 text-amber-400' },
+  { id: 'sinergia', path: '/synergy', label: 'TRIBO', icon: 'fa-people-group', text: 'text-lime-400', border: 'border-lime-500', active: 'border-lime-500 bg-lime-500/10 text-lime-400' },
 ];
 
 const sidebarTabs = [
   ...topTabs,
-  { id: 'saguaoCustom', path: '/saguaoCustom', label: 'SAGUAO' },
-  { id: 'ancestralidade', path: '/ancestralidade', label: 'ANCESTRALIDADE' },
+  { id: 'ancestralidade', path: '/ancestralidade', label: 'ANCESTRALIDADE', icon: 'fa-user-secret', active: 'border-fuchsia-500 bg-fuchsia-500/10 text-fuchsia-400' },
 ];
 
 // Overlay / countdown handlers
@@ -315,12 +356,24 @@ function updateViewport() {
 
 const isDesktop = computed(() => viewportWidth.value >= 1024);
 
+// Borda do conteúdo na cor do caminho ativo (mesma cor do botão clicado)
+const pageThemeBorder = computed(() => {
+  switch (route.path) {
+    case '/profile': return 'border-cyan-500/60';
+    case '/mastery': return 'border-amber-500/60';
+    case '/synergy': return 'border-lime-500/60';
+    case '/saguaoCustom': return 'border-orange-500/60';
+    case '/ancestralidade': return 'border-fuchsia-500/60';
+    default: return 'border-transparent';
+  }
+});
+
 const mainStyle = computed(() => {
   if (!isDesktop.value) {
     return { marginLeft: '0px', width: '100%' };
   }
 
-  const leftOffset = store.ui.sidebarCollapsed ? 80 : 288;
+  const leftOffset = effectiveCollapsed.value ? 80 : 288;
   return {
     marginLeft: `${leftOffset}px`,
     width: `calc(100% - ${leftOffset}px)`

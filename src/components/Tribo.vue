@@ -94,11 +94,15 @@
         </div>
       </div>
 
-      <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <div
+        class="gap-3"
+        :class="isSoloDuo ? 'flex flex-col items-stretch sm:flex-row sm:justify-center' : 'grid md:grid-cols-2 xl:grid-cols-5'"
+      >
         <article
           v-for="(slot, slotIndex) in activeRankedSlots"
           :key="slot.id"
           class="relative flex min-h-[360px] flex-col rounded-2xl bg-slate-900/70 backdrop-blur-md border border-slate-800 p-3"
+          :class="isSoloDuo ? 'w-full sm:w-80' : ''"
         >
           <div class="flex items-center justify-between">
             <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Slot {{ slotIndex + 1 }}</p>
@@ -375,6 +379,7 @@ const lobbyModeOptions = [
 ];
 
 const rankedQueueLabel = computed(() => (queueType.value === 'solo_duo' ? 'SOLO/DUO' : 'FLEX'));
+const isSoloDuo = computed(() => queueType.value === 'solo_duo');
 
 const roles = [
   { value: 'TOP', label: 'Top', icon: roleIcon('top') },

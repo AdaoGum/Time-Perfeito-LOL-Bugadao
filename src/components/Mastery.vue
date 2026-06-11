@@ -1,23 +1,6 @@
 <template>
   <div class="space-y-6 rounded-2xl border border-orange-950/30 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-orange-950/20 to-slate-950 p-4">
 
-    <div class="rounded-xl border border-orange-900/30 bg-slate-900/80 backdrop-blur-sm p-3">
-      <form @submit.prevent="handleMasterySearch" class="flex flex-wrap items-center gap-2">
-        <input
-          v-model="masterySummoner"
-          class="flex-1 min-w-0 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-white placeholder:text-slate-500 focus:border-amber-500 focus:outline-none transition"
-          placeholder="Trocar jogador: Nome#TAG"
-        />
-        <button class="rounded-lg bg-amber-700 px-4 py-1.5 text-sm font-bold text-white hover:bg-amber-600 transition" type="submit">Atualizar</button>
-      </form>
-    </div>
-
-    <div v-if="store.masteryDashboard.error" class="mb-4 flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm"
-      :class="isRateLimit(store.masteryDashboard.error) ? 'border-amber-700 bg-amber-950/40 text-amber-300' : 'border-red-800 bg-red-950/40 text-red-300'">
-      <p>{{ store.masteryDashboard.error }}</p>
-      <button @click="store.masteryDashboard.error = null" class="rounded border border-current px-2 py-0.5 text-xs font-semibold hover:opacity-80" type="button">Fechar</button>
-    </div>
-
     <!-- Has mastery data -->
     <template v-if="top20.length">
       <section class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
@@ -143,18 +126,11 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { computed } from 'vue';
 import { state } from '../store.js';
 import { championImage, getChampionIdFromName, DDRAGON_VERSION } from '../utils.js';
-import { workerRequest } from '../api.js';
 
 const store = state;
-
-const masterySummoner = ref(
-  store.searchProfile.gameName && store.searchProfile.tagLine
-    ? `${store.searchProfile.gameName}#${store.searchProfile.tagLine}`
-    : ''
-);
 
 const top20 = computed(() => store.masteryDashboard.allMasteries.slice(0, 20));
 const top5 = computed(() => top20.value.slice(0, 5));
@@ -181,10 +157,6 @@ function remainderTone(level) {
   return 'border-slate-700/40 bg-slate-900/40';
 }
 
-function isRateLimit(msg) {
-  return msg?.includes('muitas consultas') || msg?.includes('expirou');
-}
-
 const emit = defineEmits(['show-tooltip', 'hide-tooltip']);
 
 function showTooltip(event, entry) {
@@ -206,33 +178,4 @@ function onChampionImageError(event) {
   target.src = championFallbackUrl();
 }
 
-function normalizeMasteries(list) {
-  return (list || []).map((entry) => {
-    const fromStatic = store.staticData.championList.find((champ) => Number(champ.key) === Number(entry?.championId));
-    return {
-      championId: entry?.championId,
-      championName: entry?.championName || fromStatic?.name || 'Aatrox',
-      championLevel: Number(entry?.championLevel || 1),
-      championPoints: Number(entry?.championPoints || 0)
-    };
-  });
-}
-
-async function handleMasterySearch() {
-  const summoner = masterySummoner.value?.trim();
-  if (!summoner) return;
-  const [gameNameRaw, tagLineRaw] = summoner.split('#');
-  const gameName = (gameNameRaw || '').trim();
-  const tagLine = (tagLineRaw || '').trim();
-  if (!gameName || !tagLine) return;
-
-  try {
-    const data = await workerRequest('masteries', { gameName, tagLine });
-    if (data?.masteries) {
-      store.masteryDashboard.allMasteries = normalizeMasteries(data.masteries);
-    }
-  } catch (err) {
-    store.masteryDashboard.error = err?.message || 'Erro ao buscar maestrias.';
-  }
-}
 </script>

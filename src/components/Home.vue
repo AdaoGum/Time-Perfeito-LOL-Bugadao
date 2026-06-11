@@ -4,14 +4,14 @@
     :class="activeBg !== 0 ? 'border-slate-800' : 'border-transparent'"
   >
     <div
-      class="absolute inset-0 bg-cover bg-center transition-[opacity] duration-500"
+      class="absolute inset-0 bg-cover bg-top bg-no-repeat transition-[opacity] duration-500"
       :style="{ opacity: activeBg === 1 ? '0.6' : '0', backgroundImage: `url('${UDYR_BASE}Udyr_0.jpg')` }"
     ></div><div
-      class="absolute inset-0 bg-cover bg-center transition-[opacity] duration-500"
+      class="absolute inset-0 bg-cover bg-top bg-no-repeat transition-[opacity] duration-500"
       :style="{ opacity: activeBg === 2 ? '0.6' : '0', backgroundImage: `url('${UDYR_BASE}Udyr_3.jpg')` }"
     ></div>
     <div
-      class="absolute inset-0 bg-cover bg-center transition-[opacity] duration-500"
+      class="absolute inset-0 bg-cover bg-top bg-no-repeat transition-[opacity] duration-500"
       :style="{ opacity: activeBg === 3 ? '0.6' : '0', backgroundImage: `url('${UDYR_BASE}Udyr_6.jpg')` }"
     ></div>
     <div class="absolute inset-0 bg-slate-950/72"></div>

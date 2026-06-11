@@ -1,48 +1,5 @@
 <template>
   <div class="space-y-6">
-    <div class="pt-2">
-      <form @submit.prevent="handleProfileSearch" class="w-full rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-2xl sm:p-5 relative overflow-hidden">
-        <div class="absolute inset-0 bg-gradient-to-br from-blue-900/10 to-transparent pointer-events-none"></div>
-
-        <div v-if="store.searchProfile.error" class="mb-4 flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm"
-          :class="isRateLimit(store.searchProfile.error) ? 'border-amber-700 bg-amber-950/40 text-amber-300' : 'border-red-800 bg-red-950/40 text-red-300'">
-          <p>{{ store.searchProfile.error }}</p>
-          <button @click="store.searchProfile.error = null" class="rounded border border-current px-2 py-0.5 text-xs font-semibold hover:opacity-80" type="button">Fechar</button>
-        </div>
-
-        <div class="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center relative z-10">
-          <input
-            v-model="summonerInput"
-            required
-            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white placeholder:text-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 focus:outline-none transition"
-            placeholder="Nome#TAG (ex: Faker#KR1)"
-          />
-          <button
-            :disabled="store.searchProfile.loading"
-            class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-6 py-2 font-bold text-white shadow-lg transition hover:bg-blue-500 hover:shadow-blue-900/50 disabled:cursor-not-allowed disabled:opacity-70"
-            type="submit"
-          >
-            <span v-if="store.searchProfile.loading" class="animate-pulse">Buscando...</span>
-            <span v-else>Buscar</span>
-          </button>
-        </div>
-      </form>
-    </div>
-
-    <div class="mt-12 border-t border-slate-700 pt-8">
-      <button
-        @click="showDebug = !showDebug"
-        class="mb-4 flex items-center gap-2 rounded-lg bg-slate-800 px-5 py-2 font-bold text-slate-300 transition-colors hover:bg-slate-700 hover:text-white border border-slate-600 shadow-md"
-      >
-        <span v-if="!showDebug">+ Mostrar Dados Brutos do Worker</span>
-        <span v-else>- Esconder Dados Brutos</span>
-      </button>
-
-      <div v-if="showDebug" class="max-h-[600px] overflow-auto rounded-xl bg-[#0d1117] p-5 shadow-inner border border-slate-700">
-        <pre class="text-xs font-mono text-green-400">{{ JSON.stringify(store.searchProfile, null, 2) }}</pre>
-      </div>
-    </div>
-
     <template v-if="store.searchProfile.loading">
       <div class="flex items-center justify-center gap-3 rounded-xl border border-cyan-800/50 bg-cyan-950/30 px-4 py-3">
         <div class="h-4 w-4 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent"></div>
@@ -334,16 +291,8 @@
 import { ref, computed } from 'vue';
 import { state } from '../store.js';
 import { championImage, profileIconImage, itemImage, calculateKdaRatio, formatDuration } from '../utils.js';
-import { workerRequest } from '../api.js';
 
-const showDebug = ref(false)
 const store = state;
-
-const summonerInput = ref(
-  store.searchProfile.gameName && store.searchProfile.tagLine
-    ? `${store.searchProfile.gameName}#${store.searchProfile.tagLine}`
-    : ''
-);
 
 function formatGameDate(timestamp) {
   if (!timestamp) return 'Data desconhecida';
@@ -538,77 +487,4 @@ function matchBadges(match) {
   return badges;
 }
 
-async function handleProfileSearch() {
-  const summoner = summonerInput.value?.trim();
-  if (!summoner) return;
-
-  const [gameNameRaw, tagLineRaw] = summoner.split('#');
-  const gameName = (gameNameRaw || '').trim();
-  const tagLine = (tagLineRaw || '').trim();
-  if (!gameName || !tagLine) {
-    store.searchProfile.error = 'Formato inválido. Use Nome#TAG.';
-    return;
-  }
-
-  emit('show-overlay');
-  store.searchProfile.loading = true;
-  store.searchProfile.error = null;
-
-  let count = 3;
-  emit('show-overlay', count);
-
-  const countdownPromise = new Promise(resolve => {
-    const timer = setInterval(() => {
-      count--;
-      if (count > 0) {
-        emit('show-overlay', count);
-      } else {
-        clearInterval(timer);
-        resolve();
-      }
-    }, 1000);
-  });
-
-  const fetchPromise = (async () => {
-    try {
-      const data = await workerRequest('profile_overview', { gameName, tagLine });
-
-      store.searchProfile.puuid = data.puuid || null;
-      store.searchProfile.gameName = gameName;
-      store.searchProfile.tagLine = tagLine;
-      store.searchProfile.profileIconId = data.profileIconId || 29;
-      store.searchProfile.summonerLevel = data.summonerLevel || 0;
-      
-      store.searchProfile.statsSolo = data.statsSolo || { wins: 0, losses: 0, winRate: 0, tier: "UNRANKED", rank: "", lp: 0 };
-      store.searchProfile.statsFlex = data.statsFlex || { wins: 0, losses: 0, winRate: 0, tier: "UNRANKED", rank: "", lp: 0 };
-      
-      store.searchProfile.matches = Array.isArray(data.matches) ? data.matches : [];
-      store.masteryDashboard.error = null;
-      
-      const masteryData = await workerRequest('masteries', { puuid: data.puuid, gameName, tagLine });
-
-      const fromStaticChamp = (entry) => {
-        if (!entry) return { championName: 'Aatrox', championLevel: 1, championPoints: 0 };
-        const fromStatic = store.staticData.championList.find((champ) => Number(champ.key) === Number(entry.championId));
-        return {
-          championName: entry.championName || fromStatic?.name || 'Aatrox',
-          championLevel: Number(entry.championLevel || 1),
-          championPoints: Number(entry.championPoints || 0)
-        };
-      };
-
-      store.masteryDashboard.allMasteries = (masteryData.masteries || []).map(fromStaticChamp);
-
-    } catch (error) {
-      store.searchProfile.error = error.message;
-    }
-  })();
-
-  await Promise.all([countdownPromise, fetchPromise]);
-
-  emit('hide-overlay');
-  emit('show-udyr');
-  store.searchProfile.loading = false;
-  activeTab.value = 'Todas'; 
-}
 </script>
