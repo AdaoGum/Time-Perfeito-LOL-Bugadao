@@ -19,7 +19,11 @@ export const state = reactive({
     stats: { wins: 0, losses: 0, winRate: 0, tier: 'UNRANKED', rank: '', lp: 0 },
     statsSolo: { wins: 0, losses: 0, winRate: 0, tier: 'UNRANKED', rank: '', lp: 0 },
     statsFlex: { wins: 0, losses: 0, winRate: 0, tier: 'UNRANKED', rank: '', lp: 0 },
-    matches: []
+    matches: [],
+    // Histórico leve vindo do D1 (até 1000 partidas) usado pelo cálculo de proficiência
+    proficiencyMatches: [],
+    // Companheiros por fila (quem mais jogou com ele): { solo: [], flex: [] }
+    companions: { solo: [], flex: [] }
   },
 
   // Painel de maestrias que as outras telas consultam

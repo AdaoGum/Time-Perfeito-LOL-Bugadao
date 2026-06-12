@@ -154,14 +154,18 @@ async function rodarSincronizacao() {
 
           const participant = matchData.info.participants.find(p => p.puuid === jogador.puuid);
           if (participant) {
+            // 🌟 Grava também team_position, queue_id, game_creation, cs e game_duration
+            // (necessário para proficiência por rota e companheiros por fila no histórico profundo)
+            const cs = (participant.totalMinionsKilled || 0) + (participant.neutralMinionsKilled || 0);
             await queryD1(
-              `INSERT OR IGNORE INTO estatisticas_jogador_partida 
-              (puuid, match_id, champion_name, kills, deaths, assists, win, gold_earned, items) 
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT OR IGNORE INTO estatisticas_jogador_partida
+              (puuid, match_id, champion_name, kills, deaths, assists, win, gold_earned, items, team_position, queue_id, game_creation, cs, game_duration)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 jogador.puuid, matchId, participant.championName, participant.kills, participant.deaths, participant.assists,
                 participant.win ? 1 : 0, participant.goldEarned,
-                JSON.stringify([participant.item0, participant.item1, participant.item2, participant.item3, participant.item4, participant.item5])
+                JSON.stringify([participant.item0, participant.item1, participant.item2, participant.item3, participant.item4, participant.item5]),
+                participant.teamPosition || "", matchData.info.queueId, matchData.info.gameCreation, cs, matchData.info.gameDuration
               ]
             );
           }

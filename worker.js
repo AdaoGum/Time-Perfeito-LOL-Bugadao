@@ -1,3 +1,23 @@
+// ----------------------------------------------------------------------
+// MIGRAÇÃO IDEMPOTENTE DO SCHEMA (roda 1x por isolate; ignora "duplicate column")
+// ----------------------------------------------------------------------
+let schemaReady = false;
+async function ensureSchema(env) {
+  if (schemaReady) return;
+  const alters = [
+    "ALTER TABLE estatisticas_jogador_partida ADD COLUMN team_position TEXT",
+    "ALTER TABLE estatisticas_jogador_partida ADD COLUMN queue_id INTEGER",
+    "ALTER TABLE estatisticas_jogador_partida ADD COLUMN game_creation INTEGER",
+    "ALTER TABLE estatisticas_jogador_partida ADD COLUMN cs INTEGER",
+    "ALTER TABLE estatisticas_jogador_partida ADD COLUMN game_duration INTEGER",
+    "CREATE TABLE IF NOT EXISTS maestrias (puuid TEXT NOT NULL, champion_id INTEGER NOT NULL, champion_level INTEGER, champion_points INTEGER, last_play_time INTEGER, atualizado TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (puuid, champion_id))"
+  ];
+  for (const sql of alters) {
+    try { await env.DB.prepare(sql).run(); } catch (e) { /* coluna/tabela já existe */ }
+  }
+  schemaReady = true;
+}
+
 export default {
   async fetch(request, env, ctx) {
     // ----------------------------------------------------------------------
@@ -140,12 +160,15 @@ export default {
       }
 
       let realMatches = [];
+      let proficiencyMatches = [];
 
       if (includeMatches) {
         try {
+          await ensureSchema(env);
+
           // 🌟 MUDANÇA: Agora selecionamos a coluna p.participants do banco
           const { results: cachePartidas } = await env.DB.prepare(`
-            SELECT e.*, p.game_duration, p.game_creation, p.participants 
+            SELECT e.*, p.game_duration AS p_game_duration, p.game_creation AS p_game_creation, p.participants
             FROM estatisticas_jogador_partida e
             JOIN partidas p ON e.match_id = p.match_id
             WHERE e.puuid = ?
@@ -158,91 +181,178 @@ export default {
               const items = JSON.parse(row.items || "[0,0,0,0,0,0]");
               return {
                 win: row.win === 1,
-                queueType: "Dados Guardados (D1)",
+                queueType: queueMap[row.queue_id] || "Dados Guardados (D1)",
                 championName: row.champion_name,
-                teamPosition: "UNKNOWN",
-                gameDuration: row.game_duration,
-                gameStartTimestamp: row.game_creation,
+                teamPosition: row.team_position || "UNKNOWN",
+                gameDuration: row.game_duration || row.p_game_duration,
+                gameStartTimestamp: row.game_creation || row.p_game_creation,
                 kills: row.kills,
                 deaths: row.deaths,
                 assists: row.assists,
                 item0: items[0] || 0, item1: items[1] || 0, item2: items[2] || 0, item3: items[3] || 0, item4: items[4] || 0, item5: items[5] || 0, item6: 0,
-                totalMinionsKilled: 0, neutralMinionsKilled: 0, firstBloodKill: false, visionWardsBoughtInGame: 0,
+                totalMinionsKilled: row.cs || 0, neutralMinionsKilled: 0, firstBloodKill: false, visionWardsBoughtInGame: 0,
                 // 🌟 MUDANÇA: Retorna os dados reais dos jogadores cacheados
                 players: row.participants ? JSON.parse(row.participants) : []
               };
             });
             console.log("⚡ Histórico carregado via D1.");
           } else {
-            const matchIdsRes = await fetch(`${routingAmericas}/lol/match/v5/matches/by-puuid/${playerPuuid}/ids?start=0&count=20&api_key=${API_KEY}`);
+            // 🌟 FASE 1: coleta direcionada por fila — 50 Solo/Duo (420) + 25 Flex (440), deduplicado
+            const [soloIdsRes, flexIdsRes] = await Promise.all([
+              fetch(`${routingAmericas}/lol/match/v5/matches/by-puuid/${playerPuuid}/ids?start=0&count=50&queue=420&api_key=${API_KEY}`),
+              fetch(`${routingAmericas}/lol/match/v5/matches/by-puuid/${playerPuuid}/ids?start=0&count=25&queue=440&api_key=${API_KEY}`)
+            ]);
 
-            if (matchIdsRes.ok) {
-              const matchIds = await matchIdsRes.json();
-              const matchPromises = matchIds.map(async (matchId) => {
-                try {
-                  const detailRes = await fetch(`${routingAmericas}/lol/match/v5/matches/${matchId}?api_key=${API_KEY}`);
-                  if (!detailRes.ok) return null;
-                  const detail = await detailRes.json();
-                  const info = detail.info;
-                  
-                  const participant = info.participants.find(p => p.puuid === playerPuuid);
-                  if (!participant) return null;
+            const soloIds = soloIdsRes.ok ? await soloIdsRes.json() : [];
+            const flexIds = flexIdsRes.ok ? await flexIdsRes.json() : [];
+            const matchIds = [...new Set([...soloIds, ...flexIds])];
 
-                  const teams = info.participants.map(p => ({
-                    gameName: p.riotIdGameName || p.summonerName,
-                    tagLine: p.riotIdTagline,
-                    championName: p.championName,
-                    teamId: p.teamId,
-                    kills: p.kills,
-                    role: p.teamPosition
-                  }));
+            const fetchMatchDetail = async (matchId) => {
+              try {
+                const detailRes = await fetch(`${routingAmericas}/lol/match/v5/matches/${matchId}?api_key=${API_KEY}`);
+                if (!detailRes.ok) return null;
+                const detail = await detailRes.json();
+                const info = detail.info;
 
-                  ctx.waitUntil((async () => {
-                    try {
-                      // 🌟 MUDANÇA: Insere a lista completa de jogadores estruturada em formato de texto JSON
-                      await env.DB.prepare("INSERT OR IGNORE INTO partidas (match_id, game_duration, game_creation, participants) VALUES (?, ?, ?, ?)")
-                        .bind(matchId, info.gameDuration, info.gameCreation, JSON.stringify(teams)).run();
-                      
-                      await env.DB.prepare(`
-                        INSERT OR IGNORE INTO estatisticas_jogador_partida 
-                        (puuid, match_id, champion_name, kills, deaths, assists, win, gold_earned, items)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                      `).bind(
-                        playerPuuid, matchId, participant.championName, participant.kills, participant.deaths, participant.assists,
-                        participant.win ? 1 : 0, participant.goldEarned, 
-                        JSON.stringify([participant.item0, participant.item1, participant.item2, participant.item3, participant.item4, participant.item5])
-                      ).run();
-                    } catch (err) { }
-                  })());
+                const participant = info.participants.find(p => p.puuid === playerPuuid);
+                if (!participant) return null;
 
-                  return {
-                    win: participant.win, 
-                    queueType: queueMap[info.queueId] || "Outro Modo",
-                    championName: participant.championName,
-                    teamPosition: participant.teamPosition,
-                    gameDuration: info.gameDuration,
-                    gameStartTimestamp: info.gameStartTimestamp,
-                    kills: participant.kills,
-                    deaths: participant.deaths,
-                    assists: participant.assists,
-                    item0: participant.item0, item1: participant.item1, item2: participant.item2, item3: participant.item3, item4: participant.item4, item5: participant.item5, item6: participant.item6,
-                    totalMinionsKilled: participant.totalMinionsKilled, neutralMinionsKilled: participant.neutralMinionsKilled, firstBloodKill: participant.firstBloodKill, visionWardsBoughtInGame: participant.visionWardsBoughtInGame,
-                    players: teams
-                  };
-                } catch (e) { return null; }
-              });
-              const resolved = await Promise.all(matchPromises);
-              realMatches = resolved.filter(m => m !== null);
+                const teams = info.participants.map(p => ({
+                  gameName: p.riotIdGameName || p.summonerName,
+                  tagLine: p.riotIdTagline,
+                  championName: p.championName,
+                  teamId: p.teamId,
+                  kills: p.kills,
+                  role: p.teamPosition
+                }));
+
+                const cs = (participant.totalMinionsKilled || 0) + (participant.neutralMinionsKilled || 0);
+
+                ctx.waitUntil((async () => {
+                  try {
+                    // 🌟 MUDANÇA: Insere a lista completa de jogadores estruturada em formato de texto JSON
+                    await env.DB.prepare("INSERT OR IGNORE INTO partidas (match_id, game_duration, game_creation, participants) VALUES (?, ?, ?, ?)")
+                      .bind(matchId, info.gameDuration, info.gameCreation, JSON.stringify(teams)).run();
+
+                    // 🌟 FASE 1: grava team_position, queue_id, game_creation, cs e game_duration
+                    await env.DB.prepare(`
+                      INSERT OR IGNORE INTO estatisticas_jogador_partida
+                      (puuid, match_id, champion_name, kills, deaths, assists, win, gold_earned, items, team_position, queue_id, game_creation, cs, game_duration)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    `).bind(
+                      playerPuuid, matchId, participant.championName, participant.kills, participant.deaths, participant.assists,
+                      participant.win ? 1 : 0, participant.goldEarned,
+                      JSON.stringify([participant.item0, participant.item1, participant.item2, participant.item3, participant.item4, participant.item5]),
+                      participant.teamPosition || "", info.queueId, info.gameCreation, cs, info.gameDuration
+                    ).run();
+                  } catch (err) { }
+                })());
+
+                return {
+                  win: participant.win,
+                  queueType: queueMap[info.queueId] || "Outro Modo",
+                  queueId: info.queueId,
+                  championName: participant.championName,
+                  teamPosition: participant.teamPosition,
+                  gameDuration: info.gameDuration,
+                  gameStartTimestamp: info.gameStartTimestamp,
+                  gameCreation: info.gameCreation,
+                  kills: participant.kills,
+                  deaths: participant.deaths,
+                  assists: participant.assists,
+                  item0: participant.item0, item1: participant.item1, item2: participant.item2, item3: participant.item3, item4: participant.item4, item5: participant.item5, item6: participant.item6,
+                  totalMinionsKilled: participant.totalMinionsKilled, neutralMinionsKilled: participant.neutralMinionsKilled, firstBloodKill: participant.firstBloodKill, visionWardsBoughtInGame: participant.visionWardsBoughtInGame,
+                  players: teams
+                };
+              } catch (e) { return null; }
+            };
+
+            // 🌟 FASE 1: detalhes em lotes de 5 (Promise.all sequencial entre lotes) para respeitar rate limit
+            const resolved = [];
+            for (let i = 0; i < matchIds.length; i += 5) {
+              const lote = matchIds.slice(i, i + 5);
+              const parcial = await Promise.all(lote.map(fetchMatchDetail));
+              resolved.push(...parcial);
             }
+            realMatches = resolved.filter(m => m !== null);
+          }
+
+          // 🌟 Proficiência: usa o MÁXIMO de partidas salvas no D1 (cron enche até 1000)
+          try {
+            const { results: profRows } = await env.DB.prepare(`
+              SELECT champion_name, win, kills, deaths, assists, team_position, queue_id, game_creation, cs, game_duration
+              FROM estatisticas_jogador_partida
+              WHERE puuid = ?
+              ORDER BY game_creation DESC
+              LIMIT 1000
+            `).bind(playerPuuid).all();
+            proficiencyMatches = (profRows || []).map(row => ({
+              championName: row.champion_name,
+              win: row.win === 1,
+              kills: row.kills, deaths: row.deaths, assists: row.assists,
+              teamPosition: row.team_position || "",
+              queueId: row.queue_id,
+              gameCreation: row.game_creation,
+              cs: row.cs || 0,
+              gameDuration: row.game_duration || 0
+            }));
+          } catch (e) { }
+
+          // Fallback: se o D1 ainda não tem dados (primeira visita), deriva das partidas recém-baixadas
+          if (!proficiencyMatches.length && realMatches.length) {
+            proficiencyMatches = realMatches.map(m => ({
+              championName: m.championName,
+              win: m.win,
+              kills: m.kills, deaths: m.deaths, assists: m.assists,
+              teamPosition: m.teamPosition || "",
+              queueId: m.queueId || 0,
+              gameCreation: m.gameCreation || m.gameStartTimestamp || 0,
+              cs: (m.totalMinionsKilled || 0) + (m.neutralMinionsKilled || 0),
+              gameDuration: m.gameDuration || 0
+            }));
           }
         } catch (err) {
           console.error("Erro cache D1:", err.message);
         }
       }
 
+      // 🌟 Companheiros por fila: quem mais jogou com ele (Solo/Duo 420 e Flex 440)
+      let companions = { solo: [], flex: [] };
+      if (includeMatches) {
+        try {
+          const { results: coRows } = await env.DB.prepare(`
+            SELECT e.queue_id AS queue_id, p.participants AS participants
+            FROM estatisticas_jogador_partida e
+            JOIN partidas p ON e.match_id = p.match_id
+            WHERE e.puuid = ? AND p.participants IS NOT NULL
+            ORDER BY e.game_creation DESC
+            LIMIT 400
+          `).bind(playerPuuid).all();
+
+          const countSolo = {};
+          const countFlex = {};
+          const selfName = (exactGameName || "").toLowerCase().trim();
+          for (const row of coRows || []) {
+            const bucket = row.queue_id === 440 ? countFlex : (row.queue_id === 420 ? countSolo : null);
+            if (!bucket) continue;
+            let players;
+            try { players = JSON.parse(row.participants); } catch (e) { continue; }
+            if (!Array.isArray(players)) continue;
+            for (const pl of players) {
+              const nm = (pl?.gameName || "").trim();
+              if (!nm || nm.toLowerCase() === selfName) continue;
+              const key = pl.tagLine ? `${nm}#${pl.tagLine}` : nm;
+              bucket[key] = (bucket[key] || 0) + 1;
+            }
+          }
+          const top5 = (obj) => Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, games]) => ({ name, games }));
+          companions = { solo: top5(countSolo), flex: top5(countFlex) };
+        } catch (e) { }
+      }
+
       return new Response(JSON.stringify({
         loading: false, error: null, puuid: playerPuuid, gameName: exactGameName, tagLine: exactTagLine,
-        profileIconId, summonerLevel, statsSolo, statsFlex, matches: realMatches
+        profileIconId, summonerLevel, statsSolo, statsFlex, matches: realMatches.slice(0, 20), proficiencyMatches, companions
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -266,7 +376,33 @@ export default {
       const masteryRes = await fetch(`https://${platformHost}.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/${targetPuuid}?api_key=${API_KEY}`);
       if (!masteryRes.ok) return new Response(JSON.stringify({ error: "Erro Maestrias." }), { status: masteryRes.status, headers: corsHeaders });
       const rawMasteries = await masteryRes.json();
-      return new Response(JSON.stringify({ masteries: rawMasteries }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      // 🌟 FASE 1: repassa lastPlayTime (usado pela recência da proficiência)
+      const masteries = (rawMasteries || []).map(m => ({
+        championId: m.championId,
+        championLevel: m.championLevel,
+        championPoints: m.championPoints,
+        lastPlayTime: m.lastPlayTime
+      }));
+
+      // 🌟 Persiste as maestrias no D1 (tabela maestrias) em segundo plano
+      ctx.waitUntil((async () => {
+        try {
+          await ensureSchema(env);
+          if (!masteries.length) return;
+          const stmt = env.DB.prepare(`
+            INSERT INTO maestrias (puuid, champion_id, champion_level, champion_points, last_play_time, atualizado)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(puuid, champion_id) DO UPDATE SET
+              champion_level = excluded.champion_level,
+              champion_points = excluded.champion_points,
+              last_play_time = excluded.last_play_time,
+              atualizado = CURRENT_TIMESTAMP
+          `);
+          await env.DB.batch(masteries.map(m => stmt.bind(targetPuuid, m.championId, m.championLevel, m.championPoints, m.lastPlayTime)));
+        } catch (e) { }
+      })());
+
+      return new Response(JSON.stringify({ masteries }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // ======================================================================

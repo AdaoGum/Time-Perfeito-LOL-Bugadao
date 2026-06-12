@@ -62,6 +62,42 @@ Para proteger a chave oficial da Riot Games e contornar erros de CORS do navegad
 
 ---
 
+## 🧠 Como funciona o motor de sinergia v2
+
+O Planejador de Sinergia ranqueia cada candidato com um score **normalizado 0–1**:
+
+```
+scoreIndividual = 0.40·proficiência + 0.20·metaScore + 0.10·roleFit
+scoreDeTime     = Σ scoreIndividual + 0.30·(aderênciaArquétipo + sinergiaDePares + balanceamento)
+```
+
+- **Proficiência:** força real do jogador no campeão — winrate bayesiano, recência
+  (último jogo), maestria e desempenho (KDA/CS/min). Vem de `src/utils/proficiencia.js`.
+- **Meta:** tier list manual em `src/data/meta-tiers.csv` (S/A/B/C/D → 1.0/0.8/0.6/0.4/0.25).
+  Campeão fora do CSV = 0.5 (neutro); o meta **pondera, nunca domina**.
+- **Vetores táticos:** 8 dimensões + `cc`, `scaling` e `mechTags` em `src/data/sinergia-champs.csv`.
+- **Arquétipos** (ENGAGE/POKE/PROTECT/PICK/SPLITPUSH) e **pares sinérgicos**
+  (ex.: `fornece_knockup` + `aproveita_knockup`) medem o encaixe do time inteiro.
+- A composição é resolvida por **otimização global** (produto cartesiano dos top 8 por slot),
+  e a UI mostra o arquétipo do time, os pares encontrados e os Planos A/B/C.
+
+Dados ausentes (sem partidas, sem maestria, sem meta) degradam para neutro — nunca quebram.
+
+## 🗺️ Como atualizar o meta (tier list)
+
+O sistema lê `src/data/meta-tiers.csv` para ponderar as recomendações pela
+força de cada campeão no patch atual. A atualização é manual:
+
+1. Abra o Claude (web, com busca) e cole o prompt padrão (`.github/prompts/PLANNER-FINAL-sinergia-v2.md`, Anexo A).
+2. Salve a resposta como `src/data/meta-tiers.csv` (substituindo o anterior).
+3. Confira a 1ª linha: `# patch: X | atualizado: YYYY-MM-DD`.
+4. Commit + deploy. A UI exibe o novo patch automaticamente.
+
+Se o CSV passar de 30 dias, a UI avisa "meta desatualizado" e o peso do meta
+nas recomendações cai pela metade automaticamente.
+
+---
+
 ## 📝 Licença
 
 Este projeto é de uso pessoal e educacional. Desenvolvido de acordo com as diretrizes do **Riot Games Developer Portal**.

@@ -113,7 +113,12 @@ async function executeSearch() {
         rank: data.statsFlex?.rank || '',
         lp: Number(data.statsFlex?.lp || 0)
       },
-      matches: Array.isArray(data.matches) ? data.matches : []
+      matches: Array.isArray(data.matches) ? data.matches : [],
+      proficiencyMatches: Array.isArray(data.proficiencyMatches) ? data.proficiencyMatches : [],
+      companions: {
+        solo: Array.isArray(data.companions?.solo) ? data.companions.solo : [],
+        flex: Array.isArray(data.companions?.flex) ? data.companions.flex : []
+      }
     };
 
     if (props.syncGlobalStore) {
@@ -133,6 +138,8 @@ async function executeSearch() {
         lp: Number(data.stats?.lp || 0)
       };
       state.searchProfile.matches = normalizedData.matches;
+      state.searchProfile.proficiencyMatches = normalizedData.proficiencyMatches;
+      state.searchProfile.companions = normalizedData.companions;
       state.searchProfile.error = null;
     }
 
@@ -142,12 +149,13 @@ async function executeSearch() {
       workerRequest('masteries', { puuid: normalizedData.puuid, gameName, tagLine })
         .then((masteryData) => {
           const fromStaticChamp = (entry) => {
-            if (!entry) return { championName: 'Aatrox', championLevel: 1, championPoints: 0 };
+            if (!entry) return { championName: 'Aatrox', championLevel: 1, championPoints: 0, lastPlayTime: 0 };
             const fromStatic = state.staticData.championList.find((champ) => Number(champ.key) === Number(entry.championId));
             return {
               championName: entry.championName || fromStatic?.name || 'Aatrox',
               championLevel: Number(entry.championLevel || 1),
-              championPoints: Number(entry.championPoints || 0)
+              championPoints: Number(entry.championPoints || 0),
+              lastPlayTime: Number(entry.lastPlayTime || 0)
             };
           };
           state.masteryDashboard.allMasteries = (masteryData.masteries || []).map(fromStaticChamp);
