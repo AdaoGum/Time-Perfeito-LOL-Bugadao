@@ -119,7 +119,7 @@ async function rodarBackfill() {
         );
         atualizadas++;
       }
-      if (feitas % 25 === 0) console.log(`   ⏱️  Progresso: ${feitas}/${porPartida.size} partidas | ${atualizadas} linhas atualizadas`);
+      if (feitas % 75 === 0) console.log(`   ⏱️  Progresso: ${feitas}/${porPartida.size} partidas | ${atualizadas} linhas atualizadas`);
     } catch (err) {
       falhas++;
       console.warn(`   ❌ Falha na partida ${matchId}: ${err.message}`);

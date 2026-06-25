@@ -183,6 +183,7 @@
               <p class="font-black text-sm uppercase tracking-wider" :class="row.win === 1 ? 'text-blue-400' : 'text-red-400'">
                 {{ row.win === 1 ? 'VITÓRIA' : 'DERROTA' }}
               </p>
+              <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">{{ queueLabel(row) }}<span v-if="row.team_position && row.team_position !== 'Invalid'" class="text-slate-600"> • {{ row.team_position }}</span></p>
               <p class="text-[10px] font-semibold text-slate-400">{{ formatRelativeDate(row.game_creation) }}</p>
               <p class="text-[9px] text-slate-600 font-medium font-mono">ID: {{ row.match_id }}</p>
             </div>
@@ -195,6 +196,16 @@
             <div class="space-y-3">
               <div class="flex items-center gap-3">
                 <img class="h-12 w-12 rounded-xl border border-slate-700 object-cover shadow-md flex-shrink-0" :src="championImage(row.champion_name)" alt="champ" />
+
+                <!-- Feitiços de invocador + runa principal (quando houver dados) -->
+                <div v-if="row.summoner1_id || row.perk_keystone" class="flex flex-shrink-0 items-center gap-1">
+                  <div class="flex flex-col gap-0.5">
+                    <img v-if="spellImg(row.summoner1_id)" :src="spellImg(row.summoner1_id)" :title="spellName(row.summoner1_id)" :alt="spellName(row.summoner1_id)" class="h-5 w-5 rounded border border-slate-700 bg-slate-800" />
+                    <img v-if="spellImg(row.summoner2_id)" :src="spellImg(row.summoner2_id)" :title="spellName(row.summoner2_id)" :alt="spellName(row.summoner2_id)" class="h-5 w-5 rounded border border-slate-700 bg-slate-800" />
+                  </div>
+                  <img v-if="runeImg(row.perk_keystone)" :src="runeImg(row.perk_keystone)" :title="runeName(row.perk_keystone)" :alt="runeName(row.perk_keystone)" class="h-6 w-6 rounded-full border border-slate-700 bg-slate-950" />
+                </div>
+
                 <div class="min-w-0">
                   <p class="text-xs font-black text-slate-200 uppercase tracking-wide truncate">{{ row.champion_name }}</p>
                   <p class="text-sm font-black text-white tracking-widest mt-0.5">
@@ -212,6 +223,42 @@
                   <img v-if="itemId" class="h-6 w-6 rounded border border-slate-700 bg-slate-800 shadow-sm" :src="itemImage(itemId)" loading="lazy" />
                   <div v-else class="h-6 w-6 rounded border border-slate-800/30 bg-slate-900/40"></div>
                 </template>
+              </div>
+
+              <!-- GRADE DE STATS ANALÍTICOS (mostra só o que existir) -->
+              <div class="grid grid-cols-3 gap-1.5 text-center">
+                <div v-if="row.cs != null" class="rounded border border-slate-800/60 bg-slate-950/40 px-1 py-1">
+                  <div class="text-[10px] font-black text-slate-200">{{ row.cs }}</div>
+                  <div class="text-[8px] font-bold uppercase tracking-wider text-slate-500">CS</div>
+                </div>
+                <div v-if="row.vision_score != null" class="rounded border border-slate-800/60 bg-slate-950/40 px-1 py-1">
+                  <div class="text-[10px] font-black text-cyan-300">{{ row.vision_score }}</div>
+                  <div class="text-[8px] font-bold uppercase tracking-wider text-slate-500">Visão</div>
+                </div>
+                <div v-if="row.kill_participation != null" class="rounded border border-slate-800/60 bg-slate-950/40 px-1 py-1">
+                  <div class="text-[10px] font-black text-emerald-300">{{ Math.round(row.kill_participation * 100) }}%</div>
+                  <div class="text-[8px] font-bold uppercase tracking-wider text-slate-500">KP</div>
+                </div>
+                <div v-if="row.solo_kills != null" class="rounded border border-slate-800/60 bg-slate-950/40 px-1 py-1">
+                  <div class="text-[10px] font-black text-amber-300">{{ row.solo_kills }}</div>
+                  <div class="text-[8px] font-bold uppercase tracking-wider text-slate-500">Solo K</div>
+                </div>
+                <div v-if="row.control_wards != null" class="rounded border border-slate-800/60 bg-slate-950/40 px-1 py-1">
+                  <div class="text-[10px] font-black text-fuchsia-300">{{ row.control_wards }}</div>
+                  <div class="text-[8px] font-bold uppercase tracking-wider text-slate-500">Wards</div>
+                </div>
+                <div v-if="row.damage_champions != null" class="rounded border border-slate-800/60 bg-slate-950/40 px-1 py-1">
+                  <div class="text-[10px] font-black text-red-300">{{ Number(row.damage_champions).toLocaleString('pt-BR') }}</div>
+                  <div class="text-[8px] font-bold uppercase tracking-wider text-slate-500">Dano</div>
+                </div>
+                <div v-if="row.gold_earned != null" class="rounded border border-slate-800/60 bg-slate-950/40 px-1 py-1">
+                  <div class="text-[10px] font-black text-yellow-300">{{ Number(row.gold_earned).toLocaleString('pt-BR') }}</div>
+                  <div class="text-[8px] font-bold uppercase tracking-wider text-slate-500">Ouro</div>
+                </div>
+                <div v-if="row.gold_per_min != null" class="rounded border border-slate-800/60 bg-slate-950/40 px-1 py-1">
+                  <div class="text-[10px] font-black text-yellow-200">{{ Math.round(row.gold_per_min) }}</div>
+                  <div class="text-[8px] font-bold uppercase tracking-wider text-slate-500">Ouro/m</div>
+                </div>
               </div>
             </div>
 
@@ -272,7 +319,32 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { workerRequest } from '../api.js';
-import { championImage, itemImage, calculateKdaRatio, formatDuration } from '../utils.js';
+import { state } from '../store.js';
+import { championImage, itemImage, calculateKdaRatio, formatDuration, summonerSpellImage, runeImage } from '../utils.js';
+
+const store = state;
+
+// Mapa de filas para rótulo (e para o filtro funcionar a partir do queue_id)
+const QUEUE_MAP = { 420: 'Ranked Solo', 440: 'Ranked Flex', 400: 'Normal Draft', 430: 'Normal Blind', 450: 'ARAM', 1700: 'Arena' };
+function queueLabel(row) {
+  return QUEUE_MAP[row.queue_id] || 'Outros';
+}
+
+// Feitiços de invocador e runa (ícone + nome) a partir dos mapas estáticos
+function spellImg(id) {
+  const s = store.staticData.summonerSpells?.[id];
+  return s?.image ? summonerSpellImage(s.image) : '';
+}
+function spellName(id) {
+  return store.staticData.summonerSpells?.[id]?.name || '';
+}
+function runeImg(id) {
+  const r = store.staticData.runes?.[id];
+  return r?.icon ? runeImage(r.icon) : '';
+}
+function runeName(id) {
+  return store.staticData.runes?.[id]?.name || '';
+}
 
 const isAuthenticated = ref(false);
 const passwordInput = ref('');
@@ -361,7 +433,7 @@ const filteredHistory = computed(() => {
     }
 
     if (selectedQueues.value.length > 0) {
-      const q = row.queueType; 
+      const q = queueLabel(row);
       const isMatch = selectedQueues.value.some(selected => {
         if (selected === 'Outros') {
           return !['Ranked Solo', 'Ranked Flex', 'Normal Draft', 'Normal Blind', 'ARAM', 'Arena'].includes(q);

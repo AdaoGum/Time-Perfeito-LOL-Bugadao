@@ -486,11 +486,15 @@ export default {
 if (action === "admin_all_history") {
       try {
         const { results } = await env.DB.prepare(`
-          SELECT 
+          SELECT
             j.game_name, j.tag_line, j.tier, j.rank, j.lp, j.win_rate,
-            j.flex_tier, j.flex_rank, j.flex_lp, j.flex_win_rate, -- 👈 Colunas adicionadas aqui!
+            j.flex_tier, j.flex_rank, j.flex_lp, j.flex_win_rate,
             e.champion_name, e.kills, e.deaths, e.assists, e.win, e.items, e.match_id,
-            p.game_duration, p.game_creation, p.participants 
+            e.team_position, e.queue_id, e.cs, e.gold_earned,
+            e.vision_score, e.control_wards, e.solo_kills, e.damage_champions,
+            e.gold_per_min, e.kill_participation, e.summoner1_id, e.summoner2_id,
+            e.perk_keystone, e.perk_secondary_style,
+            p.game_duration, p.game_creation, p.participants
           FROM estatisticas_jogador_partida e
           JOIN jogadores j ON e.puuid = j.puuid
           JOIN partidas p ON e.match_id = p.match_id
