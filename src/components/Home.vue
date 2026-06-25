@@ -23,8 +23,9 @@
 
       <!-- CAIXA DE BUSCA NO CENTRO DA HOME -->
       <div class="mb-10 w-full max-w-md bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-2xl">
-        <SearchBar 
-          buttonText="Começar Jornada" 
+        <SearchBar
+          buttonText="Começar Jornada"
+          :routeToProfile="true"
           @show-overlay="c => $emit('show-overlay', c)"
           @hide-overlay="$emit('hide-overlay')"
           @show-udyr="$emit('show-udyr')"

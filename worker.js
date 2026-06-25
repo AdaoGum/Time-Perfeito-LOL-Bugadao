@@ -238,13 +238,14 @@ export default {
           };
 
           // 🌟 MUDANÇA: Agora selecionamos a coluna p.participants do banco
+          // Lê até 100 partidas detalhadas do D1 (cache, sem gastar API) p/ paginação 20/20 no front
           const { results: cachePartidas } = await env.DB.prepare(`
             SELECT e.*, p.game_duration AS p_game_duration, p.game_creation AS p_game_creation, p.participants
             FROM estatisticas_jogador_partida e
             JOIN partidas p ON e.match_id = p.match_id
             WHERE e.puuid = ?
             ORDER BY p.game_creation DESC
-            LIMIT 20
+            LIMIT 100
           `).bind(playerPuuid).all();
 
           // Partidas já guardadas (servidas do D1, não gastam a API da Riot)
@@ -300,7 +301,7 @@ export default {
             freshMatches.push(...parcial.filter(m => m !== null));
           }
 
-          // Combina novas (topo) + cache, sem duplicar, ordenado por data desc, limitado a 20
+          // Combina novas (topo) + cache, sem duplicar, ordenado por data desc, limitado a 100
           const seen = new Set();
           realMatches = [...freshMatches, ...cachedMatches]
             .filter(m => {
@@ -309,7 +310,7 @@ export default {
               return true;
             })
             .sort((a, b) => (b.gameCreation || b.gameStartTimestamp || 0) - (a.gameCreation || a.gameStartTimestamp || 0))
-            .slice(0, 20);
+            .slice(0, 100);
 
           // 🌟 Proficiência: usa o MÁXIMO de partidas salvas no D1 (cron enche até 1000)
           try {
@@ -386,7 +387,7 @@ export default {
 
       return new Response(JSON.stringify({
         loading: false, error: null, puuid: playerPuuid, gameName: exactGameName, tagLine: exactTagLine,
-        profileIconId, summonerLevel, statsSolo, statsFlex, matches: realMatches.slice(0, 20), proficiencyMatches, companions,
+        profileIconId, summonerLevel, statsSolo, statsFlex, matches: realMatches.slice(0, 100), proficiencyMatches, companions,
         apiCalls
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }

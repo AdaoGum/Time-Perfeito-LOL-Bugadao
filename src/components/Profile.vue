@@ -141,6 +141,79 @@
         </section>
       </div>
 
+      <!-- VISÃO ANALÍTICA + COMPANHEIROS: empilhados no mobile, lado a lado em telas grandes -->
+      <div class="grid gap-4 xl:grid-cols-2 items-start">
+      <!-- VISÃO ANALÍTICA: ÚLTIMOS 100 JOGOS (base leve do D1) -->
+      <section v-if="analytics100" class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
+        <div class="mb-4 flex items-center justify-between">
+          <h3 class="text-xl font-bold text-slate-100">Visão Analítica</h3>
+          <span class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Últimos {{ analytics100.games }} jogos</span>
+        </div>
+
+        <!-- Cards de desempenho geral -->
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
+            <div class="text-2xl font-black" :class="analytics100.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ analytics100.winRate }}%</div>
+            <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Win Rate</div>
+            <div class="text-[10px] text-slate-500">{{ analytics100.wins }}V / {{ analytics100.losses }}D</div>
+          </div>
+          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
+            <div class="text-2xl font-black text-emerald-400">{{ analytics100.kda }}</div>
+            <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">KDA Médio</div>
+            <div class="text-[10px] text-slate-500">{{ analytics100.avgKills }} / {{ analytics100.avgDeaths }} / {{ analytics100.avgAssists }}</div>
+          </div>
+          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
+            <div class="text-2xl font-black text-amber-400">{{ analytics100.csMin }}</div>
+            <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">CS / min</div>
+          </div>
+          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
+            <div class="text-2xl font-black text-cyan-300">{{ analytics100.primaryRole }}</div>
+            <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Rota Principal</div>
+          </div>
+          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
+            <div class="text-2xl font-black text-slate-200">{{ analytics100.avgKills }}</div>
+            <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Abates / jogo</div>
+          </div>
+          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
+            <div class="text-2xl font-black text-slate-200">{{ analytics100.avgDeaths }}</div>
+            <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Mortes / jogo</div>
+          </div>
+        </div>
+
+        <!-- Top campeões dos últimos 100 jogos -->
+        <div v-if="top100Champions.length" class="mt-5">
+          <h4 class="mb-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">Top Campeões (100 jogos)</h4>
+          <div class="overflow-x-auto rounded-xl border border-slate-800">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-950/60 text-[9px] uppercase tracking-wider text-slate-500">
+                <tr>
+                  <th class="px-3 py-2 font-bold">Campeão</th>
+                  <th class="px-3 py-2 font-bold text-center">Jogos</th>
+                  <th class="px-3 py-2 font-bold text-center">Win Rate</th>
+                  <th class="px-3 py-2 font-bold text-center">KDA</th>
+                  <th class="px-3 py-2 font-bold text-center">CS/min</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="champ in top100Champions" :key="champ.name" class="border-t border-slate-800/60 hover:bg-slate-800/30">
+                  <td class="px-3 py-2">
+                    <div class="flex items-center gap-2">
+                      <img class="h-6 w-6 rounded-full border border-slate-600" :src="championImage(champ.name)" :alt="champ.name" />
+                      <span class="font-bold text-slate-200">{{ champ.name }}</span>
+                    </div>
+                  </td>
+                  <td class="px-3 py-2 text-center font-semibold text-slate-300">{{ champ.games }}</td>
+                  <td class="px-3 py-2 text-center font-black" :class="champ.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ champ.winRate }}%</td>
+                  <td class="px-3 py-2 text-center font-bold" :class="Number(champ.kda) >= 4 ? 'text-amber-400' : 'text-slate-300'">{{ champ.kda }}</td>
+                  <td class="px-3 py-2 text-center font-semibold text-slate-300">{{ champ.csMin }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- COMPANHEIROS DE BATALHA (ao lado da Visão Analítica em telas grandes) -->
       <section v-if="battleCompanions.length" class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
         <h3 class="mb-4 text-lg font-bold text-slate-100">Companheiros de Batalha (Top 10)</h3>
         <div class="flex flex-wrap gap-3">
@@ -151,6 +224,7 @@
           </div>
         </div>
       </section>
+      </div>
 
       <!-- HISTÓRICO DE PARTIDAS EM FORMATO GRID FLEXÍVEL LADO A LADO -->
       <section class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
@@ -208,7 +282,7 @@
           </p>
 
           <article
-            v-for="match in filteredMatches"
+            v-for="match in pagedMatches"
             :key="match.matchId || match.championName + Math.random()"
             class="rounded-2xl border p-4 bg-slate-900/40 backdrop-blur-sm transition hover:brightness-110 flex flex-col justify-between gap-4 shadow-xl"
             :class="match.win ? 'border-blue-800/50 bg-blue-950/20 text-blue-100' : 'border-red-800/50 bg-red-950/20 text-red-100'"
@@ -294,20 +368,74 @@
             </div>
           </article>
         </div>
+
+        <!-- PAGINAÇÃO 20/20 -->
+        <div v-if="totalPages > 1" class="mt-5 flex items-center justify-center gap-2">
+          <button
+            @click="goToPage(currentPage - 1)"
+            :disabled="currentPage === 1"
+            class="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-bold text-slate-300 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            ‹ Anterior
+          </button>
+          <button
+            v-for="p in totalPages"
+            :key="p"
+            @click="goToPage(p)"
+            class="h-8 w-8 rounded-md border text-xs font-bold transition"
+            :class="p === currentPage ? 'border-blue-500 bg-blue-600 text-white' : 'border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800'"
+          >
+            {{ p }}
+          </button>
+          <button
+            @click="goToPage(currentPage + 1)"
+            :disabled="currentPage === totalPages"
+            class="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-bold text-slate-300 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Próxima ›
+          </button>
+        </div>
       </section>
     </template>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { state } from '../store.js';
 import { championImage, profileIconImage, itemImage, calculateKdaRatio, formatDuration } from '../utils.js';
+import { loadProfileIntoStore } from '../api.js';
 import SearchGate from './SearchGate.vue';
 
 const store = state;
+const route = useRoute();
 
 defineEmits(['show-overlay', 'hide-overlay', 'show-udyr']);
+
+// Carrega automaticamente o jogador presente na URL (/profile/:gameName/:tagLine).
+// Permite atualizar a página sem precisar buscar de novo.
+async function loadFromRoute() {
+  const gameName = route.params.gameName ? decodeURIComponent(route.params.gameName) : '';
+  const tagLine = route.params.tagLine ? decodeURIComponent(route.params.tagLine) : '';
+  if (!gameName || !tagLine) return;
+
+  // Já está carregado este mesmo jogador? Não refaz.
+  const sameLoaded =
+    store.searchProfile.puuid &&
+    (store.searchProfile.gameName || '').toLowerCase() === gameName.toLowerCase() &&
+    (store.searchProfile.tagLine || '').toLowerCase() === tagLine.toLowerCase();
+  if (sameLoaded) return;
+
+  try {
+    await loadProfileIntoStore(gameName, tagLine);
+  } catch (e) {
+    // erro já fica em store.searchProfile.error
+  }
+}
+
+onMounted(loadFromRoute);
+watch(() => [route.params.gameName, route.params.tagLine], loadFromRoute);
 
 function formatGameDate(timestamp) {
   if (!timestamp) return 'Data desconhecida';
@@ -344,6 +472,93 @@ const filteredMatches = computed(() => {
     if (activeTab.value === 'Outros') return !['Ranked Solo', 'Ranked Flex', 'Normal Draft', 'Normal Blind'].includes(q);
     return true;
   });
+});
+
+// -------- Paginação do histórico (20 por página, até 100 partidas) --------
+const pageSize = 20;
+const currentPage = ref(1);
+
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredMatches.value.length / pageSize)));
+
+const pagedMatches = computed(() => {
+  const start = (currentPage.value - 1) * pageSize;
+  return filteredMatches.value.slice(start, start + pageSize);
+});
+
+// Volta para a 1ª página ao trocar de aba ou de jogador
+watch(activeTab, () => { currentPage.value = 1; });
+watch(() => store.searchProfile.puuid, () => { currentPage.value = 1; });
+
+function goToPage(p) {
+  currentPage.value = Math.min(Math.max(1, p), totalPages.value);
+}
+
+// -------- Análise dos últimos 100 jogos (base leve do D1, até 1000) --------
+const ROLE_LABELS = { TOP: 'Top', JUNGLE: 'Jungle', MIDDLE: 'Mid', BOTTOM: 'ADC', UTILITY: 'Sup' };
+
+const last100 = computed(() => (store.searchProfile.proficiencyMatches || []).slice(0, 100));
+
+// Top campeões dos últimos 100 jogos: jogos, winrate, KDA e CS/min
+const top100Champions = computed(() => {
+  const agg = {};
+  for (const m of last100.value) {
+    const name = m.championName;
+    if (!name) continue;
+    if (!agg[name]) agg[name] = { name, games: 0, wins: 0, k: 0, d: 0, a: 0, cs: 0, dur: 0 };
+    const c = agg[name];
+    c.games++;
+    if (m.win) c.wins++;
+    c.k += Number(m.kills || 0);
+    c.d += Number(m.deaths || 0);
+    c.a += Number(m.assists || 0);
+    c.cs += Number(m.cs || 0);
+    c.dur += Number(m.gameDuration || 0);
+  }
+  return Object.values(agg)
+    .map((c) => ({
+      name: c.name,
+      games: c.games,
+      winRate: Math.round((c.wins / c.games) * 100),
+      kda: c.d === 0 ? (c.k + c.a).toFixed(2) : ((c.k + c.a) / c.d).toFixed(2),
+      csMin: c.dur > 0 ? (c.cs / (c.dur / 60)).toFixed(1) : '0.0'
+    }))
+    .sort((a, b) => b.games - a.games)
+    .slice(0, 8);
+});
+
+// Resumo analítico geral dos últimos 100 jogos
+const analytics100 = computed(() => {
+  const ms = last100.value;
+  const games = ms.length;
+  if (!games) return null;
+  let wins = 0, k = 0, d = 0, a = 0, cs = 0, dur = 0;
+  const roles = {};
+  for (const m of ms) {
+    if (m.win) wins++;
+    k += Number(m.kills || 0);
+    d += Number(m.deaths || 0);
+    a += Number(m.assists || 0);
+    cs += Number(m.cs || 0);
+    dur += Number(m.gameDuration || 0);
+    const r = ROLE_LABELS[m.teamPosition] || 'Outro';
+    roles[r] = (roles[r] || 0) + 1;
+  }
+  const roleStats = Object.entries(roles)
+    .map(([name, count]) => ({ name, count, percentage: Math.round((count / games) * 100) }))
+    .sort((x, y) => y.count - x.count);
+  return {
+    games,
+    winRate: Math.round((wins / games) * 100),
+    wins,
+    losses: games - wins,
+    kda: d === 0 ? (k + a).toFixed(2) : ((k + a) / d).toFixed(2),
+    avgKills: (k / games).toFixed(1),
+    avgDeaths: (d / games).toFixed(1),
+    avgAssists: (a / games).toFixed(1),
+    csMin: dur > 0 ? (cs / (dur / 60)).toFixed(1) : '0.0',
+    primaryRole: roleStats[0]?.name || '—',
+    roleStats
+  };
 });
 
 const hasProfile = computed(() => Boolean(store.searchProfile.puuid));

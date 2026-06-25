@@ -11,6 +11,8 @@ import Ancestralidade from './components/Ancestralidade.vue';
 const routes = [
   { path: '/', component: Home },
   { path: '/profile', component: Profile },
+  // Rota com o jogador embutido: permite recarregar a página sem perder a busca
+  { path: '/profile/:gameName/:tagLine', component: Profile },
   { path: '/mastery', component: Mastery },
   { path: '/synergy', component: Tribo },
   { path: '/saguaoCustom', component: SaguaoCustom },

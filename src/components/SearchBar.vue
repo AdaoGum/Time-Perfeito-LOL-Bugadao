@@ -36,8 +36,11 @@
 
 <script setup>
 import { ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { state } from '../store.js';
-import { workerRequest } from '../api.js';
+import { workerRequest, normalizeProfileData, applyProfileToStore, loadMasteriesInBackground } from '../api.js';
+
+const router = useRouter();
 
 const props = defineProps({
   buttonText: {
@@ -59,6 +62,12 @@ const props = defineProps({
   syncGlobalStore: {
     type: Boolean,
     default: true
+  },
+  // Quando true, ao concluir a busca navega para /profile/:gameName/:tagLine
+  // (mantém o jogador na URL, sobrevive ao refresh).
+  routeToProfile: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -93,78 +102,21 @@ async function executeSearch() {
 
   try {
     const data = await workerRequest(props.action, { gameName, tagLine });
-    const normalizedData = {
-      ...data,
-      gameName: data?.gameName || gameName,
-      tagLine: data?.tagLine || tagLine,
-      profileIconId: data?.profileIconId || 29,
-      summonerLevel: data?.summonerLevel || 0,
-      statsSolo: {
-        wins: Number(data.statsSolo?.wins || 0),
-        losses: Number(data.statsSolo?.losses || 0),
-        winRate: Number(data.statsSolo?.winRate || 0),
-        tier: data.statsSolo?.tier || 'UNRANKED',
-        rank: data.statsSolo?.rank || '',
-        lp: Number(data.statsSolo?.lp || 0)
-      },
-      statsFlex: {
-        wins: Number(data.statsFlex?.wins || 0),
-        losses: Number(data.statsFlex?.losses || 0),
-        winRate: Number(data.statsFlex?.winRate || 0),
-        tier: data.statsFlex?.tier || 'UNRANKED',
-        rank: data.statsFlex?.rank || '',
-        lp: Number(data.statsFlex?.lp || 0)
-      },
-      matches: Array.isArray(data.matches) ? data.matches : [],
-      proficiencyMatches: Array.isArray(data.proficiencyMatches) ? data.proficiencyMatches : [],
-      companions: {
-        solo: Array.isArray(data.companions?.solo) ? data.companions.solo : [],
-        flex: Array.isArray(data.companions?.flex) ? data.companions.flex : []
-      }
-    };
+    const normalizedData = normalizeProfileData(data, gameName, tagLine);
 
     if (props.syncGlobalStore) {
-      state.searchProfile.puuid = normalizedData.puuid || null;
-      state.searchProfile.gameName = normalizedData.gameName;
-      state.searchProfile.tagLine = normalizedData.tagLine;
-      state.searchProfile.profileIconId = normalizedData.profileIconId;
-      state.searchProfile.summonerLevel = normalizedData.summonerLevel;
-      state.searchProfile.statsSolo = normalizedData.statsSolo;
-      state.searchProfile.statsFlex = normalizedData.statsFlex;
-      state.searchProfile.stats = {
-        wins: Number(data.stats?.wins || 0),
-        losses: Number(data.stats?.losses || 0),
-        winRate: Number(data.stats?.winRate || 0),
-        tier: data.stats?.tier || 'UNRANKED',
-        rank: data.stats?.rank || '',
-        lp: Number(data.stats?.lp || 0)
-      };
-      state.searchProfile.matches = normalizedData.matches;
-      state.searchProfile.proficiencyMatches = normalizedData.proficiencyMatches;
-      state.searchProfile.companions = normalizedData.companions;
-      state.searchProfile.error = null;
+      applyProfileToStore(normalizedData, data);
     }
 
     emit('search-success', props.syncGlobalStore ? state.searchProfile : normalizedData);
 
     if (props.loadMasteries && normalizedData.puuid) {
-      workerRequest('masteries', { puuid: normalizedData.puuid, gameName, tagLine })
-        .then((masteryData) => {
-          const fromStaticChamp = (entry) => {
-            if (!entry) return { championName: 'Aatrox', championLevel: 1, championPoints: 0, lastPlayTime: 0 };
-            const fromStatic = state.staticData.championList.find((champ) => Number(champ.key) === Number(entry.championId));
-            return {
-              championName: entry.championName || fromStatic?.name || 'Aatrox',
-              championLevel: Number(entry.championLevel || 1),
-              championPoints: Number(entry.championPoints || 0),
-              lastPlayTime: Number(entry.lastPlayTime || 0)
-            };
-          };
-          state.masteryDashboard.allMasteries = (masteryData.masteries || []).map(fromStaticChamp);
-        })
-        .catch((mErr) => {
-          console.warn('Erro nas maestrias em background:', mErr);
-        });
+      loadMasteriesInBackground(normalizedData.puuid, gameName, tagLine);
+    }
+
+    // Coloca o jogador buscado na URL para sobreviver ao refresh.
+    if (props.routeToProfile && normalizedData.puuid) {
+      router.push(`/profile/${encodeURIComponent(normalizedData.gameName)}/${encodeURIComponent(normalizedData.tagLine)}`);
     }
   } catch (error) {
     localError.value = error.message;
