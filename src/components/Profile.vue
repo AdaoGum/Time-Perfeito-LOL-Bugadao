@@ -30,200 +30,278 @@
     </template>
 
     <template v-else>
-      <div class="grid gap-4 lg:grid-cols-[1.4fr_0.9fr]">
-        <section class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl flex flex-col justify-between relative overflow-hidden">
-          <div class="absolute inset-0 bg-gradient-to-tr from-slate-950/20 to-transparent pointer-events-none"></div>
-          
-          <div class="flex flex-col sm:flex-row items-center gap-5 rounded-xl border border-slate-700/50 bg-slate-900/80 backdrop-blur-sm p-5 relative z-10">
-            <div class="relative flex-shrink-0">
-              <img 
-                :src="profileIconImage(store.searchProfile.profileIconId)"
-                @error="(e) => e.target.src = profileIconImage(29)"
-                class="h-24 w-24 rounded-2xl border-4 border-slate-800 shadow-2xl object-cover"
-              >
-              <span class="absolute -bottom-2 -right-2 bg-blue-600 border-2 border-slate-800 rounded-full px-2.5 py-0.5 text-[10px] font-black text-white shadow-lg">
-                Lv {{ store.searchProfile.summonerLevel || 0 }}
-              </span>
-            </div>
+      <!-- LINHA 1: PERFIL (2/3) + COMPANHEIROS DE BATALHA (1/3) — mesma altura -->
+      <div class="grid gap-4 xl:grid-cols-3 items-stretch">
+      <section class="xl:col-span-2 h-full rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-tr from-slate-950/20 to-transparent pointer-events-none"></div>
 
-            <div class="text-center sm:text-left flex-1">
-              <h2 class="text-3xl font-black text-white drop-shadow-md tracking-wide">
-                {{ store.searchProfile.gameName }}<span class="ml-1.5 text-lg font-bold text-slate-500">#{{ store.searchProfile.tagLine }}</span>
-              </h2>
-              <p class="text-xs text-slate-400 mt-1 font-medium">Visualização tática das filas ranqueadas ativas.</p>
-            </div>
+        <!-- 1) CABEÇALHO: ÍCONE (COM NÍVEL) + NOME -->
+        <div class="flex flex-col sm:flex-row items-center gap-5 rounded-xl border border-slate-700/50 bg-slate-900/80 backdrop-blur-sm p-5 relative z-10">
+          <div class="relative flex-shrink-0">
+            <img
+              :src="profileIconImage(store.searchProfile.profileIconId)"
+              @error="(e) => e.target.src = profileIconImage(29)"
+              class="h-24 w-24 rounded-2xl border-4 border-slate-800 shadow-2xl object-cover"
+            >
+            <span class="absolute -bottom-2 -right-2 bg-blue-600 border-2 border-slate-800 rounded-full px-2.5 py-0.5 text-[10px] font-black text-white shadow-lg">
+              Lv {{ store.searchProfile.summonerLevel || 0 }}
+            </span>
           </div>
 
-          <div class="grid grid-cols-2 gap-4 mt-4 relative z-10">
-            <div class="flex flex-col items-center justify-center rounded-xl border border-slate-800/80 bg-slate-900/80 backdrop-blur-sm p-4 text-center">
-              <img 
-                :src="getLocalRankEmblem(store.searchProfile.statsSolo?.tier)" 
-                class="h-28 w-28 sm:h-32 sm:w-32 object-contain filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)] transition transform hover:scale-105 duration-300 block mb-2"
-                alt="Brasão SoloQ"
-              />
+          <div class="text-center sm:text-left flex-1">
+            <h2 class="text-3xl font-black text-white drop-shadow-md tracking-wide">
+              {{ store.searchProfile.gameName }}<span class="ml-1.5 text-lg font-bold text-slate-500">#{{ store.searchProfile.tagLine }}</span>
+            </h2>
+            <p class="text-xs text-slate-400 mt-1 font-medium">Visualização tática das filas ranqueadas ativas.</p>
+          </div>
+        </div>
+
+        <!-- 2) TÍTULO -->
+        <h3 class="mt-5 mb-3 text-center font-bold text-slate-300 relative z-10">Resumo Competitivo</h3>
+
+        <!-- 3) RANKS: EMBLEMA + LABEL + LP + VITÓRIAS (Solo | Flex) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
+          <div class="flex items-center gap-4 rounded-xl border border-slate-800/80 bg-slate-900/80 backdrop-blur-sm p-4">
+            <img
+              :src="getLocalRankEmblem(store.searchProfile.statsSolo?.tier)"
+              class="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 object-contain filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)] transition transform hover:scale-105 duration-300"
+              alt="Brasão SoloQ"
+            />
+            <div class="min-w-0 flex-1">
               <span class="text-[10px] font-black uppercase tracking-wider text-cyan-400">Solo / Duo</span>
-              <span class="text-xs font-bold text-slate-200 mt-0.5">{{ labelSolo }}</span>
+              <div class="text-xl font-black text-amber-500 font-stone tracking-wide leading-tight mt-0.5 truncate">{{ labelSolo }}</div>
+              <div class="mt-1 flex items-center gap-2 text-[11px] font-medium">
+                <span class="font-bold text-slate-200">{{ store.searchProfile.statsSolo?.lp || 0 }} LP</span>
+                <span class="text-slate-600">•</span>
+                <span class="text-slate-400">{{ store.searchProfile.statsSolo?.wins || 0 }} Vitórias</span>
+              </div>
             </div>
+          </div>
 
-            <div class="flex flex-col items-center justify-center rounded-xl border border-slate-800/80 bg-slate-900/80 backdrop-blur-sm p-4 text-center">
-              <img 
-                :src="getLocalRankEmblem(store.searchProfile.statsFlex?.tier)" 
-                class="h-28 w-28 sm:h-32 sm:w-32 object-contain filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)] transition transform hover:scale-105 duration-300 block mb-2"
-                alt="Brasão Flex"
-              />
+          <div class="flex items-center gap-4 rounded-xl border border-slate-800/80 bg-slate-900/80 backdrop-blur-sm p-4">
+            <img
+              :src="getLocalRankEmblem(store.searchProfile.statsFlex?.tier)"
+              class="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 object-contain filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)] transition transform hover:scale-105 duration-300"
+              alt="Brasão Flex"
+            />
+            <div class="min-w-0 flex-1">
               <span class="text-[10px] font-black uppercase tracking-wider text-purple-400">Ranked Flex</span>
-              <span class="text-xs font-bold text-slate-200 mt-0.5">{{ labelFlex }}</span>
-            </div>
-          </div>
-        </section>
-
-        <section class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl flex flex-col justify-between">
-          <h3 class="mb-3 text-center font-bold text-slate-300">Resumo Competitivo</h3>
-          
-          <div class="space-y-4">
-            <div class="rounded-xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-3 flex items-center justify-between">
-              <div class="text-left">
-                <span class="text-[10px] font-black uppercase tracking-wider text-cyan-400">Solo / Duo</span>
-                <div class="text-2xl font-black text-amber-500 font-stone tracking-wide mt-0.5">{{ labelSolo }}</div>
-              </div>
-              <div class="text-right">
-                <span class="text-xs font-bold text-slate-300">{{ store.searchProfile.statsSolo?.lp || 0 }} LP</span>
-                <div class="text-[11px] font-medium text-slate-400 mt-0.5">{{ store.searchProfile.statsSolo?.wins || 0 }} Vitórias</div>
-              </div>
-            </div>
-
-            <div class="rounded-xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-3 flex items-center justify-between">
-              <div class="text-left">
-                <span class="text-[10px] font-black uppercase tracking-wider text-purple-400">Ranked Flex</span>
-                <div class="text-lg font-black text-white leading-tight mt-0.5">{{ labelFlex }}</div>
-              </div>
-              <div class="text-right">
-                <span class="text-xs font-bold text-slate-300">{{ store.searchProfile.statsFlex?.lp || 0 }} LP</span>
-                <div class="text-[11px] font-medium text-slate-400 mt-0.5">{{ store.searchProfile.statsFlex?.wins || 0 }} Vitórias</div>
+              <div class="text-xl font-black text-white tracking-wide leading-tight mt-0.5 truncate">{{ labelFlex }}</div>
+              <div class="mt-1 flex items-center gap-2 text-[11px] font-medium">
+                <span class="font-bold text-slate-200">{{ store.searchProfile.statsFlex?.lp || 0 }} LP</span>
+                <span class="text-slate-600">•</span>
+                <span class="text-slate-400">{{ store.searchProfile.statsFlex?.wins || 0 }} Vitórias</span>
               </div>
             </div>
           </div>
+        </div>
 
-          <div class="mt-4 pt-3 border-t border-slate-800">
-            <div class="grid grid-cols-2 gap-3 mb-4">
-              <div class="rounded-xl border border-slate-700 bg-slate-900/80 backdrop-blur-sm p-2.5 text-center">
-                <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400">Total Vitórias</div>
-                <div class="text-lg font-black text-blue-400">
-                  {{ (store.searchProfile.statsSolo?.wins || 0) + (store.searchProfile.statsFlex?.wins || 0) }}
+        <!-- 4) TOTAIS: VITÓRIAS + KDA (20 / 100 partidas) -->
+        <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 relative z-10">
+          <div class="rounded-xl border border-slate-700 bg-slate-900/80 backdrop-blur-sm p-3 text-center flex flex-col justify-center">
+            <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400">Total Vitórias</div>
+            <div class="text-2xl font-black text-blue-400">
+              {{ (store.searchProfile.statsSolo?.wins || 0) + (store.searchProfile.statsFlex?.wins || 0) }}
+            </div>
+          </div>
+
+          <div class="rounded-xl border border-slate-700 bg-slate-900/80 backdrop-blur-sm p-3 grid grid-cols-2 gap-2 text-center">
+            <div class="flex flex-col justify-center sm:border-r border-slate-800">
+              <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400">KDA (20 Partidas)</div>
+              <div class="text-2xl font-black text-emerald-400">{{ avgKda }}</div>
+            </div>
+            <div class="flex flex-col justify-center">
+              <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400">KDA (100 Partidas)</div>
+              <div v-if="analytics100" class="text-2xl font-black text-emerald-400">{{ analytics100.kda }}</div>
+              <div v-else class="text-[10px] font-medium text-slate-500 leading-tight mt-1">Disponível após sincronizar 100 jogos</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5) WIN RATES (barras) -->
+        <div class="mt-4 pt-3 border-t border-slate-800 relative z-10">
+          <div class="text-center mb-2">
+            <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-0.5">
+              <span>Win Rate SoloQ:</span>
+              <span class="text-slate-200">{{ winRateSolo.toFixed(1) }}%</span>
+            </div>
+            <div class="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+              <div class="h-full bg-cyan-500 transition-all duration-1000" :style="`width: ${winRateSolo}%`"></div>
+            </div>
+          </div>
+
+          <div class="text-center">
+            <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-0.5">
+              <span>Win Rate Flex:</span>
+              <span class="text-slate-200">{{ winRateFlex.toFixed(1) }}%</span>
+            </div>
+            <div class="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+              <div class="h-full bg-purple-500 transition-all duration-1000" :style="`width: ${winRateFlex}%`"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- COMPANHEIROS DE BATALHA (1/3 — clicável: ao clicar, busca aquele jogador) -->
+      <section v-if="companionsList.length" class="xl:col-span-1 h-full rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
+        <h3 class="mb-4 text-lg font-bold text-slate-100">Companheiros de Batalha</h3>
+        <div class="space-y-2">
+          <button
+            v-for="(comp, i) in companionsList"
+            :key="comp.name"
+            type="button"
+            @click="searchCompanion(comp)"
+            :disabled="!comp.tagLine"
+            :title="comp.tagLine ? `Buscar ${comp.gameName}#${comp.tagLine}` : 'Sem tag disponível para buscar'"
+            class="flex w-full items-center gap-3 rounded-xl border border-slate-700 bg-slate-900/80 backdrop-blur-sm px-3 py-2 text-left transition hover:border-cyan-500/60 hover:bg-slate-800/60 disabled:cursor-default disabled:opacity-70 disabled:hover:border-slate-700 disabled:hover:bg-slate-900/80"
+          >
+            <span class="w-5 flex-shrink-0 text-xs font-black text-slate-500">#{{ i + 1 }}</span>
+            <span class="min-w-0 flex-1 truncate font-bold text-cyan-300">
+              {{ comp.gameName }}<span v-if="comp.tagLine" class="font-medium text-slate-500">#{{ comp.tagLine }}</span>
+            </span>
+            <span class="flex-shrink-0 text-[11px] font-semibold text-slate-400">{{ comp.games }} partida{{ comp.games > 1 ? 's' : '' }}</span>
+          </button>
+        </div>
+      </section>
+      </div>
+      <!-- FIM DA LINHA 1 -->
+
+      <!-- LINHA 2: CARD EXTERNO (seletor único 20/100/1000) com 2 cards internos do mesmo tamanho -->
+      <section v-if="analyticsWin" class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h3 class="text-xl font-bold text-slate-100">Análise de Desempenho</h3>
+          <div v-if="showWindowFilter" class="flex gap-1 rounded-lg border border-slate-700 bg-slate-950 p-0.5">
+            <button
+              v-for="w in ANALYTICS_WINDOWS"
+              :key="w"
+              type="button"
+              @click="setAnalyticsWindow(w)"
+              :disabled="!windowEnabled(w)"
+              :title="windowEnabled(w) ? `Últimos ${w} jogos` : 'Informações ainda não disponíveis'"
+              class="rounded-md px-3 py-1 text-[11px] font-bold transition"
+              :class="analyticsWindow === w ? 'bg-blue-600 text-white' : (windowEnabled(w) ? 'text-slate-400 hover:text-slate-200' : 'cursor-not-allowed text-slate-600 opacity-50')"
+            >
+              {{ w }}
+            </button>
+          </div>
+          <span v-else class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Últimos {{ analyticsWin.games }} jogos</span>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-2 items-stretch">
+
+          <!-- CARD INTERNO 1: VISÃO ANALÍTICA (cards + top campeões) -->
+          <div class="flex h-full flex-col rounded-2xl border border-slate-800 bg-slate-950/30 p-4">
+            <h4 class="mb-3 text-lg font-bold text-slate-100">Visão Analítica</h4>
+
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
+                <div class="text-2xl font-black" :class="analyticsWin.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ analyticsWin.winRate }}%</div>
+                <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Win Rate</div>
+                <div class="text-[10px] text-slate-500">{{ analyticsWin.wins }}V / {{ analyticsWin.losses }}D</div>
+              </div>
+              <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
+                <div class="text-2xl font-black text-emerald-400">{{ analyticsWin.kda }}</div>
+                <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">KDA Médio</div>
+                <div class="text-[10px] text-slate-500">{{ analyticsWin.avgKills }} / {{ analyticsWin.avgDeaths }} / {{ analyticsWin.avgAssists }}</div>
+              </div>
+              <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
+                <div class="text-2xl font-black text-amber-400">{{ analyticsWin.csMin }}</div>
+                <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">CS / min</div>
+              </div>
+              <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
+                <div class="text-2xl font-black text-cyan-300">{{ analyticsWin.primaryRole }}</div>
+                <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Rota Principal</div>
+              </div>
+              <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
+                <div class="text-2xl font-black text-slate-200">{{ analyticsWin.avgKills }}</div>
+                <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Abates / jogo</div>
+              </div>
+              <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
+                <div class="text-2xl font-black text-slate-200">{{ analyticsWin.avgDeaths }}</div>
+                <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Mortes / jogo</div>
+              </div>
+            </div>
+
+            <!-- Top campeões (janela) -->
+            <div v-if="topChampionsWin.length" class="mt-4">
+              <h5 class="mb-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">Top Campeões ({{ analyticsWin.games }} jogos)</h5>
+              <div class="overflow-x-auto rounded-xl border border-slate-800">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-slate-950/60 text-[9px] uppercase tracking-wider text-slate-500">
+                    <tr>
+                      <th class="px-3 py-2 font-bold">Campeão</th>
+                      <th class="px-3 py-2 font-bold text-center">Jogos</th>
+                      <th class="px-3 py-2 font-bold text-center">Win Rate</th>
+                      <th class="px-3 py-2 font-bold text-center">KDA</th>
+                      <th class="px-3 py-2 font-bold text-center">CS/min</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="champ in topChampionsWin" :key="champ.name" class="border-t border-slate-800/60 hover:bg-slate-800/30">
+                      <td class="px-3 py-2">
+                        <div class="flex items-center gap-2">
+                          <img class="h-6 w-6 rounded-full border border-slate-600" :src="championImage(champ.name)" :alt="champ.name" />
+                          <span class="font-bold text-slate-200">{{ champ.name }}</span>
+                        </div>
+                      </td>
+                      <td class="px-3 py-2 text-center font-semibold text-slate-300">{{ champ.games }}</td>
+                      <td class="px-3 py-2 text-center font-black" :class="champ.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ champ.winRate }}%</td>
+                      <td class="px-3 py-2 text-center font-bold" :class="Number(champ.kda) >= 4 ? 'text-amber-400' : 'text-slate-300'">{{ champ.kda }}</td>
+                      <td class="px-3 py-2 text-center font-semibold text-slate-300">{{ champ.csMin }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- CARD INTERNO 2: PERFIL DE JOGO (radar + top rotas) — mesmo tamanho do card de Visão Analítica -->
+          <div class="flex h-full flex-col rounded-2xl border border-slate-800 bg-slate-950/30 p-4">
+            <h4 class="mb-3 text-lg font-bold text-slate-100">Perfil de Jogo</h4>
+
+            <!-- Gráfico 1: Radar GPI (compacto, todo o conteúdo visível) -->
+            <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+              <p class="mb-1 text-center text-[10px] font-bold uppercase tracking-widest text-amber-300/80">Perfil de Jogo (GPI)</p>
+              <div class="mx-auto w-full max-w-[230px]">
+                <RadarChart :axes="radarMetricsWin" :size="240" color="#f59e0b" />
+              </div>
+            </div>
+
+            <!-- Gráfico 2: Top Rotas (vitórias x derrotas por rota) -->
+            <div v-if="roleBarsWin.length" class="mt-4 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+              <p class="mb-2 text-center text-[10px] font-bold uppercase tracking-widest text-cyan-300/80">Top Rotas</p>
+              <div class="flex h-24 items-stretch justify-around gap-2 px-2">
+                <div v-for="r in roleBarsWin" :key="r.role" class="flex h-full flex-1 items-end justify-center gap-1">
+                  <div class="w-3 rounded-t bg-emerald-500" :style="{ height: `${Math.max(4, (r.wins / maxRoleGames) * 100)}%` }" :title="`${r.wins} vitórias`"></div>
+                  <div class="w-3 rounded-t bg-rose-500" :style="{ height: `${Math.max(4, (r.losses / maxRoleGames) * 100)}%` }" :title="`${r.losses} derrotas`"></div>
                 </div>
               </div>
-              <div class="rounded-xl border border-slate-700 bg-slate-900/80 backdrop-blur-sm p-2.5 text-center">
-                <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400">KDA (20 Partidas)</div>
-                <div class="text-lg font-black text-emerald-400">{{ avgKda }}</div>
-              </div>
-            </div>
-
-            <div class="text-center mb-2">
-              <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-0.5">
-                <span>Win Rate SoloQ:</span>
-                <span class="text-slate-200">{{ winRateSolo.toFixed(1) }}%</span>
-              </div>
-              <div class="h-2 w-full overflow-hidden rounded-full bg-slate-800">
-                <div class="h-full bg-cyan-500 transition-all duration-1000" :style="`width: ${winRateSolo}%`"></div>
-              </div>
-            </div>
-
-            <div class="text-center">
-              <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-0.5">
-                <span>Win Rate Flex:</span>
-                <span class="text-slate-200">{{ winRateFlex.toFixed(1) }}%</span>
-              </div>
-              <div class="h-2 w-full overflow-hidden rounded-full bg-slate-800">
-                <div class="h-full bg-purple-500 transition-all duration-1000" :style="`width: ${winRateFlex}%`"></div>
+              <div class="mt-1 flex justify-around gap-2 border-t border-dashed border-slate-700 px-2 pt-2">
+                <div v-for="r in roleBarsWin" :key="r.role" class="flex flex-1 flex-col items-center gap-0.5">
+                  <img :src="getMiniRoleIcon(ROLE_POS[r.role])" class="h-4 w-4 opacity-90 brightness-200" :alt="r.role" :title="r.role" />
+                  <span class="text-[10px] font-bold text-slate-300">{{ r.games }}</span>
+                  <span class="text-[10px] font-black" :class="r.winRate >= 50 ? 'text-emerald-400' : 'text-rose-400'">{{ r.winRate }}%</span>
+                </div>
               </div>
             </div>
           </div>
-        </section>
-      </div>
 
-      <!-- VISÃO ANALÍTICA + COMPANHEIROS: empilhados no mobile, lado a lado em telas grandes -->
-      <div class="grid gap-4 xl:grid-cols-2 items-start">
-      <!-- VISÃO ANALÍTICA: ÚLTIMOS 100 JOGOS (base leve do D1) -->
-      <section v-if="analytics100" class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
-        <div class="mb-4 flex items-center justify-between">
-          <h3 class="text-xl font-bold text-slate-100">Visão Analítica</h3>
-          <span class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Últimos {{ analytics100.games }} jogos</span>
-        </div>
-
-        <!-- Cards de desempenho geral -->
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
-            <div class="text-2xl font-black" :class="analytics100.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ analytics100.winRate }}%</div>
-            <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Win Rate</div>
-            <div class="text-[10px] text-slate-500">{{ analytics100.wins }}V / {{ analytics100.losses }}D</div>
-          </div>
-          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
-            <div class="text-2xl font-black text-emerald-400">{{ analytics100.kda }}</div>
-            <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">KDA Médio</div>
-            <div class="text-[10px] text-slate-500">{{ analytics100.avgKills }} / {{ analytics100.avgDeaths }} / {{ analytics100.avgAssists }}</div>
-          </div>
-          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
-            <div class="text-2xl font-black text-amber-400">{{ analytics100.csMin }}</div>
-            <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">CS / min</div>
-          </div>
-          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
-            <div class="text-2xl font-black text-cyan-300">{{ analytics100.primaryRole }}</div>
-            <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Rota Principal</div>
-          </div>
-          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
-            <div class="text-2xl font-black text-slate-200">{{ analytics100.avgKills }}</div>
-            <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Abates / jogo</div>
-          </div>
-          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
-            <div class="text-2xl font-black text-slate-200">{{ analytics100.avgDeaths }}</div>
-            <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Mortes / jogo</div>
-          </div>
-        </div>
-
-        <!-- Top campeões dos últimos 100 jogos -->
-        <div v-if="top100Champions.length" class="mt-5">
-          <h4 class="mb-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">Top Campeões (100 jogos)</h4>
-          <div class="overflow-x-auto rounded-xl border border-slate-800">
-            <table class="w-full text-left text-xs">
-              <thead class="bg-slate-950/60 text-[9px] uppercase tracking-wider text-slate-500">
-                <tr>
-                  <th class="px-3 py-2 font-bold">Campeão</th>
-                  <th class="px-3 py-2 font-bold text-center">Jogos</th>
-                  <th class="px-3 py-2 font-bold text-center">Win Rate</th>
-                  <th class="px-3 py-2 font-bold text-center">KDA</th>
-                  <th class="px-3 py-2 font-bold text-center">CS/min</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="champ in top100Champions" :key="champ.name" class="border-t border-slate-800/60 hover:bg-slate-800/30">
-                  <td class="px-3 py-2">
-                    <div class="flex items-center gap-2">
-                      <img class="h-6 w-6 rounded-full border border-slate-600" :src="championImage(champ.name)" :alt="champ.name" />
-                      <span class="font-bold text-slate-200">{{ champ.name }}</span>
-                    </div>
-                  </td>
-                  <td class="px-3 py-2 text-center font-semibold text-slate-300">{{ champ.games }}</td>
-                  <td class="px-3 py-2 text-center font-black" :class="champ.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ champ.winRate }}%</td>
-                  <td class="px-3 py-2 text-center font-bold" :class="Number(champ.kda) >= 4 ? 'text-amber-400' : 'text-slate-300'">{{ champ.kda }}</td>
-                  <td class="px-3 py-2 text-center font-semibold text-slate-300">{{ champ.csMin }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
         </div>
       </section>
 
-      <!-- COMPANHEIROS DE BATALHA (ao lado da Visão Analítica em telas grandes) -->
-      <section v-if="battleCompanions.length" class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
-        <h3 class="mb-4 text-lg font-bold text-slate-100">Companheiros de Batalha (Top 10)</h3>
-        <div class="flex flex-wrap gap-3">
-          <div v-for="(comp, i) in battleCompanions" :key="comp.name" class="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-900/80 backdrop-blur-sm px-4 py-2.5">
-            <span class="text-xs font-black text-slate-500">#{{ i + 1 }}</span>
-            <span class="font-bold text-cyan-300">{{ comp.name }}</span>
-            <span class="text-xs font-semibold text-slate-400">{{ comp.games }} partida{{ comp.games > 1 ? 's' : '' }}</span>
-          </div>
+      <!-- LINHA 3: TAGS DE COMPORTAMENTO DO JOGADOR -->
+      <div v-if="playerTags.length" class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
+        <h3 class="mb-3 text-lg font-bold text-slate-100">Comportamento do Jogador</h3>
+        <div class="flex flex-wrap gap-2">
+          <span
+            v-for="tag in playerTags"
+            :key="tag.label"
+            class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold"
+            :class="tag.cls"
+          >
+            <span>{{ tag.icon }}</span>{{ tag.label }}
+          </span>
         </div>
-      </section>
       </div>
 
       <!-- HISTÓRICO DE PARTIDAS EM FORMATO GRID FLEXÍVEL LADO A LADO -->
@@ -417,14 +495,42 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { state } from '../store.js';
 import { championImage, profileIconImage, itemImage, calculateKdaRatio, formatDuration, summonerSpellImage, runeImage } from '../utils.js';
 import { loadProfileIntoStore } from '../api.js';
 import SearchGate from './SearchGate.vue';
+import RadarChart from './RadarChart.vue';
 
 const store = state;
 const route = useRoute();
+const router = useRouter();
+
+// Lista de companheiros clicáveis (mescla solo+flex do worker, que inclui a #TAG).
+// Cai para battleCompanions (sem tag, não-clicável) se o worker não trouxe nada.
+const companionsList = computed(() => {
+  const merged = {};
+  const add = (arr) => {
+    for (const c of arr || []) {
+      const [gn, tl] = String(c.name || '').split('#');
+      const key = c.name;
+      if (!key) continue;
+      if (!merged[key]) merged[key] = { name: c.name, gameName: gn, tagLine: tl || '', games: 0 };
+      merged[key].games += Number(c.games || 0);
+    }
+  };
+  add(store.searchProfile.companions?.solo);
+  add(store.searchProfile.companions?.flex);
+  const list = Object.values(merged).sort((a, b) => b.games - a.games).slice(0, 10);
+  if (list.length) return list;
+  // Fallback: somente exibição (sem #TAG → não dá pra buscar)
+  return (battleCompanions.value || []).map((c) => ({ name: c.name, gameName: c.name, tagLine: '', games: c.games }));
+});
+
+function searchCompanion(comp) {
+  if (!comp?.tagLine) return; // sem tag não conseguimos buscar com segurança
+  router.push(`/profile/${encodeURIComponent(comp.gameName)}/${encodeURIComponent(comp.tagLine)}`);
+}
 
 defineEmits(['show-overlay', 'hide-overlay', 'show-udyr']);
 
@@ -508,42 +614,34 @@ function goToPage(p) {
   currentPage.value = Math.min(Math.max(1, p), totalPages.value);
 }
 
-// -------- Análise dos últimos 100 jogos (base leve do D1, até 1000) --------
+// -------- Análise (base leve do D1, até 1000 jogos) com filtro de janela --------
 const ROLE_LABELS = { TOP: 'Top', JUNGLE: 'Jungle', MIDDLE: 'Mid', BOTTOM: 'ADC', UTILITY: 'Sup' };
+const ROLE_POS = { Top: 'TOP', Jungle: 'JUNGLE', Mid: 'MIDDLE', ADC: 'BOTTOM', Sup: 'UTILITY' };
+const ANALYTICS_WINDOWS = [20, 100, 1000];
 
-const last100 = computed(() => (store.searchProfile.proficiencyMatches || []).slice(0, 100));
+const proficiency = computed(() => store.searchProfile.proficiencyMatches || []);
+const availableGames = computed(() => proficiency.value.length);
 
-// Top campeões dos últimos 100 jogos: jogos, winrate, KDA e CS/min
-const top100Champions = computed(() => {
-  const agg = {};
-  for (const m of last100.value) {
-    const name = m.championName;
-    if (!name) continue;
-    if (!agg[name]) agg[name] = { name, games: 0, wins: 0, k: 0, d: 0, a: 0, cs: 0, dur: 0 };
-    const c = agg[name];
-    c.games++;
-    if (m.win) c.wins++;
-    c.k += Number(m.kills || 0);
-    c.d += Number(m.deaths || 0);
-    c.a += Number(m.assists || 0);
-    c.cs += Number(m.cs || 0);
-    c.dur += Number(m.gameDuration || 0);
-  }
-  return Object.values(agg)
-    .map((c) => ({
-      name: c.name,
-      games: c.games,
-      winRate: Math.round((c.wins / c.games) * 100),
-      kda: c.d === 0 ? (c.k + c.a).toFixed(2) : ((c.k + c.a) / c.d).toFixed(2),
-      csMin: c.dur > 0 ? (c.cs / (c.dur / 60)).toFixed(1) : '0.0'
-    }))
-    .sort((a, b) => b.games - a.games)
-    .slice(0, 8);
-});
+// Quantos jogos cada janela exige (a janela só liga se houver dados suficientes)
+const windowEnabled = (w) => availableGames.value >= w;
+const showWindowFilter = computed(() => availableGames.value >= ANALYTICS_WINDOWS[0]);
 
-// Resumo analítico geral dos últimos 100 jogos
-const analytics100 = computed(() => {
-  const ms = last100.value;
+const analyticsWindow = ref(20);
+// Ao trocar de jogador, escolhe automaticamente a maior janela disponível
+watch(availableGames, (n) => {
+  const largest = [...ANALYTICS_WINDOWS].reverse().find((w) => n >= w);
+  analyticsWindow.value = largest || ANALYTICS_WINDOWS[0];
+}, { immediate: true });
+
+function setAnalyticsWindow(w) {
+  if (windowEnabled(w)) analyticsWindow.value = w;
+}
+
+// Jogos da janela selecionada (slice cuida de quando há menos jogos que a janela)
+const windowMatches = computed(() => proficiency.value.slice(0, analyticsWindow.value));
+
+// ----- Construtores reutilizáveis -----
+function buildAnalytics(ms) {
   const games = ms.length;
   if (!games) return null;
   let wins = 0, k = 0, d = 0, a = 0, cs = 0, dur = 0;
@@ -574,6 +672,97 @@ const analytics100 = computed(() => {
     primaryRole: roleStats[0]?.name || '—',
     roleStats
   };
+}
+
+function buildTopChampions(ms) {
+  const agg = {};
+  for (const m of ms) {
+    const name = m.championName;
+    if (!name) continue;
+    if (!agg[name]) agg[name] = { name, games: 0, wins: 0, k: 0, d: 0, a: 0, cs: 0, dur: 0 };
+    const c = agg[name];
+    c.games++;
+    if (m.win) c.wins++;
+    c.k += Number(m.kills || 0);
+    c.d += Number(m.deaths || 0);
+    c.a += Number(m.assists || 0);
+    c.cs += Number(m.cs || 0);
+    c.dur += Number(m.gameDuration || 0);
+  }
+  return Object.values(agg)
+    .map((c) => ({
+      name: c.name,
+      games: c.games,
+      winRate: Math.round((c.wins / c.games) * 100),
+      kda: c.d === 0 ? (c.k + c.a).toFixed(2) : ((c.k + c.a) / c.d).toFixed(2),
+      csMin: c.dur > 0 ? (c.cs / (c.dur / 60)).toFixed(1) : '0.0'
+    }))
+    .sort((a, b) => b.games - a.games)
+    .slice(0, 8);
+}
+
+function buildRadar(a, ms) {
+  if (!a) return [];
+  const distinct = new Set(ms.map((m) => m.championName).filter(Boolean)).size;
+  const clamp = (v) => Math.max(0, Math.min(100, Math.round(v)));
+  return [
+    { label: 'Win Rate', value: clamp(a.winRate) },
+    { label: 'KDA', value: clamp((Number(a.kda) / 5) * 100) },
+    { label: 'Farm', value: clamp((Number(a.csMin) / 10) * 100) },
+    { label: 'Agressão', value: clamp((Number(a.avgKills) / 12) * 100) },
+    { label: 'Sobrevivência', value: clamp(100 - (Number(a.avgDeaths) / 12) * 100) },
+    { label: 'Participação', value: clamp((Number(a.avgAssists) / 15) * 100) },
+    { label: 'Versatilidade', value: clamp((distinct / 15) * 100) }
+  ];
+}
+
+// Barras de rota (estilo "Top Roles": vitórias/derrotas por rota)
+function buildRoleBars(ms) {
+  const map = {};
+  for (const m of ms) {
+    const r = ROLE_LABELS[m.teamPosition] || 'Outro';
+    if (!map[r]) map[r] = { role: r, games: 0, wins: 0 };
+    map[r].games++;
+    if (m.win) map[r].wins++;
+  }
+  return Object.values(map)
+    .map((x) => ({ ...x, losses: x.games - x.wins, winRate: Math.round((x.wins / x.games) * 100) }))
+    .sort((a, b) => b.games - a.games)
+    .slice(0, 5);
+}
+
+// ----- Computeds baseados na janela selecionada -----
+const analyticsWin = computed(() => buildAnalytics(windowMatches.value));
+const topChampionsWin = computed(() => buildTopChampions(windowMatches.value));
+const radarMetricsWin = computed(() => buildRadar(analyticsWin.value, windowMatches.value));
+const roleBarsWin = computed(() => buildRoleBars(windowMatches.value));
+const maxRoleGames = computed(() => Math.max(1, ...roleBarsWin.value.map((r) => r.games)));
+
+// Mantido fixo em 100 jogos para o card "KDA (100 Partidas)" do resumo
+const analytics100 = computed(() => buildAnalytics(proficiency.value.slice(0, 100)));
+
+// ----- Tags de comportamento do jogador (derivadas da janela atual) -----
+const playerTags = computed(() => {
+  const a = analyticsWin.value;
+  if (!a) return [];
+  const tags = [];
+  const kda = Number(a.kda);
+  const csMin = Number(a.csMin);
+  const avgDeaths = Number(a.avgDeaths);
+  const avgKills = Number(a.avgKills);
+  const distinct = new Set(windowMatches.value.map((m) => m.championName).filter(Boolean)).size;
+
+  if (a.winRate >= 55) tags.push({ label: 'Em Ascensão', icon: '📈', cls: 'border-emerald-600/50 bg-emerald-950/40 text-emerald-300' });
+  if (kda >= 4) tags.push({ label: 'Jogador Focado', icon: '🎯', cls: 'border-amber-600/50 bg-amber-950/40 text-amber-300' });
+  if (avgDeaths <= 4) tags.push({ label: 'Difícil de Matar', icon: '🛡️', cls: 'border-cyan-600/50 bg-cyan-950/40 text-cyan-300' });
+  if (avgKills >= 8) tags.push({ label: 'Carregador', icon: '⚔️', cls: 'border-red-600/50 bg-red-950/40 text-red-300' });
+  if (csMin >= 7.5) tags.push({ label: 'Mestre do Farm', icon: '🌾', cls: 'border-lime-600/50 bg-lime-950/40 text-lime-300' });
+  if (distinct >= 12) tags.push({ label: 'Versátil', icon: '🔄', cls: 'border-fuchsia-600/50 bg-fuchsia-950/40 text-fuchsia-300' });
+  else if (distinct > 0 && distinct <= 3) tags.push({ label: 'One-Trick', icon: '🐎', cls: 'border-purple-600/50 bg-purple-950/40 text-purple-300' });
+  if (a.winRate >= 45 && a.winRate <= 55 && a.games >= 20) tags.push({ label: 'Consistente', icon: '⚖️', cls: 'border-slate-600/50 bg-slate-800/60 text-slate-300' });
+
+  if (!tags.length) tags.push({ label: 'Jogador Equilibrado', icon: '🎮', cls: 'border-slate-600/50 bg-slate-800/60 text-slate-300' });
+  return tags;
 });
 
 const hasProfile = computed(() => Boolean(store.searchProfile.puuid));
