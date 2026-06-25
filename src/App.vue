@@ -539,5 +539,13 @@ onMounted(async () => {
   } catch (e) {
     console.error('Erro ao carregar dados do Data Dragon:', e);
   }
+
+  try {
+    const res = await fetch(`https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/data/pt_BR/item.json`);
+    const json = await res.json();
+    store.staticData.items = json.data || {};
+  } catch (e) {
+    console.error('Erro ao carregar itens do Data Dragon:', e);
+  }
 });
 </script>

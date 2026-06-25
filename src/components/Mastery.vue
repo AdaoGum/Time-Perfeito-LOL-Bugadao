@@ -1,5 +1,13 @@
 <template>
-  <div class="space-y-6 rounded-2xl border border-orange-950/30 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-orange-950/20 to-slate-950 p-4">
+  <div class="relative min-h-[74vh] space-y-6 rounded-2xl border border-orange-950/30 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-orange-950/20 to-slate-950 p-4">
+
+    <!-- Busca sobreposta enquanto nenhum perfil foi pesquisado -->
+    <SearchGate
+      title="Buga! Caverna dos Monos"
+      @show-overlay="c => $emit('show-overlay', c)"
+      @hide-overlay="$emit('hide-overlay')"
+      @show-udyr="$emit('show-udyr')"
+    />
 
     <!-- Has mastery data -->
     <template v-if="top20.length">
@@ -129,6 +137,7 @@
 import { computed } from 'vue';
 import { state } from '../store.js';
 import { championImage, getChampionIdFromName, DDRAGON_VERSION } from '../utils.js';
+import SearchGate from './SearchGate.vue';
 
 const store = state;
 
@@ -157,7 +166,7 @@ function remainderTone(level) {
   return 'border-slate-700/40 bg-slate-900/40';
 }
 
-const emit = defineEmits(['show-tooltip', 'hide-tooltip']);
+const emit = defineEmits(['show-tooltip', 'hide-tooltip', 'show-overlay', 'hide-overlay', 'show-udyr']);
 
 function showTooltip(event, entry) {
   emit('show-tooltip', { event, name: entry.championName, level: entry.championLevel, points: entry.championPoints });

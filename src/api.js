@@ -17,17 +17,6 @@ function normalizeWorkerError(status) {
 
 export async function workerRequest(action, payload) {
   const meta = TELEMETRY_META[action] || TELEMETRY_META.default;
-  const cost = meta.cost;
-  const now = Date.now();
-  for (let i = 0; i < cost; i++) {
-    state.telemetry.timestamps.push(now);
-  }
-  state.telemetry.events.push({
-    at: now,
-    action,
-    group: meta.group,
-    cost
-  });
 
   const response = await fetch(WORKER_URL, {
     method: 'POST',
@@ -38,5 +27,25 @@ export async function workerRequest(action, payload) {
   if (!response.ok) {
     throw new Error(normalizeWorkerError(response.status));
   }
-  return response.json();
+
+  const data = await response.json();
+
+  // Contabiliza APENAS as chamadas reais à API da Riot que o worker informou.
+  // Quando os dados vêm do banco (cache D1), apiCalls é baixo/zero e não gasta o orçamento.
+  // Fallback para o custo estimado quando o worker não reportar (compatibilidade).
+  const apiCalls = Number.isFinite(data?.apiCalls) ? data.apiCalls : meta.cost;
+  if (apiCalls > 0) {
+    const now = Date.now();
+    for (let i = 0; i < apiCalls; i++) {
+      state.telemetry.timestamps.push(now);
+    }
+    state.telemetry.events.push({
+      at: now,
+      action,
+      group: meta.group,
+      cost: apiCalls
+    });
+  }
+
+  return data;
 }

@@ -90,6 +90,11 @@ export default {
 
       const includeMatches = action === "profile_overview" || action === "visão_geral_do_perfil";
 
+      // 🌟 Conta apenas as chamadas REAIS à API da Riot (leituras do D1 não entram).
+      // É devolvido no JSON para o front contabilizar o orçamento de rate limit com precisão.
+      let apiCalls = 0;
+
+      apiCalls++;
       const accountRes = await fetch(`${routingAmericas}/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}?api_key=${API_KEY}`);
       if (!accountRes.ok) {
         return new Response(JSON.stringify({ error: "Jogador não encontrado." }), { status: accountRes.status, headers: corsHeaders });
@@ -102,6 +107,7 @@ export default {
 
       let platformHost = 'br1';
       try {
+        apiCalls++;
         const shardRes = await fetch(`${routingAmericas}/riot/account/v1/active-shards/by-game/lol/by-puuid/${playerPuuid}?api_key=${API_KEY}`);
         if (shardRes.ok) {
           const shardData = await shardRes.json();
@@ -111,6 +117,7 @@ export default {
 
       const routingPlatform = `https://${platformHost}.api.riotgames.com`;
 
+      apiCalls++;
       const summonerRes = await fetch(`${routingPlatform}/lol/summoner/v4/summoners/by-puuid/${playerPuuid}?api_key=${API_KEY}`);
       let profileIconId = 29;
       let summonerLevel = 0;
@@ -123,6 +130,7 @@ export default {
       let statsSolo = { wins: 0, losses: 0, winRate: 0, tier: "UNRANKED", rank: "", lp: 0 };
       let statsFlex = { wins: 0, losses: 0, winRate: 0, tier: "UNRANKED", rank: "", lp: 0 };
       
+      apiCalls++;
       const leagueRes = await fetch(`${routingPlatform}/lol/league/v4/entries/by-puuid/${playerPuuid}?api_key=${API_KEY}`);
       if (leagueRes.ok) {
         const leagueData = await leagueRes.json();
@@ -166,6 +174,69 @@ export default {
         try {
           await ensureSchema(env);
 
+          // Baixa o detalhe de UMA partida na API e a persiste no D1 (em segundo plano)
+          const fetchMatchDetail = async (matchId) => {
+            try {
+              apiCalls++;
+              const detailRes = await fetch(`${routingAmericas}/lol/match/v5/matches/${matchId}?api_key=${API_KEY}`);
+              if (!detailRes.ok) return null;
+              const detail = await detailRes.json();
+              const info = detail.info;
+
+              const participant = info.participants.find(p => p.puuid === playerPuuid);
+              if (!participant) return null;
+
+              const teams = info.participants.map(p => ({
+                gameName: p.riotIdGameName || p.summonerName,
+                tagLine: p.riotIdTagline,
+                championName: p.championName,
+                teamId: p.teamId,
+                kills: p.kills,
+                role: p.teamPosition
+              }));
+
+              const cs = (participant.totalMinionsKilled || 0) + (participant.neutralMinionsKilled || 0);
+
+              ctx.waitUntil((async () => {
+                try {
+                  // 🌟 MUDANÇA: Insere a lista completa de jogadores estruturada em formato de texto JSON
+                  await env.DB.prepare("INSERT OR IGNORE INTO partidas (match_id, game_duration, game_creation, participants) VALUES (?, ?, ?, ?)")
+                    .bind(matchId, info.gameDuration, info.gameCreation, JSON.stringify(teams)).run();
+
+                  // 🌟 FASE 1: grava team_position, queue_id, game_creation, cs e game_duration
+                  await env.DB.prepare(`
+                    INSERT OR IGNORE INTO estatisticas_jogador_partida
+                    (puuid, match_id, champion_name, kills, deaths, assists, win, gold_earned, items, team_position, queue_id, game_creation, cs, game_duration)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  `).bind(
+                    playerPuuid, matchId, participant.championName, participant.kills, participant.deaths, participant.assists,
+                    participant.win ? 1 : 0, participant.goldEarned,
+                    JSON.stringify([participant.item0, participant.item1, participant.item2, participant.item3, participant.item4, participant.item5]),
+                    participant.teamPosition || "", info.queueId, info.gameCreation, cs, info.gameDuration
+                  ).run();
+                } catch (err) { }
+              })());
+
+              return {
+                matchId,
+                win: participant.win,
+                queueType: queueMap[info.queueId] || "Outro Modo",
+                queueId: info.queueId,
+                championName: participant.championName,
+                teamPosition: participant.teamPosition,
+                gameDuration: info.gameDuration,
+                gameStartTimestamp: info.gameStartTimestamp,
+                gameCreation: info.gameCreation,
+                kills: participant.kills,
+                deaths: participant.deaths,
+                assists: participant.assists,
+                item0: participant.item0, item1: participant.item1, item2: participant.item2, item3: participant.item3, item4: participant.item4, item5: participant.item5, item6: participant.item6,
+                totalMinionsKilled: participant.totalMinionsKilled, neutralMinionsKilled: participant.neutralMinionsKilled, firstBloodKill: participant.firstBloodKill, visionWardsBoughtInGame: participant.visionWardsBoughtInGame,
+                players: teams
+              };
+            } catch (e) { return null; }
+          };
+
           // 🌟 MUDANÇA: Agora selecionamos a coluna p.participants do banco
           const { results: cachePartidas } = await env.DB.prepare(`
             SELECT e.*, p.game_duration AS p_game_duration, p.game_creation AS p_game_creation, p.participants
@@ -176,106 +247,69 @@ export default {
             LIMIT 20
           `).bind(playerPuuid).all();
 
-          if (cachePartidas && cachePartidas.length > 0) {
-            realMatches = cachePartidas.map(row => {
-              const items = JSON.parse(row.items || "[0,0,0,0,0,0]");
-              return {
-                win: row.win === 1,
-                queueType: queueMap[row.queue_id] || "Dados Guardados (D1)",
-                championName: row.champion_name,
-                teamPosition: row.team_position || "UNKNOWN",
-                gameDuration: row.game_duration || row.p_game_duration,
-                gameStartTimestamp: row.game_creation || row.p_game_creation,
-                kills: row.kills,
-                deaths: row.deaths,
-                assists: row.assists,
-                item0: items[0] || 0, item1: items[1] || 0, item2: items[2] || 0, item3: items[3] || 0, item4: items[4] || 0, item5: items[5] || 0, item6: 0,
-                totalMinionsKilled: row.cs || 0, neutralMinionsKilled: 0, firstBloodKill: false, visionWardsBoughtInGame: 0,
-                // 🌟 MUDANÇA: Retorna os dados reais dos jogadores cacheados
-                players: row.participants ? JSON.parse(row.participants) : []
-              };
-            });
-            console.log("⚡ Histórico carregado via D1.");
-          } else {
-            // 🌟 FASE 1: coleta direcionada por fila — 50 Solo/Duo (420) + 25 Flex (440), deduplicado
-            const [soloIdsRes, flexIdsRes] = await Promise.all([
-              fetch(`${routingAmericas}/lol/match/v5/matches/by-puuid/${playerPuuid}/ids?start=0&count=50&queue=420&api_key=${API_KEY}`),
-              fetch(`${routingAmericas}/lol/match/v5/matches/by-puuid/${playerPuuid}/ids?start=0&count=25&queue=440&api_key=${API_KEY}`)
-            ]);
-
-            const soloIds = soloIdsRes.ok ? await soloIdsRes.json() : [];
-            const flexIds = flexIdsRes.ok ? await flexIdsRes.json() : [];
-            const matchIds = [...new Set([...soloIds, ...flexIds])];
-
-            const fetchMatchDetail = async (matchId) => {
-              try {
-                const detailRes = await fetch(`${routingAmericas}/lol/match/v5/matches/${matchId}?api_key=${API_KEY}`);
-                if (!detailRes.ok) return null;
-                const detail = await detailRes.json();
-                const info = detail.info;
-
-                const participant = info.participants.find(p => p.puuid === playerPuuid);
-                if (!participant) return null;
-
-                const teams = info.participants.map(p => ({
-                  gameName: p.riotIdGameName || p.summonerName,
-                  tagLine: p.riotIdTagline,
-                  championName: p.championName,
-                  teamId: p.teamId,
-                  kills: p.kills,
-                  role: p.teamPosition
-                }));
-
-                const cs = (participant.totalMinionsKilled || 0) + (participant.neutralMinionsKilled || 0);
-
-                ctx.waitUntil((async () => {
-                  try {
-                    // 🌟 MUDANÇA: Insere a lista completa de jogadores estruturada em formato de texto JSON
-                    await env.DB.prepare("INSERT OR IGNORE INTO partidas (match_id, game_duration, game_creation, participants) VALUES (?, ?, ?, ?)")
-                      .bind(matchId, info.gameDuration, info.gameCreation, JSON.stringify(teams)).run();
-
-                    // 🌟 FASE 1: grava team_position, queue_id, game_creation, cs e game_duration
-                    await env.DB.prepare(`
-                      INSERT OR IGNORE INTO estatisticas_jogador_partida
-                      (puuid, match_id, champion_name, kills, deaths, assists, win, gold_earned, items, team_position, queue_id, game_creation, cs, game_duration)
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    `).bind(
-                      playerPuuid, matchId, participant.championName, participant.kills, participant.deaths, participant.assists,
-                      participant.win ? 1 : 0, participant.goldEarned,
-                      JSON.stringify([participant.item0, participant.item1, participant.item2, participant.item3, participant.item4, participant.item5]),
-                      participant.teamPosition || "", info.queueId, info.gameCreation, cs, info.gameDuration
-                    ).run();
-                  } catch (err) { }
-                })());
-
-                return {
-                  win: participant.win,
-                  queueType: queueMap[info.queueId] || "Outro Modo",
-                  queueId: info.queueId,
-                  championName: participant.championName,
-                  teamPosition: participant.teamPosition,
-                  gameDuration: info.gameDuration,
-                  gameStartTimestamp: info.gameStartTimestamp,
-                  gameCreation: info.gameCreation,
-                  kills: participant.kills,
-                  deaths: participant.deaths,
-                  assists: participant.assists,
-                  item0: participant.item0, item1: participant.item1, item2: participant.item2, item3: participant.item3, item4: participant.item4, item5: participant.item5, item6: participant.item6,
-                  totalMinionsKilled: participant.totalMinionsKilled, neutralMinionsKilled: participant.neutralMinionsKilled, firstBloodKill: participant.firstBloodKill, visionWardsBoughtInGame: participant.visionWardsBoughtInGame,
-                  players: teams
-                };
-              } catch (e) { return null; }
+          // Partidas já guardadas (servidas do D1, não gastam a API da Riot)
+          const cachedMatches = (cachePartidas || []).map(row => {
+            const items = JSON.parse(row.items || "[0,0,0,0,0,0]");
+            return {
+              matchId: row.match_id,
+              win: row.win === 1,
+              queueType: queueMap[row.queue_id] || "Dados Guardados (D1)",
+              championName: row.champion_name,
+              teamPosition: row.team_position || "UNKNOWN",
+              gameDuration: row.game_duration || row.p_game_duration,
+              gameStartTimestamp: row.game_creation || row.p_game_creation,
+              gameCreation: row.game_creation || row.p_game_creation,
+              kills: row.kills,
+              deaths: row.deaths,
+              assists: row.assists,
+              item0: items[0] || 0, item1: items[1] || 0, item2: items[2] || 0, item3: items[3] || 0, item4: items[4] || 0, item5: items[5] || 0, item6: 0,
+              totalMinionsKilled: row.cs || 0, neutralMinionsKilled: 0, firstBloodKill: false, visionWardsBoughtInGame: 0,
+              // 🌟 MUDANÇA: Retorna os dados reais dos jogadores cacheados
+              players: row.participants ? JSON.parse(row.participants) : []
             };
+          });
 
-            // 🌟 FASE 1: detalhes em lotes de 5 (Promise.all sequencial entre lotes) para respeitar rate limit
-            const resolved = [];
-            for (let i = 0; i < matchIds.length; i += 5) {
-              const lote = matchIds.slice(i, i + 5);
-              const parcial = await Promise.all(lote.map(fetchMatchDetail));
-              resolved.push(...parcial);
-            }
-            realMatches = resolved.filter(m => m !== null);
+          // 🌟 CORREÇÃO: SEMPRE consulta a API pelos IDs recentes (50 Solo/Duo 420 + 25 Flex 440)
+          // para captar partidas novas mesmo quando já existe cache no D1.
+          apiCalls += 2;
+          const [soloIdsRes, flexIdsRes] = await Promise.all([
+            fetch(`${routingAmericas}/lol/match/v5/matches/by-puuid/${playerPuuid}/ids?start=0&count=50&queue=420&api_key=${API_KEY}`),
+            fetch(`${routingAmericas}/lol/match/v5/matches/by-puuid/${playerPuuid}/ids?start=0&count=25&queue=440&api_key=${API_KEY}`)
+          ]);
+
+          const soloIds = soloIdsRes.ok ? await soloIdsRes.json() : [];
+          const flexIds = flexIdsRes.ok ? await flexIdsRes.json() : [];
+          const recentIds = [...new Set([...soloIds, ...flexIds])];
+
+          // Descobre quais desses IDs já estão salvos para baixar SÓ os novos (economiza API)
+          let newIds = recentIds;
+          if (recentIds.length) {
+            const placeholders = recentIds.map(() => "?").join(",");
+            const { results: existing } = await env.DB.prepare(
+              `SELECT match_id FROM estatisticas_jogador_partida WHERE puuid = ? AND match_id IN (${placeholders})`
+            ).bind(playerPuuid, ...recentIds).all();
+            const known = new Set((existing || []).map(r => r.match_id));
+            newIds = recentIds.filter(id => !known.has(id));
           }
+
+          // Baixa o detalhe apenas das partidas novas (lotes de 5 para respeitar o rate limit)
+          const freshMatches = [];
+          for (let i = 0; i < newIds.length; i += 5) {
+            const lote = newIds.slice(i, i + 5);
+            const parcial = await Promise.all(lote.map(fetchMatchDetail));
+            freshMatches.push(...parcial.filter(m => m !== null));
+          }
+
+          // Combina novas (topo) + cache, sem duplicar, ordenado por data desc, limitado a 20
+          const seen = new Set();
+          realMatches = [...freshMatches, ...cachedMatches]
+            .filter(m => {
+              if (m.matchId && seen.has(m.matchId)) return false;
+              if (m.matchId) seen.add(m.matchId);
+              return true;
+            })
+            .sort((a, b) => (b.gameCreation || b.gameStartTimestamp || 0) - (a.gameCreation || a.gameStartTimestamp || 0))
+            .slice(0, 20);
 
           // 🌟 Proficiência: usa o MÁXIMO de partidas salvas no D1 (cron enche até 1000)
           try {
@@ -352,20 +386,24 @@ export default {
 
       return new Response(JSON.stringify({
         loading: false, error: null, puuid: playerPuuid, gameName: exactGameName, tagLine: exactTagLine,
-        profileIconId, summonerLevel, statsSolo, statsFlex, matches: realMatches.slice(0, 20), proficiencyMatches, companions
+        profileIconId, summonerLevel, statsSolo, statsFlex, matches: realMatches.slice(0, 20), proficiencyMatches, companions,
+        apiCalls
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     if (action === "masteries") {
+      let apiCalls = 0;
       let targetPuuid = puuid;
       if (!targetPuuid && gameName && tagLine) {
+        apiCalls++;
         const accRes = await fetch(`${routingAmericas}/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}?api_key=${API_KEY}`);
         if (accRes.ok) { const accData = await accRes.json(); targetPuuid = accData.puuid; }
       }
       if (!targetPuuid) return new Response(JSON.stringify({ error: "Falta PUUID." }), { status: 400, headers: corsHeaders });
-      
+
       let platformHost = 'br1';
       try {
+        apiCalls++;
         const shardRes = await fetch(`${routingAmericas}/riot/account/v1/active-shards/by-game/lol/by-puuid/${targetPuuid}?api_key=${API_KEY}`);
         if (shardRes.ok) {
           const shardData = await shardRes.json();
@@ -373,6 +411,7 @@ export default {
         }
       } catch (e) { }
 
+      apiCalls++;
       const masteryRes = await fetch(`https://${platformHost}.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/${targetPuuid}?api_key=${API_KEY}`);
       if (!masteryRes.ok) return new Response(JSON.stringify({ error: "Erro Maestrias." }), { status: masteryRes.status, headers: corsHeaders });
       const rawMasteries = await masteryRes.json();
@@ -402,7 +441,7 @@ export default {
         } catch (e) { }
       })());
 
-      return new Response(JSON.stringify({ masteries }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ masteries, apiCalls }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // ======================================================================

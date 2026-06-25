@@ -60,6 +60,8 @@ export const state = reactive({
   },
 
   staticData: {
-    championList: []
+    championList: [],
+    // Mapa de itens do Data Dragon, indexado pelo id (string) -> { name, ... }
+    items: {}
   }
 });

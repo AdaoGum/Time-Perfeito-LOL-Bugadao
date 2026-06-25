@@ -1,5 +1,13 @@
 <template>
-  <div class="space-y-6">
+  <div class="relative min-h-[74vh] space-y-6">
+    <!-- Busca sobreposta enquanto nenhum perfil foi pesquisado -->
+    <SearchGate
+      title="UGA! Caçadas Passadas"
+      @show-overlay="c => $emit('show-overlay', c)"
+      @hide-overlay="$emit('hide-overlay')"
+      @show-udyr="$emit('show-udyr')"
+    />
+
     <template v-if="store.searchProfile.loading">
       <div class="flex items-center justify-center gap-3 rounded-xl border border-cyan-800/50 bg-cyan-950/30 px-4 py-3">
         <div class="h-4 w-4 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent"></div>
@@ -251,7 +259,7 @@
                 <!-- ITEMS COMPACT GRID -->
                 <div class="flex flex-wrap gap-1">
                   <template v-for="(itemId, idx) in [match.item0, match.item1, match.item2, match.item3, match.item4, match.item5, match.item6]" :key="idx">
-                    <img v-if="itemId" class="h-6 w-6 rounded border border-slate-700 bg-slate-800 shadow-sm" :src="itemImage(itemId)" loading="lazy" />
+                    <img v-if="itemId" class="h-6 w-6 rounded border border-slate-700 bg-slate-800 shadow-sm" :src="itemImage(itemId)" :title="itemName(itemId)" :alt="itemName(itemId)" loading="lazy" />
                     <div v-else class="h-6 w-6 rounded border border-slate-800/30 bg-slate-900/40"></div>
                   </template>
                 </div>
@@ -261,19 +269,19 @@
               <div class="grid grid-cols-2 gap-1 bg-slate-950/40 rounded-xl p-2 border border-slate-900/60 h-full content-center">
                 <!-- TIME ALIADO -->
                 <div class="space-y-0.5 border-r border-slate-900/60 pr-1 flex flex-col justify-center">
-                  <div v-for="p in alliedPlayers(match)" :key="p?.gameName" class="flex items-center gap-1 overflow-hidden">
-                    <img class="h-3.5 w-3.5 rounded-sm border border-slate-800 flex-shrink-0 shadow-sm" :src="championImage(p?.championName || 'Aatrox')" loading="lazy" />
-                    <span class="truncate text-[9px] font-bold" :class="(p?.gameName || '').toLowerCase().trim() === (store.searchProfile.gameName || '').toLowerCase().trim() ? 'text-amber-300 font-black' : 'text-blue-300/80'">
-                      {{ p?.gameName || 'Desconhecido' }}
+                  <div v-for="p in alliedPlayers(match)" :key="p?.gameName" class="flex items-center gap-1 overflow-hidden" :title="playerLabel(p)">
+                    <img class="h-3.5 w-3.5 rounded-sm border border-slate-800 flex-shrink-0 shadow-sm" :src="championImage(p?.championName || 'Aatrox')" :title="p?.championName" :alt="p?.championName" loading="lazy" />
+                    <span class="truncate text-[9px] font-bold" :title="playerLabel(p)" :class="(p?.gameName || '').toLowerCase().trim() === (store.searchProfile.gameName || '').toLowerCase().trim() ? 'text-amber-300 font-black' : 'text-blue-300/80'">
+                      {{ playerLabel(p) }}
                     </span>
                   </div>
                 </div>
                 <!-- TIME INIMIGO -->
                 <div class="space-y-0.5 pl-1 flex flex-col justify-center">
-                  <div v-for="p in enemyPlayers(match)" :key="p?.gameName" class="flex items-center gap-1 overflow-hidden">
-                    <img class="h-3.5 w-3.5 rounded-sm border border-slate-800 flex-shrink-0 shadow-sm" :src="championImage(p?.championName || 'Aatrox')" loading="lazy" />
-                    <span class="truncate text-[9px] font-bold text-red-300/80">
-                      {{ p?.gameName || 'Desconhecido' }}
+                  <div v-for="p in enemyPlayers(match)" :key="p?.gameName" class="flex items-center gap-1 overflow-hidden" :title="playerLabel(p)">
+                    <img class="h-3.5 w-3.5 rounded-sm border border-slate-800 flex-shrink-0 shadow-sm" :src="championImage(p?.championName || 'Aatrox')" :title="p?.championName" :alt="p?.championName" loading="lazy" />
+                    <span class="truncate text-[9px] font-bold text-red-300/80" :title="playerLabel(p)">
+                      {{ playerLabel(p) }}
                     </span>
                   </div>
                 </div>
@@ -291,8 +299,11 @@
 import { ref, computed } from 'vue';
 import { state } from '../store.js';
 import { championImage, profileIconImage, itemImage, calculateKdaRatio, formatDuration } from '../utils.js';
+import SearchGate from './SearchGate.vue';
 
 const store = state;
+
+defineEmits(['show-overlay', 'hide-overlay', 'show-udyr']);
 
 function formatGameDate(timestamp) {
   if (!timestamp) return 'Data desconhecida';
@@ -457,6 +468,17 @@ function enemyPlayers(match) {
   const playerEntry = participants.find((p) => p?.championName === match.championName);
   const allyTeamId = playerEntry?.teamId;
   return participants.filter((p) => p?.teamId !== allyTeamId).slice(0, 5);
+}
+
+// Nome completo do jogador com a tag (ex.: "Kami#BR1") para o tooltip
+function playerLabel(p) {
+  const name = p?.gameName || 'Desconhecido';
+  return p?.tagLine ? `${name}#${p.tagLine}` : name;
+}
+
+// Nome do item a partir do mapa estático do Data Dragon (para o tooltip)
+function itemName(itemId) {
+  return store.staticData.items?.[itemId]?.name || `Item ${itemId}`;
 }
 
 function matchFarm(match) {

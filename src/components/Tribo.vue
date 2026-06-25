@@ -6,12 +6,24 @@
           <h2 class="text-xl font-black tracking-wide text-cyan-300">Tribo PERFEITO</h2>
           <p class="text-xs text-slate-400">Escolha o modo da fila e monte seu time sem perder o estilo raiz.</p>
         </div>
-        <button
-          v-if="viewMode !== 'selection'"
-          type="button"
-          @click="goBackToSelection"
-          class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-bold text-slate-300 hover:text-white"
-        >Voltar</button>
+        <div class="flex items-center gap-2">
+          <button
+            v-if="viewMode === 'ranked'"
+            type="button"
+            @click="toggleQueueType"
+            class="flex items-center gap-1.5 rounded-lg border border-cyan-700/60 bg-slate-950 px-3 py-1.5 text-xs font-bold text-cyan-300 transition hover:border-cyan-500 hover:text-white"
+            :title="`Trocar para ${isSoloDuo ? 'Flex' : 'Solo/Duo'}`"
+          >
+            <i class="fa-solid fa-right-left"></i>
+            <span>{{ isSoloDuo ? 'Solo/Duo' : 'Flex' }}</span>
+          </button>
+          <button
+            v-if="viewMode !== 'selection'"
+            type="button"
+            @click="goBackToSelection"
+            class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-bold text-slate-300 hover:text-white"
+          >Voltar</button>
+        </div>
       </div>
     </section>
 
@@ -258,21 +270,6 @@
                     <span class="truncate flex-1 text-left">{{ m.name }}</span>
                     <span class="text-cyan-400">{{ m.tier }} {{ m.role }}</span>
                   </button>
-                </div>
-              </div>
-
-              <!-- Parças: quem mais jogou na fila ativa com ele -->
-              <div v-if="parcasDoSlot(slot).length" class="w-full rounded-lg border border-fuchsia-900/40 bg-slate-900/50 p-2 text-left">
-                <p class="text-[9px] font-black uppercase tracking-wider text-fuchsia-300">
-                  Parças de {{ queueType === 'flex' ? 'Flex' : 'Solo/Duo' }}
-                </p>
-                <div
-                  v-for="parca in parcasDoSlot(slot)"
-                  :key="`parca-${slot.id}-${parca.name}`"
-                  class="mt-1 flex w-full items-center gap-1 text-[9px] text-slate-300"
-                >
-                  <span class="truncate flex-1">{{ parca.name }}</span>
-                  <span class="text-slate-500">{{ parca.games }} jogos</span>
                 </div>
               </div>
 
@@ -729,6 +726,12 @@ function goBackToSelection() {
   viewMode.value = 'selection';
 }
 
+// Alterna o lobby ranqueado entre Solo/Duo e Flex sem voltar para a seleção.
+function toggleQueueType() {
+  queueType.value = isSoloDuo.value ? 'flex' : 'solo_duo';
+  synergyResult.value = null;
+}
+
 function resetRankedSlot(slotId) {
   const idx = rankedSlots.findIndex((slot) => slot.id === slotId);
   if (idx === -1) return;
@@ -994,12 +997,6 @@ function masteriaTop5(slot) {
 function metaSugerido(slot) {
   const jaTem = new Set(masteriaTop5(slot).map((m) => m.name));
   return topMetaChampions([...jaTem], 5, slot.role);
-}
-
-// Parças pela fila ativa do lobby (solo/duo ou flex).
-function parcasDoSlot(slot) {
-  const c = slot.companions || {};
-  return (queueType.value === 'flex' ? c.flex : c.solo) || [];
 }
 
 // Aviso de degradação de dados por slot (FASE 5.4).

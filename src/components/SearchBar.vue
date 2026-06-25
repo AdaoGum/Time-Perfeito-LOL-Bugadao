@@ -87,6 +87,8 @@ async function executeSearch() {
 
   loading.value = true;
   localError.value = null;
+  // Liga a animação global de carregamento (esqueleto/spinner do Profile.vue)
+  if (props.syncGlobalStore) state.searchProfile.loading = true;
   emit('search-start');
 
   try {
@@ -166,9 +168,11 @@ async function executeSearch() {
     }
   } catch (error) {
     localError.value = error.message;
+    if (props.syncGlobalStore) state.searchProfile.error = error.message;
     emit('search-error', error.message);
   } finally {
     loading.value = false;
+    if (props.syncGlobalStore) state.searchProfile.loading = false;
   }
 }
 </script>
