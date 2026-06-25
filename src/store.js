@@ -62,6 +62,10 @@ export const state = reactive({
   staticData: {
     championList: [],
     // Mapa de itens do Data Dragon, indexado pelo id (string) -> { name, ... }
-    items: {}
+    items: {},
+    // Feitiços de invocador indexados pelo id numérico -> { name, image }
+    summonerSpells: {},
+    // Runas indexadas pelo id do perk -> { name, icon }
+    runes: {}
   }
 });

@@ -318,6 +318,16 @@
                     <img class="h-12 w-12 rounded-xl border border-slate-700 object-cover shadow-md" :src="championImage(match.championName || 'Aatrox')" :alt="match.championName" loading="lazy" />
                     <img v-if="match.teamPosition && match.teamPosition !== 'Invalid'" :src="getMiniRoleIcon(match.teamPosition)" class="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-slate-950 p-0.5 brightness-200" :title="match.teamPosition" :alt="match.teamPosition" />
                   </div>
+
+                  <!-- Feitiços de invocador + runa principal (quando houver dados) -->
+                  <div v-if="match.summoner1Id || match.perkKeystone" class="flex flex-shrink-0 items-center gap-1">
+                    <div class="flex flex-col gap-0.5">
+                      <img v-if="spellImg(match.summoner1Id)" :src="spellImg(match.summoner1Id)" :title="spellName(match.summoner1Id)" :alt="spellName(match.summoner1Id)" class="h-5 w-5 rounded border border-slate-700 bg-slate-800" />
+                      <img v-if="spellImg(match.summoner2Id)" :src="spellImg(match.summoner2Id)" :title="spellName(match.summoner2Id)" :alt="spellName(match.summoner2Id)" class="h-5 w-5 rounded border border-slate-700 bg-slate-800" />
+                    </div>
+                    <img v-if="runeImg(match.perkKeystone)" :src="runeImg(match.perkKeystone)" :title="runeName(match.perkKeystone)" :alt="runeName(match.perkKeystone)" class="h-6 w-6 rounded-full border border-slate-700 bg-slate-950" />
+                  </div>
+
                   <div class="min-w-0">
                     <p class="text-xs font-black text-slate-200 uppercase tracking-wide truncate">{{ match.championName }}</p>
                     <p class="text-sm font-black text-white tracking-widest mt-0.5">
@@ -329,7 +339,12 @@
                       </span>
                       <span class="text-slate-600 font-normal"> • </span>{{ matchFarm(match) }} CS <span class="text-[10px] font-normal text-slate-500">({{ matchCsMin(match) }}/m)</span>
                     </p>
-                    <p class="text-[10px] font-semibold text-slate-500 mt-0.5">KP: <span class="text-slate-200">{{ matchKP(match) }}</span></p>
+                    <p class="text-[10px] font-semibold text-slate-500 mt-0.5">
+                      KP: <span class="text-slate-200">{{ matchKP(match) }}</span>
+                      <template v-if="match.visionScore != null">
+                        <span class="text-slate-600"> • </span>Visão: <span class="text-slate-200">{{ match.visionScore }}</span>
+                      </template>
+                    </p>
                   </div>
                 </div>
 
@@ -404,7 +419,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { state } from '../store.js';
-import { championImage, profileIconImage, itemImage, calculateKdaRatio, formatDuration } from '../utils.js';
+import { championImage, profileIconImage, itemImage, calculateKdaRatio, formatDuration, summonerSpellImage, runeImage } from '../utils.js';
 import { loadProfileIntoStore } from '../api.js';
 import SearchGate from './SearchGate.vue';
 
@@ -724,6 +739,24 @@ function playerLabel(p) {
 // Nome do item a partir do mapa estático do Data Dragon (para o tooltip)
 function itemName(itemId) {
   return store.staticData.items?.[itemId]?.name || `Item ${itemId}`;
+}
+
+// Feitiços de invocador (ícone + nome) a partir do id numérico
+function spellImg(id) {
+  const s = store.staticData.summonerSpells?.[id];
+  return s?.image ? summonerSpellImage(s.image) : '';
+}
+function spellName(id) {
+  return store.staticData.summonerSpells?.[id]?.name || '';
+}
+
+// Runa (ícone + nome) a partir do id do perk
+function runeImg(id) {
+  const r = store.staticData.runes?.[id];
+  return r?.icon ? runeImage(r.icon) : '';
+}
+function runeName(id) {
+  return store.staticData.runes?.[id]?.name || '';
 }
 
 function matchFarm(match) {

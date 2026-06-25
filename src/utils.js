@@ -30,6 +30,15 @@ export function itemImage(itemId) {
   return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/item/${itemId}.png`;
 }
 
+export function summonerSpellImage(full) {
+  return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/spell/${full}`;
+}
+
+// Ícones de runa usam o caminho "icon" do runesReforged.json, sem versão na URL
+export function runeImage(icon) {
+  return `https://ddragon.leagueoflegends.com/cdn/img/${icon}`;
+}
+
 export function calculateKdaRatio(k, d, a) {
   return ((k + a) / Math.max(1, d)).toFixed(2);
 }

@@ -157,15 +157,32 @@ async function rodarSincronizacao() {
             // 🌟 Grava também team_position, queue_id, game_creation, cs e game_duration
             // (necessário para proficiência por rota e companheiros por fila no histórico profundo)
             const cs = (participant.totalMinionsKilled || 0) + (participant.neutralMinionsKilled || 0);
+
+            // 🌟 FASE 2: campos analíticos (mesma extração usada no worker.js)
+            const ch = participant.challenges || {};
+            const keystone = participant.perks?.styles?.[0]?.selections?.[0]?.perk ?? null;
+            const secondaryStyle = participant.perks?.styles?.[1]?.style ?? null;
+
             await queryD1(
               `INSERT OR IGNORE INTO estatisticas_jogador_partida
-              (puuid, match_id, champion_name, kills, deaths, assists, win, gold_earned, items, team_position, queue_id, game_creation, cs, game_duration)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              (puuid, match_id, champion_name, kills, deaths, assists, win, gold_earned, items, team_position, queue_id, game_creation, cs, game_duration,
+               vision_score, control_wards, solo_kills, damage_champions, gold_per_min, kill_participation, summoner1_id, summoner2_id, perk_keystone, perk_secondary_style)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 jogador.puuid, matchId, participant.championName, participant.kills, participant.deaths, participant.assists,
                 participant.win ? 1 : 0, participant.goldEarned,
                 JSON.stringify([participant.item0, participant.item1, participant.item2, participant.item3, participant.item4, participant.item5]),
-                participant.teamPosition || "", matchData.info.queueId, matchData.info.gameCreation, cs, matchData.info.gameDuration
+                participant.teamPosition || "", matchData.info.queueId, matchData.info.gameCreation, cs, matchData.info.gameDuration,
+                participant.visionScore ?? null,
+                participant.visionWardsBoughtInGame ?? null,
+                ch.soloKills ?? null,
+                participant.totalDamageDealtToChampions ?? null,
+                ch.goldPerMinute ?? null,
+                ch.killParticipation ?? null,
+                participant.summoner1Id ?? null,
+                participant.summoner2Id ?? null,
+                keystone,
+                secondaryStyle
               ]
             );
           }

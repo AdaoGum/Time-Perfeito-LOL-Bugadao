@@ -4,17 +4,13 @@
 let schemaReady = false;
 async function ensureSchema(env) {
   if (schemaReady) return;
-  const alters = [
-    "ALTER TABLE estatisticas_jogador_partida ADD COLUMN team_position TEXT",
-    "ALTER TABLE estatisticas_jogador_partida ADD COLUMN queue_id INTEGER",
-    "ALTER TABLE estatisticas_jogador_partida ADD COLUMN game_creation INTEGER",
-    "ALTER TABLE estatisticas_jogador_partida ADD COLUMN cs INTEGER",
-    "ALTER TABLE estatisticas_jogador_partida ADD COLUMN game_duration INTEGER",
-    "CREATE TABLE IF NOT EXISTS maestrias (puuid TEXT NOT NULL, champion_id INTEGER NOT NULL, champion_level INTEGER, champion_points INTEGER, last_play_time INTEGER, atualizado TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (puuid, champion_id))"
-  ];
-  for (const sql of alters) {
-    try { await env.DB.prepare(sql).run(); } catch (e) { /* coluna/tabela já existe */ }
-  }
+  // As colunas de estatisticas_jogador_partida vêm da migração (migrations/001_analytics.sql).
+  // Aqui garantimos apenas a tabela de maestrias, que não faz parte da migração.
+  try {
+    await env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS maestrias (puuid TEXT NOT NULL, champion_id INTEGER NOT NULL, champion_level INTEGER, champion_points INTEGER, last_play_time INTEGER, atualizado TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (puuid, champion_id))"
+    ).run();
+  } catch (e) { /* tabela já existe */ }
   schemaReady = true;
 }
 
@@ -197,6 +193,11 @@ export default {
 
               const cs = (participant.totalMinionsKilled || 0) + (participant.neutralMinionsKilled || 0);
 
+              // 🌟 Campos analíticos (mesma extração usada no cron/sync.js)
+              const ch = participant.challenges || {};
+              const keystone = participant.perks?.styles?.[0]?.selections?.[0]?.perk ?? null;
+              const secondaryStyle = participant.perks?.styles?.[1]?.style ?? null;
+
               ctx.waitUntil((async () => {
                 try {
                   // 🌟 MUDANÇA: Insere a lista completa de jogadores estruturada em formato de texto JSON
@@ -204,15 +205,27 @@ export default {
                     .bind(matchId, info.gameDuration, info.gameCreation, JSON.stringify(teams)).run();
 
                   // 🌟 FASE 1: grava team_position, queue_id, game_creation, cs e game_duration
+                  // 🌟 FASE 2: grava também os campos analíticos (visão, wards, solo kills, dano, etc.)
                   await env.DB.prepare(`
                     INSERT OR IGNORE INTO estatisticas_jogador_partida
-                    (puuid, match_id, champion_name, kills, deaths, assists, win, gold_earned, items, team_position, queue_id, game_creation, cs, game_duration)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (puuid, match_id, champion_name, kills, deaths, assists, win, gold_earned, items, team_position, queue_id, game_creation, cs, game_duration,
+                     vision_score, control_wards, solo_kills, damage_champions, gold_per_min, kill_participation, summoner1_id, summoner2_id, perk_keystone, perk_secondary_style)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                   `).bind(
                     playerPuuid, matchId, participant.championName, participant.kills, participant.deaths, participant.assists,
                     participant.win ? 1 : 0, participant.goldEarned,
                     JSON.stringify([participant.item0, participant.item1, participant.item2, participant.item3, participant.item4, participant.item5]),
-                    participant.teamPosition || "", info.queueId, info.gameCreation, cs, info.gameDuration
+                    participant.teamPosition || "", info.queueId, info.gameCreation, cs, info.gameDuration,
+                    participant.visionScore ?? null,
+                    participant.visionWardsBoughtInGame ?? null,
+                    ch.soloKills ?? null,
+                    participant.totalDamageDealtToChampions ?? null,
+                    ch.goldPerMinute ?? null,
+                    ch.killParticipation ?? null,
+                    participant.summoner1Id ?? null,
+                    participant.summoner2Id ?? null,
+                    keystone,
+                    secondaryStyle
                   ).run();
                 } catch (err) { }
               })());
@@ -232,6 +245,17 @@ export default {
                 assists: participant.assists,
                 item0: participant.item0, item1: participant.item1, item2: participant.item2, item3: participant.item3, item4: participant.item4, item5: participant.item5, item6: participant.item6,
                 totalMinionsKilled: participant.totalMinionsKilled, neutralMinionsKilled: participant.neutralMinionsKilled, firstBloodKill: participant.firstBloodKill, visionWardsBoughtInGame: participant.visionWardsBoughtInGame,
+                // 🌟 FASE 2: campos analíticos para os cards (feitiços, runa, visão, etc.)
+                visionScore: participant.visionScore ?? null,
+                controlWards: participant.visionWardsBoughtInGame ?? null,
+                soloKills: ch.soloKills ?? null,
+                damageChampions: participant.totalDamageDealtToChampions ?? null,
+                goldPerMin: ch.goldPerMinute ?? null,
+                killParticipation: ch.killParticipation ?? null,
+                summoner1Id: participant.summoner1Id ?? null,
+                summoner2Id: participant.summoner2Id ?? null,
+                perkKeystone: keystone,
+                perkSecondaryStyle: secondaryStyle,
                 players: teams
               };
             } catch (e) { return null; }
@@ -264,7 +288,18 @@ export default {
               deaths: row.deaths,
               assists: row.assists,
               item0: items[0] || 0, item1: items[1] || 0, item2: items[2] || 0, item3: items[3] || 0, item4: items[4] || 0, item5: items[5] || 0, item6: 0,
-              totalMinionsKilled: row.cs || 0, neutralMinionsKilled: 0, firstBloodKill: false, visionWardsBoughtInGame: 0,
+              totalMinionsKilled: row.cs || 0, neutralMinionsKilled: 0, firstBloodKill: false, visionWardsBoughtInGame: row.control_wards || 0,
+              // 🌟 FASE 2: campos analíticos vindos do D1 (NULL em partidas antigas, até o backfill rodar)
+              visionScore: row.vision_score ?? null,
+              controlWards: row.control_wards ?? null,
+              soloKills: row.solo_kills ?? null,
+              damageChampions: row.damage_champions ?? null,
+              goldPerMin: row.gold_per_min ?? null,
+              killParticipation: row.kill_participation ?? null,
+              summoner1Id: row.summoner1_id ?? null,
+              summoner2Id: row.summoner2_id ?? null,
+              perkKeystone: row.perk_keystone ?? null,
+              perkSecondaryStyle: row.perk_secondary_style ?? null,
               // 🌟 MUDANÇA: Retorna os dados reais dos jogadores cacheados
               players: row.participants ? JSON.parse(row.participants) : []
             };

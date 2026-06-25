@@ -547,5 +547,35 @@ onMounted(async () => {
   } catch (e) {
     console.error('Erro ao carregar itens do Data Dragon:', e);
   }
+
+  try {
+    const res = await fetch(`https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/data/pt_BR/summoner.json`);
+    const json = await res.json();
+    const map = {};
+    for (const spell of Object.values(json.data || {})) {
+      map[spell.key] = { name: spell.name, image: spell.image?.full };
+    }
+    store.staticData.summonerSpells = map;
+  } catch (e) {
+    console.error('Erro ao carregar feitiços do Data Dragon:', e);
+  }
+
+  try {
+    const res = await fetch(`https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/data/pt_BR/runesReforged.json`);
+    const styles = await res.json();
+    const map = {};
+    for (const style of styles || []) {
+      // O próprio estilo (árvore) também tem id/icon (usado para a árvore secundária)
+      map[style.id] = { name: style.name, icon: style.icon };
+      for (const slot of style.slots || []) {
+        for (const rune of slot.runes || []) {
+          map[rune.id] = { name: rune.name, icon: rune.icon };
+        }
+      }
+    }
+    store.staticData.runes = map;
+  } catch (e) {
+    console.error('Erro ao carregar runas do Data Dragon:', e);
+  }
 });
 </script>
