@@ -240,14 +240,17 @@
               <!-- SUB-COLUNA ESQUERDA: CAMPEÃO, KDA, CS E ITENS GRIDS -->
               <div class="space-y-3">
                 <div class="flex items-center gap-3">
-                  <img class="h-12 w-12 rounded-xl border border-slate-700 object-cover shadow-md flex-shrink-0" :src="championImage(match.championName || 'Aatrox')" :alt="match.championName" loading="lazy" />
+                  <div class="relative flex-shrink-0">
+                    <img class="h-12 w-12 rounded-xl border border-slate-700 object-cover shadow-md" :src="championImage(match.championName || 'Aatrox')" :alt="match.championName" loading="lazy" />
+                    <img v-if="match.teamPosition && match.teamPosition !== 'Invalid'" :src="getMiniRoleIcon(match.teamPosition)" class="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-slate-950 p-0.5 brightness-200" :title="match.teamPosition" :alt="match.teamPosition" />
+                  </div>
                   <div class="min-w-0">
                     <p class="text-xs font-black text-slate-200 uppercase tracking-wide truncate">{{ match.championName }}</p>
                     <p class="text-sm font-black text-white tracking-widest mt-0.5">
                       {{ match.kills }} <span class="text-slate-600">/</span> {{ match.deaths }} <span class="text-slate-600">/</span> {{ match.assists }}
                     </p>
                     <p class="text-[11px] font-bold text-slate-400 truncate">
-                      <span :class="幕 => Number(calculateKdaRatio(match.kills, match.deaths, match.assists)) >= 4 ? 'text-amber-400' : 'text-slate-400'">
+                      <span :class="Number(calculateKdaRatio(match.kills, match.deaths, match.assists)) >= 4 ? 'text-amber-400' : 'text-slate-400'">
                         {{ calculateKdaRatio(match.kills, match.deaths, match.assists) }} KDA
                       </span>
                       <span class="text-slate-600 font-normal"> • </span>{{ matchFarm(match) }} CS <span class="text-[10px] font-normal text-slate-500">({{ matchCsMin(match) }}/m)</span>
@@ -265,24 +268,25 @@
                 </div>
               </div>
 
-              <!-- SUB-COLUNA DIREITA: OS 10 JOGADORES DA INVASÃO (SALIÊNCIA DO NICK PESQUISADO) -->
-              <div class="grid grid-cols-2 gap-1 bg-slate-950/40 rounded-xl p-2 border border-slate-900/60 h-full content-center">
-                <!-- TIME ALIADO -->
-                <div class="space-y-0.5 border-r border-slate-900/60 pr-1 flex flex-col justify-center">
-                  <div v-for="p in alliedPlayers(match)" :key="p?.gameName" class="flex items-center gap-1 overflow-hidden" :title="playerLabel(p)">
-                    <img class="h-3.5 w-3.5 rounded-sm border border-slate-800 flex-shrink-0 shadow-sm" :src="championImage(p?.championName || 'Aatrox')" :title="p?.championName" :alt="p?.championName" loading="lazy" />
-                    <span class="truncate text-[9px] font-bold" :title="playerLabel(p)" :class="(p?.gameName || '').toLowerCase().trim() === (store.searchProfile.gameName || '').toLowerCase().trim() ? 'text-amber-300 font-black' : 'text-blue-300/80'">
-                      {{ playerLabel(p) }}
+              <!-- SUB-COLUNA DIREITA: CONFRONTOS POR ROTA (ALIADO vs INIMIGO, COMO NO OP.GG) -->
+              <div class="bg-slate-950/40 rounded-xl p-2 border border-slate-900/60 h-full flex flex-col justify-center gap-0.5">
+                <div v-for="(lane, i) in laneMatchups(match)" :key="i" class="flex items-center gap-1">
+                  <!-- ALIADO -->
+                  <div class="flex items-center gap-1 flex-1 min-w-0" :title="playerLabel(lane.ally)">
+                    <img class="h-4 w-4 rounded-sm border border-slate-800 flex-shrink-0 shadow-sm" :src="championImage(lane.ally?.championName || 'Aatrox')" :alt="lane.ally?.championName" loading="lazy" />
+                    <span class="truncate text-[9px] font-bold" :class="isSearchedPlayer(lane.ally) ? 'text-amber-300 font-black' : 'text-blue-300/80'">
+                      {{ lane.ally?.gameName || '—' }}
                     </span>
                   </div>
-                </div>
-                <!-- TIME INIMIGO -->
-                <div class="space-y-0.5 pl-1 flex flex-col justify-center">
-                  <div v-for="p in enemyPlayers(match)" :key="p?.gameName" class="flex items-center gap-1 overflow-hidden" :title="playerLabel(p)">
-                    <img class="h-3.5 w-3.5 rounded-sm border border-slate-800 flex-shrink-0 shadow-sm" :src="championImage(p?.championName || 'Aatrox')" :title="p?.championName" :alt="p?.championName" loading="lazy" />
-                    <span class="truncate text-[9px] font-bold text-red-300/80" :title="playerLabel(p)">
-                      {{ playerLabel(p) }}
+                  <!-- ROTA -->
+                  <img v-if="lane.role" :src="getMiniRoleIcon(lane.role)" class="h-3 w-3 flex-shrink-0 opacity-60 brightness-200" :title="lane.role" :alt="lane.role" />
+                  <span v-else class="text-[8px] text-slate-600 flex-shrink-0">vs</span>
+                  <!-- INIMIGO -->
+                  <div class="flex items-center gap-1 flex-1 min-w-0 justify-end" :title="playerLabel(lane.enemy)">
+                    <span class="truncate text-right text-[9px] font-bold" :class="isSearchedPlayer(lane.enemy) ? 'text-amber-300 font-black' : 'text-red-300/80'">
+                      {{ lane.enemy?.gameName || '—' }}
                     </span>
+                    <img class="h-4 w-4 rounded-sm border border-slate-800 flex-shrink-0 shadow-sm" :src="championImage(lane.enemy?.championName || 'Aatrox')" :alt="lane.enemy?.championName" loading="lazy" />
                   </div>
                 </div>
               </div>
@@ -456,18 +460,44 @@ const battleCompanions = computed(() => {
     .map(([name, games]) => ({ name, games }));
 });
 
-function alliedPlayers(match) {
-  const participants = Array.isArray(match.players) ? match.players : [];
-  const playerEntry = participants.find((p) => p?.championName === match.championName);
-  const allyTeamId = playerEntry?.teamId;
-  return participants.filter((p) => p?.teamId === allyTeamId).slice(0, 5);
+const ROLE_ORDER = ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY'];
+
+function isSearchedPlayer(p) {
+  return (p?.gameName || '').toLowerCase().trim() === (store.searchProfile.gameName || '').toLowerCase().trim();
 }
 
-function enemyPlayers(match) {
+// Monta os confrontos por rota: cada linha pareia 1 aliado x 1 inimigo da mesma role.
+// Se as roles não estiverem disponíveis (dados antigos), pareia pela ordem.
+function laneMatchups(match) {
   const participants = Array.isArray(match.players) ? match.players : [];
-  const playerEntry = participants.find((p) => p?.championName === match.championName);
-  const allyTeamId = playerEntry?.teamId;
-  return participants.filter((p) => p?.teamId !== allyTeamId).slice(0, 5);
+  const me = participants.find((p) => p?.championName === match.championName);
+  const myTeamId = me?.teamId;
+  const allies = participants.filter((p) => p?.teamId === myTeamId);
+  const enemies = participants.filter((p) => p?.teamId !== myTeamId);
+
+  const pickByRole = (arr, role, used) => arr.find((p) => !used.has(p) && (p?.role || '').toUpperCase() === role);
+
+  const rows = [];
+  const usedAlly = new Set();
+  const usedEnemy = new Set();
+
+  for (const role of ROLE_ORDER) {
+    const ally = pickByRole(allies, role, usedAlly);
+    const enemy = pickByRole(enemies, role, usedEnemy);
+    if (ally) usedAlly.add(ally);
+    if (enemy) usedEnemy.add(enemy);
+    if (ally || enemy) rows.push({ role, ally, enemy });
+  }
+
+  // Fallback: quem ficou sem role pareado entra por ordem
+  const restAlly = allies.filter((p) => !usedAlly.has(p));
+  const restEnemy = enemies.filter((p) => !usedEnemy.has(p));
+  const maxRest = Math.max(restAlly.length, restEnemy.length);
+  for (let i = 0; i < maxRest; i++) {
+    rows.push({ role: null, ally: restAlly[i], enemy: restEnemy[i] });
+  }
+
+  return rows.slice(0, 5);
 }
 
 // Nome completo do jogador com a tag (ex.: "Kami#BR1") para o tooltip
