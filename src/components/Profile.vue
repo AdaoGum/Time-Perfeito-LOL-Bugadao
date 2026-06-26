@@ -616,6 +616,10 @@ function goToPage(p) {
 
 // -------- Análise (base leve do D1, até 1000 jogos) com filtro de janela --------
 const ROLE_LABELS = { TOP: 'Top', JUNGLE: 'Jungle', MIDDLE: 'Mid', BOTTOM: 'ADC', UTILITY: 'Sup' };
+// Só conta como rota quando a Riot devolveu uma posição válida de Summoner's Rift.
+// ARAM/Arena (sem lane) e dados antigos sem position retornam vazio/Invalid → ficam
+// fora das estatísticas de rota em vez de cair num balde "Outro".
+const roleLabelOf = (m) => ROLE_LABELS[m && m.teamPosition] || null;
 const ROLE_POS = { Top: 'TOP', Jungle: 'JUNGLE', Mid: 'MIDDLE', ADC: 'BOTTOM', Sup: 'UTILITY' };
 const ANALYTICS_WINDOWS = [20, 100, 1000];
 
@@ -646,6 +650,7 @@ function buildAnalytics(ms) {
   if (!games) return null;
   let wins = 0, k = 0, d = 0, a = 0, cs = 0, dur = 0;
   const roles = {};
+  let comRota = 0; // jogos com rota válida (denominador do % por rota)
   for (const m of ms) {
     if (m.win) wins++;
     k += Number(m.kills || 0);
@@ -653,11 +658,11 @@ function buildAnalytics(ms) {
     a += Number(m.assists || 0);
     cs += Number(m.cs || 0);
     dur += Number(m.gameDuration || 0);
-    const r = ROLE_LABELS[m.teamPosition] || 'Outro';
-    roles[r] = (roles[r] || 0) + 1;
+    const r = roleLabelOf(m);
+    if (r) { roles[r] = (roles[r] || 0) + 1; comRota++; }
   }
   const roleStats = Object.entries(roles)
-    .map(([name, count]) => ({ name, count, percentage: Math.round((count / games) * 100) }))
+    .map(([name, count]) => ({ name, count, percentage: comRota ? Math.round((count / comRota) * 100) : 0 }))
     .sort((x, y) => y.count - x.count);
   return {
     games,
@@ -720,7 +725,8 @@ function buildRadar(a, ms) {
 function buildRoleBars(ms) {
   const map = {};
   for (const m of ms) {
-    const r = ROLE_LABELS[m.teamPosition] || 'Outro';
+    const r = roleLabelOf(m);
+    if (!r) continue; // ignora jogos sem lane (ARAM/Arena) ou sem dado de rota
     if (!map[r]) map[r] = { role: r, games: 0, wins: 0 };
     map[r].games++;
     if (m.win) map[r].wins++;
@@ -809,7 +815,7 @@ const getRoleIcon = (roleName) => {
     'Top': 'top',
     'Jungle': 'jungle',
     'Mid': 'middle',
-    'Adc': 'bottom',
+    'ADC': 'bottom',
     'Sup': 'utility'
   };
   const position = map[roleName] || 'fill'; 
@@ -820,15 +826,17 @@ const roleStats = computed(() => {
   const matches = filteredMatches.value;
   if (!matches.length) return [];
   const counts = {};
+  let comRota = 0;
   matches.forEach(m => {
-    let role = m.teamPosition && m.teamPosition !== 'Invalid' ? m.teamPosition : 'OUTRO';
-    const roleMap = { TOP: 'Top', JUNGLE: 'Jungle', MIDDLE: 'Mid', BOTTOM: 'ADC', UTILITY: 'Sup' };
-    role = roleMap[role] || 'Outro';
+    const role = roleLabelOf(m);
+    if (!role) return; // ARAM/Arena ou sem rota não entram na contagem
     counts[role] = (counts[role] || 0) + 1;
+    comRota++;
   });
+  if (!comRota) return [];
   return Object.entries(counts)
     .map(([name, count]) => ({
-      name, count, percentage: Math.round((count / matches.length) * 100)
+      name, count, percentage: Math.round((count / comRota) * 100)
     }))
     .sort((a, b) => b.count - a.count);
 });
