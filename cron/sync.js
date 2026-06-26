@@ -1,12 +1,46 @@
-import { SQL_PARTIDAS, valoresPartida, montarTeams, SQL_ESTATISTICAS, valoresEstatisticas, SQL_TIMELINE, valoresTimeline } from './lib/match-extract.js';
+// ============================================================================
+// TRATOR DA MADRUGADA — Ingestão + Processamento unificados (Marcos Temporais).
+//
+// Papel duplo e definitivo:
+//   1) Ingestão: para cada jogador, baixa as ÚLTIMAS 100 partidas (limite de
+//      segurança contra estouro do D1) e detecta as inéditas.
+//   2) Processamento: para cada partida inédita faz a CHAMADA DUPLA à Riot
+//      (resumo + timeline), grava metadados + estatísticas de fim de jogo e
+//      extrai os Marcos Temporais (52 colunas) nos minutos [0,5,10,15,25].
+//      A timeline bruta é DESCARTADA logo após a extração (não ocupa o banco).
+//
+// Ordem de prioridade: os 5 PUUIDs do NÚCLEO DO TIME rodam primeiro; os demais
+// jogadores cadastrados são processados sequencialmente em seguida.
+//
+// BACKFILL=1 reprocessa TODAS as 100 partidas (reescreve linhas via INSERT OR
+// REPLACE), útil para preencher colunas novas no histórico recente.
+// ============================================================================
+
+import {
+  SQL_PARTIDAS, valoresPartida, montarTeams,
+  SQL_ESTATISTICAS, valoresEstatisticas,
+  SQL_MARCOS, extrairMarcos, MARCOS_MINUTOS
+} from './lib/match-extract.js';
 
 const RIOT_API_KEY = process.env.RIOT_API_KEY;
 const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
 const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 const D1_DATABASE_ID = process.env.D1_DATABASE_ID;
 
-const REGION_ROUTE = 'americas'; 
+const REGION_ROUTE = 'americas';
+const LIMITE_PARTIDAS = 100; // 🔒 Limite de segurança: só as 100 últimas por jogador
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// 🌟 NÚCLEO DO TIME — sempre processados PRIMEIRO, nesta ordem.
+const PUUIDS_PRIORITARIOS = [
+  '9t-kjlDiabw7Br6dj5pq4H7ulYloLp5DBVJAAydDdIjBxBp3oNXXG2Y-igp9j7XEGjGBTFuQPcxTfQ',
+  'DitIIHgFfSgTu92vQZDadmBDDl6qr84NHnAuMiyk6EHv6GtGvRGH-K1_xg3PUNlAwdSJcCVudTQSrg',
+  'p-yebFHaXORPI_xcZ2NJW6C2_oPP7wWH3BxIPl2OHfFPfnKHTk23acLjmWZ65ShHGNWBM0knAFbx6g',
+  'kaEzM3m6zjWx3pijWPvRv7dJnKY0aDiSE_1O81kdc71IaZhHATt0E-Ws_66Q9NbV7j0y06QZWslznQ',
+  'K_PROi5ZKvNuZd_F5meGTE-ZZ-IObaSLwHQrkRoogcmgpJEAHyCPtz1NzTPDwlUgMEXWULrmfJdDmw'
+];
+
+const BACKFILL = process.env.BACKFILL === '1' || process.env.BACKFILL === 'true';
 
 async function queryD1(sql, params = []) {
   const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/query`;
@@ -23,178 +57,157 @@ async function queryD1(sql, params = []) {
   return data.result[0];
 }
 
+let totalRequestsFeitas = 0;
+
+// Resfriamento de chave: pausa preventiva antes de estourar o limite de 100/2min.
+async function respeitarRateLimit(logger) {
+  if (totalRequestsFeitas >= 90) {
+    logger('⏳ [ESFRIANDO CHAVE] Quase no limite de 100 reqs. Pausando 2 min...');
+    await sleep(125000);
+    totalRequestsFeitas = 0;
+  }
+}
+
 async function fetchFromRiot(endpoint) {
   const url = `https://${REGION_ROUTE}.api.riotgames.com${endpoint}`;
-  const response = await fetch(url, { headers: { "X-Riot-Token": RIOT_API_KEY } });
+  const response = await fetch(url, { headers: { 'X-Riot-Token': RIOT_API_KEY } });
+  totalRequestsFeitas++;
   if (response.status === 429) {
-    console.warn("⚠️ [RIOT LIMIT] Chave esquentou demais! Pausando por 2 minutos para esfriar...");
-    await sleep(125000); 
-    return fetchFromRiot(endpoint); 
+    console.warn('⚠️ [RIOT LIMIT] Chave esquentou demais! Pausando 2 min para esfriar...');
+    await sleep(125000);
+    totalRequestsFeitas = 0;
+    return fetchFromRiot(endpoint);
   }
   if (!response.ok) throw new Error(`Erro na Riot API: ${response.status}`);
   return response.json();
 }
 
-// Modo backfill: BACKFILL=1 re-baixa TODAS as partidas (mesmo as já salvas)
-// e reescreve as linhas via INSERT OR REPLACE, preenchendo as colunas novas
-// no histórico antigo. Sem a flag, só baixa partidas inéditas (rápido/diário).
-const BACKFILL = process.env.BACKFILL === '1' || process.env.BACKFILL === 'true';
+// Reordena os jogadores do banco: núcleo do time primeiro (na ordem fixa), resto depois.
+function ordenarPorPrioridade(jogadores) {
+  const prioridade = new Map(PUUIDS_PRIORITARIOS.map((p, i) => [p, i]));
+  const nucleo = [];
+  const resto = [];
+  for (const j of jogadores) {
+    if (prioridade.has(j.puuid)) nucleo.push(j);
+    else resto.push(j);
+  }
+  nucleo.sort((a, b) => prioridade.get(a.puuid) - prioridade.get(b.puuid));
+  return [...nucleo, ...resto];
+}
+
+async function processarJogador(jogador, fs) {
+  const ehNucleo = PUUIDS_PRIORITARIOS.includes(jogador.puuid);
+  console.log(`\n---------------------------------------------------------`);
+  console.log(`⛏️  [ALVO${ehNucleo ? ' ⭐ NÚCLEO' : ''}] Escavando: ${jogador.game_name}#${jogador.tag_line}`);
+  console.log(`---------------------------------------------------------`);
+
+  const nomeArquivoClean = `${jogador.game_name.replace(/[^a-zA-Z0-9]/g, '_')}_${jogador.tag_line.replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
+  const logPath = `logs/${nomeArquivoClean}`;
+  fs.writeFileSync(logPath, `=========================================================\n`);
+  fs.appendFileSync(logPath, `📋 RELATÓRIO DE INGESTÃO (MARCOS TEMPORAIS)\n`);
+  fs.appendFileSync(logPath, `JOGADOR: ${jogador.game_name}#${jogador.tag_line}${ehNucleo ? ' ⭐ NÚCLEO DO TIME' : ''}\n`);
+  fs.appendFileSync(logPath, `DATA: ${new Date().toLocaleString('pt-BR')}\n`);
+  fs.appendFileSync(logPath, `=========================================================\n\n`);
+
+  const logger = (texto) => {
+    console.log(texto);
+    fs.appendFileSync(logPath, texto + '\n');
+  };
+
+  // 1) Últimas 100 partidas (uma única página — limite de segurança).
+  await respeitarRateLimit(logger);
+  logger(`🔍 [Riot API] Buscando as últimas ${LIMITE_PARTIDAS} partidas...`);
+  const allMatchIds = await fetchFromRiot(`/lol/match/v5/matches/by-puuid/${jogador.puuid}/ids?start=0&count=${LIMITE_PARTIDAS}`);
+  logger(`🔹 Partidas retornadas pela Riot: ${allMatchIds.length}`);
+  if (!allMatchIds || allMatchIds.length === 0) return;
+
+  // 2) Quais já estão no banco (para baixar só as inéditas).
+  const existentes = new Set();
+  for (let i = 0; i < allMatchIds.length; i += 50) {
+    const chunk = allMatchIds.slice(i, i + 50);
+    const placeholders = chunk.map(() => '?').join(',');
+    const res = await queryD1(`SELECT match_id FROM partidas WHERE match_id IN (${placeholders})`, chunk);
+    (res.results || []).forEach(row => existentes.add(row.match_id));
+  }
+
+  const novasPartidas = BACKFILL ? allMatchIds : allMatchIds.filter(id => !existentes.has(id));
+  if (BACKFILL) logger(`🔁 [BACKFILL] Reprocessando TODAS as ${novasPartidas.length} partidas.`);
+  else logger(`📈 [BALANÇO] Já no D1: ${existentes.size} | Inéditas: ${novasPartidas.length}`);
+
+  if (novasPartidas.length === 0) {
+    logger('✨ [OK] Banco já atualizado para este jogador.');
+    await queryD1('UPDATE jogadores SET ultima_atualizacao = CURRENT_TIMESTAMP WHERE puuid = ?', [jogador.puuid]);
+    return;
+  }
+
+  // 3) Para cada inédita: CHAMADA DUPLA (resumo + timeline) e extração.
+  let processadas = 0;
+  for (const matchId of novasPartidas) {
+    try {
+      await respeitarRateLimit(logger);
+      const matchData = await fetchFromRiot(`/lol/match/v5/matches/${matchId}`);
+      const info = matchData.info;
+
+      // Metadados globais (patch, modo, fila, bans, objetivos)
+      await queryD1(SQL_PARTIDAS, valoresPartida(matchId, info, montarTeams(info)));
+
+      const participant = info.participants.find(p => p.puuid === jogador.puuid);
+      if (participant) {
+        // Estatísticas consolidadas de fim de jogo (37 colunas) — FK exige isto antes dos marcos.
+        await queryD1(SQL_ESTATISTICAS, valoresEstatisticas(jogador.puuid, matchId, info, participant));
+
+        // Timeline detalhada (+1 request) -> extrai marcos -> descarta o JSON pesado.
+        try {
+          await respeitarRateLimit(logger);
+          const timeline = await fetchFromRiot(`/lol/match/v5/matches/${matchId}/timeline`);
+          const marcos = extrairMarcos(jogador.puuid, matchId, timeline);
+          for (const linha of marcos) {
+            await queryD1(SQL_MARCOS, linha);
+          }
+          logger(`   💾 [${++processadas}/${novasPartidas.length}] ${matchId} | ${participant.championName} | ${marcos.length} marcos (de ${MARCOS_MINUTOS.length})`);
+        } catch (tlErr) {
+          logger(`   ⚠️ Timeline indisponível para ${matchId}: ${tlErr.message} (estatísticas gravadas mesmo assim)`);
+          processadas++;
+        }
+
+        fs.appendFileSync(logPath, `      📊 ${participant.win ? '▶ VITÓRIA' : '❌ DERROTA'} | KDA ${participant.kills}/${participant.deaths}/${participant.assists} | ${participant.goldEarned.toLocaleString('pt-BR')}g\n`);
+      } else {
+        logger(`   ⚠️ Participante ${jogador.game_name} não encontrado em ${matchId} (partida ignorada).`);
+      }
+    } catch (matchError) {
+      logger(`   ❌ Erro na partida ${matchId}: ${matchError.message}`);
+    }
+  }
+
+  await queryD1('UPDATE jogadores SET ultima_atualizacao = CURRENT_TIMESTAMP WHERE puuid = ?', [jogador.puuid]);
+  logger(`\n🎉 [SUCESSO] ${jogador.game_name}: ${processadas} partidas processadas.`);
+}
 
 async function rodarSincronizacao() {
   const fs = await import('fs');
 
-  console.log("=========================================================");
-  console.log("🚀 [SISTEMA] INICIANDO TRATOR DE HISTÓRICO PROFUNDO (1000)");
-  console.log("=========================================================");
-  let totalRequestsFeitas = 0;
+  console.log('=========================================================');
+  console.log(`🚀 [SISTEMA] TRATOR DE MARCOS TEMPORAIS (limite ${LIMITE_PARTIDAS}/jogador)`);
+  console.log('=========================================================');
 
   try {
-    if (!fs.existsSync('logs')) {
-      fs.mkdirSync('logs');
-    }
+    if (!fs.existsSync('logs')) fs.mkdirSync('logs');
 
-    console.log("強 [D1] Baixando a lista de jogadores monitorados...");
-    const dbResult = await queryD1("SELECT puuid, game_name, tag_line FROM jogadores");
-    const jogadores = dbResult.results || [];
-    console.log(`📋 [D1] Sucesso! Encontrado(s) ${jogadores.length} jogador(es) para escanear.`);
+    console.log('🗄️  [D1] Baixando a lista de jogadores monitorados...');
+    const dbResult = await queryD1('SELECT puuid, game_name, tag_line FROM jogadores');
+    const jogadores = ordenarPorPrioridade(dbResult.results || []);
+    console.log(`📋 [D1] ${jogadores.length} jogador(es). Núcleo do time roda primeiro.`);
 
     for (const jogador of jogadores) {
-      console.log(`\n---------------------------------------------------------`);
-      console.log(`⛏️  [ALVO] Iniciando escavação de: ${jogador.game_name}#${jogador.tag_line}`);
-      console.log(`---------------------------------------------------------`);
-      
-      const nomeArquivoClean = `${jogador.game_name.replace(/[^a-zA-Z0-9]/g, '_')}_${jogador.tag_line.replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
-      const logPath = `logs/${nomeArquivoClean}`;
-      
-      fs.writeFileSync(logPath, `=========================================================\n`);
-      fs.appendFileSync(logPath, `📋 RELATÓRIO DE ESCAVAÇÃO DE HISTÓRICO\n`);
-      fs.appendFileSync(logPath, `JOGADOR: ${jogador.game_name}#${jogador.tag_line}\n`);
-      fs.appendFileSync(logPath, `DATA DA OPERAÇÃO: ${new Date().toLocaleString('pt-BR')}\n`);
-      fs.appendFileSync(logPath, `=========================================================\n\n`);
-
-      const loggerhibrido = (texto) => {
-        console.log(texto);
-        fs.appendFileSync(logPath, texto + '\n');
-      };
-
-      let allMatchIds = [];
-
-      for (let start = 0; start < 1000; start += 100) {
-        if (totalRequestsFeitas >= 90) {
-          loggerhibrido("⏳ [ESFRIANDO CHAVE] Quase no limite de 100 reqs. Pausando 2 min...");
-          await sleep(125000);
-          totalRequestsFeitas = 0;
-        }
-
-        const numPagina = (start / 100) + 1;
-        loggerhibrido(`🔍 [Riot API] Buscando Página ${numPagina}/10 (IDs do índice ${start} ao ${start + 100})...`);
-        
-        const chunkIds = await fetchFromRiot(`/lol/match/v5/matches/by-puuid/${jogador.puuid}/ids?start=${start}&count=100`);
-        totalRequestsFeitas++;
-
-        if (!chunkIds || chunkIds.length === 0) {
-          loggerhibrido(`🏁 [FIM DE HISTÓRICO] Riot retornou 0 partidas na página ${numPagina}. Parando coleta de IDs.`);
-          break; 
-        }
-
-        loggerhibrido(`   └─> Sucesso! +${chunkIds.length} IDs capturados.`);
-        allMatchIds = allMatchIds.concat(chunkIds);
-      }
-
-      loggerhibrido(`\n🔹 Total de partidas encontradas na Riot: ${allMatchIds.length}`);
-      if (allMatchIds.length === 0) continue;
-
-      loggerhibrido("📡 [D1] Verificando quais partidas já estão salvas no banco...");
-      const partidasExistentesNoBanco = new Set();
-      
-      for (let i = 0; i < allMatchIds.length; i += 50) {
-        const chunkVerificacao = allMatchIds.slice(i, i + 50);
-        const placeholders = chunkVerificacao.map(() => '?').join(',');
-        
-        const checarBloco = await queryD1(
-          `SELECT match_id FROM partidas WHERE match_id IN (${placeholders})`,
-          chunkVerificacao
-        );
-
-        if (checarBloco.results) {
-          checarBloco.results.forEach(row => partidasExistentesNoBanco.add(row.match_id));
-        }
-      }
-
-      // No modo backfill, reprocessa TUDO para preencher as colunas novas no histórico.
-      const novasPartidas = BACKFILL ? allMatchIds : allMatchIds.filter(id => !partidasExistentesNoBanco.has(id));
-      if (BACKFILL) {
-        loggerhibrido(`🔁 [BACKFILL ATIVO] Reprocessando TODAS as ${novasPartidas.length} partidas (reescreve linhas antigas).`);
-      } else {
-        loggerhibrido(`📈 [BALANÇO] Já gravadas no D1: ${partidasExistentesNoBanco.size} | Inéditas para baixar: ${novasPartidas.length}`);
-      }
-
-      if (novasPartidas.length === 0) {
-        loggerhibrido("✨ [OK] O banco já está 100% atualizado com este jogador. Nenhuma ação necessária.");
-        continue;
-      }
-
-      loggerhibrido(`\n📥 [DOWNLOAD] Baixando dados detalhados das ${novasPartidas.length} partidas novas...`);
-      let processadas = 0;
-
-      for (const matchId of novasPartidas) {
-        if (totalRequestsFeitas >= 90) {
-          loggerhibrido("⏳ [ESFRIANDO CHAVE] Pausando por 2 minutos para evitar erro 429...");
-          await sleep(125000);
-          totalRequestsFeitas = 0;
-        }
-
-        try {
-          const matchData = await fetchFromRiot(`/lol/match/v5/matches/${matchId}`);
-          totalRequestsFeitas++;
-          const info = matchData.info;
-
-          // Estrutura os 10 jogadores + grava metadados globais (patch, modo, bans, objetivos)
-          const teams = montarTeams(info);
-          await queryD1(SQL_PARTIDAS, valoresPartida(matchId, info, teams));
-
-          const participant = info.participants.find(p => p.puuid === jogador.puuid);
-          if (participant) {
-            // Estatísticas completas do jogador (combate, dano, visão, objetivos)
-            await queryD1(SQL_ESTATISTICAS, valoresEstatisticas(jogador.puuid, matchId, info, participant));
-          }
-
-          // 🌟 Timeline bruta (+1 request): ouro/xp por minuto, ordem de itens, eventos
-          try {
-            const tl = await fetchFromRiot(`/lol/match/v5/matches/${matchId}/timeline`);
-            totalRequestsFeitas++;
-            await queryD1(SQL_TIMELINE, valoresTimeline(matchId, tl));
-          } catch (tlErr) {
-            loggerhibrido(`   ⚠️ Timeline indisponível para ${matchId}: ${tlErr.message}`);
-          }
-
-
-          processadas++;
-          loggerhibrido(`   💾 [PROGRESSO: ${processadas}/${novasPartidas.length}] Guardada: ${matchId} | Campeão: ${participant?.championName || 'N/A'}`);
-          
-          if (participant) {
-            fs.appendFileSync(logPath, `      📊 [DADOS TÁTICOS GRAVADOS]:\n`);
-            fs.appendFileSync(logPath, `         - Resultado: ${participant.win ? '▶ VITÓRIA' : '❌ DERROTA'}\n`);
-            fs.appendFileSync(logPath, `         - KDA Final: ${participant.kills} / ${participant.deaths} / ${participant.assists}\n`);
-            fs.appendFileSync(logPath, `         - Ouro Acumulado: ${participant.goldEarned.toLocaleString('pt-BR')}g\n`);
-            fs.appendFileSync(logPath, `         - Build Final (IDs): [${[participant.item0, participant.item1, participant.item2, participant.item3, participant.item4, participant.item5].join(', ')}]\n`);
-            fs.appendFileSync(logPath, `         -----------------------------------------------------\n`);
-          }
-        } catch (matchError) {
-          loggerhibrido(`   ❌ Erro ao baixar dados da partida ${matchId}: ${matchError.message}`);
-          continue; 
-        }
-      }
-
-      await queryD1("UPDATE jogadores SET ultima_atualizacao = CURRENT_TIMESTAMP WHERE puuid = ?", [jogador.puuid]);
-      loggerhibrido(`\n🎉 [SUCESSO] Todo o histórico disponível de ${jogador.game_name} foi sincronizado!`);
+      await processarJogador(jogador, fs);
     }
 
-    console.log("\n=========================================================");
-    console.log("✅ [FINALIZADO] O trator encerrou a rodada com sucesso!");
-    console.log("=========================================================");
+    console.log('\n=========================================================');
+    console.log('✅ [FINALIZADO] O trator encerrou a rodada com sucesso!');
+    console.log('=========================================================');
   } catch (error) {
-    console.error("\n❌ [FALHA CRÍTICA] O motor engasgou por um erro externo:", error.message);
+    console.error('\n❌ [FALHA CRÍTICA] O motor engasgou por um erro externo:', error.message);
+    process.exit(1);
   }
 }
 
