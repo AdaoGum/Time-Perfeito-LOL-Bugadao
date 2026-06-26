@@ -304,8 +304,31 @@
         </div>
       </div>
 
+      <!-- SELETOR DE VISÃO: HISTÓRICO DE PARTIDAS x ANÁLISE DO JOGADOR -->
+      <div class="flex gap-2 rounded-xl border border-slate-800 bg-slate-900/80 p-1.5 shadow-xl">
+        <button
+          type="button"
+          @click="profileView = 'historico'"
+          class="flex-1 rounded-lg px-4 py-2.5 text-sm font-bold transition-all"
+          :class="profileView === 'historico' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
+        >
+          📜 Histórico de Partidas
+        </button>
+        <button
+          type="button"
+          @click="profileView = 'analise'"
+          class="flex-1 rounded-lg px-4 py-2.5 text-sm font-bold transition-all"
+          :class="profileView === 'analise' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
+        >
+          📊 Análise do Jogador
+        </button>
+      </div>
+
+      <!-- ABA: ANÁLISE DO JOGADOR (gráficos, radar, tags e filtros) -->
+      <PlayerAnalysis v-if="profileView === 'analise'" />
+
       <!-- HISTÓRICO DE PARTIDAS EM FORMATO GRID FLEXÍVEL LADO A LADO -->
-      <section class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
+      <section v-show="profileView === 'historico'" class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
         <div class="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h3 class="text-xl font-bold text-slate-100">Histórico de Partidas</h3>
           
@@ -501,8 +524,12 @@ import { championImage, profileIconImage, itemImage, calculateKdaRatio, formatDu
 import { loadProfileIntoStore } from '../api.js';
 import SearchGate from './SearchGate.vue';
 import RadarChart from './RadarChart.vue';
+import PlayerAnalysis from './PlayerAnalysis.vue';
 
 const store = state;
+
+// Visão de nível superior do perfil: histórico de partidas x análise aprofundada
+const profileView = ref('historico');
 const route = useRoute();
 const router = useRouter();
 

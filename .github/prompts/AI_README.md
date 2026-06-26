@@ -1,33 +1,36 @@
-# 🗺️ Mapa de Contexto Técnico - Time Perfeito LoL (Uga Buga Analytics)
+# 🗺️ Mapa de Contexto Técnico - bUGAdão Analytics (Time Perfeito LoL)
 
-Este documento serve como fonte única de verdade (SSOT) de contexto para Modelos de Linguagem (LLMs), Copilots e assistentes de código. Ele descreve a arquitetura do projeto e estabelece regras restritas para evitar quebras de build no Vite ou regressões lógicas.
-
----
-
-## 🛠️ Stack Tecnológica & Infraestrutura
-- **Frontend:** Vue 3 (Composition API com `<script setup>`) + Vite + Tailwind CSS.
-- **Roteamento Interno:** Atualmente gerenciado via estado reativo de abas (`state.currentTab` na store). Não utiliza Vue Router ainda.
-- **Estado Global:** Objeto reativo nativo do Vue em `src/store.js` (Não utiliza Pinia ou Vuex).
-- **Backend/API:** Cloudflare Worker (`worker.js`) consumindo diretamente a API Oficial da Riot Games (Rotas Americas e BR1).
+Este documento é a Fonte Única de Verdade (SSOT) de contexto técnico para Modelos de Linguagem (LLMs), Copilots, Cursor e agentes de IA. Ele descreve detalhadamente a arquitetura atualizada do ecossistema, regras de negócio e o modelo relacional de banco de dados para evitar alucinações, quebras de build ou regressões lógicas.
 
 ---
 
-## 📂 Árvore de Diretórios e Fluxo de Dependências
+## 🛠️ 1. Stack Tecnológica & Infraestrutura
+
+- **Frontend:** Vue 3 (Composition API com `<script setup>`) + Vite + Tailwind CSS v4.
+- **Roteamento Interno:** Gerenciado via estado reativo de abas (`state.currentTab` na store global) ou integrado nativamente com `vue-router` conforme regras do `AI_ROUTING_PLANNER.md`.
+- **Estado Global:** Objeto reativo nativo do Vue em `src/store.js`. **PROIBIDO** introduzir Pinia, Vuex ou outras dependências de estado sem autorização.
+- **Backend/API:** Cloudflare Worker (`worker.js`) atuando como Proxy Reverso Seguro. Protege a `RIOT_API_KEY`, gerencia o CORS e centraliza requisições para as rotas da Riot Games (`br1` e `americas`).
+- **Banco de Dados:** Cloudflare D1 (Motor SQLite nativo serverless de alta performance).
+- **Automação/Ingestão:** GitHub Actions rodando o script "Trator da Madrugada" (`cron/sync.js`).
+
+---
+
+## 📂 2. Árvore de Diretórios e Fluxo de Dependências
 
 ```text
 raiz-do-projeto/
-├── assets/                     # Pasta de recursos estáticos na raiz (brasões de elo)
-├── src/                        # Código fonte da aplicação Vue
+├── assets/                     # Recursos estáticos de imagem (Brasões de elo, etc.)
+├── src/                        # Código-fonte da aplicação Vue
 │   ├── components/             # Componentes modulares da interface
-│   │   ├── Home.vue            # Templo Ancestral (Homepage com as 4 posturas do Udyr)
-│   │   ├── Profile.vue         # Caçada (Painel principal do jogador e histórico avançado)
-│   │   ├── ProfileCard.Vue     # Card persistente flutuante (Superior Esquerdo)
-│   │   ├── Mastery.vue         # Caverna Monos (Painel tático de maestrias e rankings)
-│   │   ├── Synergy.vue         # Tribo Perfeita (Simulador de composições e rotas)
-│   │   └── SearchBar.vue       # Barra de busca global com monitor de telemetria
-│   ├── App.vue                 # Orquestrador da Interface, Overlays, Widgets e Animações
+│   │   ├── Home.vue            # Templo Ancestral (Homepage com as posturas do Udyr)
+│   │   ├── Profile.vue         # Caçada (Painel do jogador, histórico e abas Solo/Flex/Outros)
+│   │   ├── Mastery.vue         # Caverna dos Monos (Grades de maestrias e tooltips)
+│   │   └── Tribo.vue           # Planejador de Equipes (Sinergia Engine v2 e Lobbies 5v5)
+│   ├── App.vue                 # Orquestrador da Interface, Overlays e Widgets
 │   ├── store.js                # Estado global compartilhado reativo (state)
 │   ├── api.js                  # Handler assíncrono de requisições para o Worker
-│   ├── utils.js                # Helpers de imagens do DDragon, constantes de versão e KDA
-│   └── main.js                 # Inicializador padrão da aplicação Vue 3
-└── worker.js                   # Código JavaScript implantado na infraestrutura Cloudflare
+│   └── utils.js                # Helpers do Data Dragon, conversão de KDA e tempo
+├── cron/
+│   └── sync.js                 # O "Trator" (Script oficial de sincronização da madrugada)
+├── worker.js                   # Back-end oficial rodando na Cloudflare (Proxy + D1 SQL)
+└── AI_README.md                # Este documento (Contexto do Agente de IA)
