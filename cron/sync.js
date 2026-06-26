@@ -33,6 +33,64 @@ async function fetchFromRiot(endpoint) {
   return response.json();
 }
 
+// Modo backfill: BACKFILL=1 re-baixa TODAS as partidas (mesmo as já salvas)
+// e reescreve as linhas via INSERT OR REPLACE, preenchendo as colunas novas
+// no histórico antigo. Sem a flag, só baixa partidas inéditas (rápido/diário).
+const BACKFILL = process.env.BACKFILL === '1' || process.env.BACKFILL === 'true';
+
+// ----------------------------------------------------------------------
+// EXTRAÇÃO ANALÍTICA (match-v5) — espelha exatamente o worker.js
+// ----------------------------------------------------------------------
+const SQL_PARTIDAS =
+  "INSERT OR REPLACE INTO partidas (match_id, game_duration, game_creation, participants, game_version, game_mode, game_type, bans, team_objectives) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+function valoresPartida(matchId, info, teams) {
+  const bans = JSON.stringify((info.teams || []).map(t => ({ teamId: t.teamId, bans: t.bans || [] })));
+  const objetivos = JSON.stringify((info.teams || []).map(t => ({ teamId: t.teamId, objectives: t.objectives || {} })));
+  return [matchId, info.gameDuration, info.gameCreation, JSON.stringify(teams), info.gameVersion ?? null, info.gameMode ?? null, info.gameType ?? null, bans, objetivos];
+}
+
+const SQL_ESTATISTICAS = `
+  INSERT OR REPLACE INTO estatisticas_jogador_partida
+  (puuid, match_id, champion_name, champion_id, kills, deaths, assists, win, gold_earned, items,
+   team_position, queue_id, game_creation, cs, game_duration,
+   vision_score, control_wards, solo_kills, damage_champions, gold_per_min, kill_participation,
+   summoner1_id, summoner2_id, perk_keystone, perk_secondary_style, challenges,
+   double_kills, triple_kills, quadra_kills, penta_kills, largest_multi_kill,
+   physical_damage_champions, magic_damage_champions, true_damage_champions, damage_taken, damage_mitigated,
+   total_heal, total_heal_teammates, damage_shielded_teammates, time_ccing_others,
+   wards_placed, wards_killed, detector_wards_placed,
+   dragon_kills, baron_kills, turret_kills, inhibitor_kills, damage_objectives, objectives_stolen,
+   total_time_spent_dead, longest_time_living, champ_level,
+   game_ended_surrender, game_ended_early_surrender)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`;
+
+function valoresEstatisticas(puuid, matchId, info, participant) {
+  const ch = participant.challenges || {};
+  const cs = (participant.totalMinionsKilled || 0) + (participant.neutralMinionsKilled || 0);
+  const keystone = participant.perks?.styles?.[0]?.selections?.[0]?.perk ?? null;
+  const secondaryStyle = participant.perks?.styles?.[1]?.style ?? null;
+  return [
+    puuid, matchId, participant.championName, participant.championId ?? null,
+    participant.kills, participant.deaths, participant.assists, participant.win ? 1 : 0, participant.goldEarned,
+    JSON.stringify([participant.item0, participant.item1, participant.item2, participant.item3, participant.item4, participant.item5]),
+    participant.teamPosition || "", info.queueId, info.gameCreation, cs, info.gameDuration,
+    participant.visionScore ?? null, participant.visionWardsBoughtInGame ?? null, ch.soloKills ?? null,
+    participant.totalDamageDealtToChampions ?? null, ch.goldPerMinute ?? null, ch.killParticipation ?? null,
+    participant.summoner1Id ?? null, participant.summoner2Id ?? null, keystone, secondaryStyle, JSON.stringify(ch),
+    participant.doubleKills ?? 0, participant.tripleKills ?? 0, participant.quadraKills ?? 0, participant.pentaKills ?? 0, participant.largestMultiKill ?? 0,
+    participant.physicalDamageDealtToChampions ?? null, participant.magicDamageDealtToChampions ?? null, participant.trueDamageDealtToChampions ?? null,
+    participant.totalDamageTaken ?? null, participant.damageSelfMitigated ?? null,
+    participant.totalHeal ?? null, participant.totalHealsOnTeammates ?? null, participant.totalDamageShieldedOnTeammates ?? null, participant.timeCCingOthers ?? null,
+    participant.wardsPlaced ?? null, participant.wardsKilled ?? null, participant.detectorWardsPlaced ?? null,
+    participant.dragonKills ?? null, participant.baronKills ?? null, participant.turretKills ?? null, participant.inhibitorKills ?? null,
+    participant.damageDealtToObjectives ?? null, participant.objectivesStolen ?? null,
+    participant.totalTimeSpentDead ?? null, participant.longestTimeSpentLiving ?? null, participant.champLevel ?? null,
+    participant.gameEndedInSurrender ? 1 : 0, participant.gameEndedInEarlySurrender ? 1 : 0
+  ];
+}
+
 async function rodarSincronizacao() {
   const fs = await import('fs');
 
@@ -114,8 +172,13 @@ async function rodarSincronizacao() {
         }
       }
 
-      const novasPartidas = allMatchIds.filter(id => !partidasExistentesNoBanco.has(id));
-      loggerhibrido(`📈 [BALANÇO] Já gravadas no D1: ${partidasExistentesNoBanco.size} | Inéditas para baixar: ${novasPartidas.length}`);
+      // No modo backfill, reprocessa TUDO para preencher as colunas novas no histórico.
+      const novasPartidas = BACKFILL ? allMatchIds : allMatchIds.filter(id => !partidasExistentesNoBanco.has(id));
+      if (BACKFILL) {
+        loggerhibrido(`🔁 [BACKFILL ATIVO] Reprocessando TODAS as ${novasPartidas.length} partidas (reescreve linhas antigas).`);
+      } else {
+        loggerhibrido(`📈 [BALANÇO] Já gravadas no D1: ${partidasExistentesNoBanco.size} | Inéditas para baixar: ${novasPartidas.length}`);
+      }
 
       if (novasPartidas.length === 0) {
         loggerhibrido("✨ [OK] O banco já está 100% atualizado com este jogador. Nenhuma ação necessária.");
@@ -135,9 +198,10 @@ async function rodarSincronizacao() {
         try {
           const matchData = await fetchFromRiot(`/lol/match/v5/matches/${matchId}`);
           totalRequestsFeitas++;
+          const info = matchData.info;
 
           // 🌟 MUDANÇA: Estrutura os 10 jogadores aqui igualzinho ao worker do back-end
-          const teams = matchData.info.participants.map(p => ({
+          const teams = info.participants.map(p => ({
             gameName: p.riotIdGameName || p.summonerName,
             tagLine: p.riotIdTagline,
             championName: p.championName,
@@ -146,47 +210,28 @@ async function rodarSincronizacao() {
             role: p.teamPosition
           }));
 
-          // 🌟 MUDANÇA: Insere na tabela 'partidas' incluindo os participantes estruturados
-          await queryD1(
-            "INSERT OR IGNORE INTO partidas (match_id, game_duration, game_creation, participants) VALUES (?, ?, ?, ?)",
-            [matchId, matchData.info.gameDuration, matchData.info.gameCreation, JSON.stringify(teams)]
-          );
+          // Metadados globais (patch, modo, bans, objetivos dos times)
+          await queryD1(SQL_PARTIDAS, valoresPartida(matchId, info, teams));
 
-          const participant = matchData.info.participants.find(p => p.puuid === jogador.puuid);
+          const participant = info.participants.find(p => p.puuid === jogador.puuid);
           if (participant) {
-            // 🌟 Grava também team_position, queue_id, game_creation, cs e game_duration
-            // (necessário para proficiência por rota e companheiros por fila no histórico profundo)
-            const cs = (participant.totalMinionsKilled || 0) + (participant.neutralMinionsKilled || 0);
-
-            // 🌟 FASE 2: campos analíticos (mesma extração usada no worker.js)
-            const ch = participant.challenges || {};
-            const keystone = participant.perks?.styles?.[0]?.selections?.[0]?.perk ?? null;
-            const secondaryStyle = participant.perks?.styles?.[1]?.style ?? null;
-
-            await queryD1(
-              `INSERT OR IGNORE INTO estatisticas_jogador_partida
-              (puuid, match_id, champion_name, kills, deaths, assists, win, gold_earned, items, team_position, queue_id, game_creation, cs, game_duration,
-               vision_score, control_wards, solo_kills, damage_champions, gold_per_min, kill_participation, summoner1_id, summoner2_id, perk_keystone, perk_secondary_style)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [
-                jogador.puuid, matchId, participant.championName, participant.kills, participant.deaths, participant.assists,
-                participant.win ? 1 : 0, participant.goldEarned,
-                JSON.stringify([participant.item0, participant.item1, participant.item2, participant.item3, participant.item4, participant.item5]),
-                participant.teamPosition || "", matchData.info.queueId, matchData.info.gameCreation, cs, matchData.info.gameDuration,
-                participant.visionScore ?? null,
-                participant.visionWardsBoughtInGame ?? null,
-                ch.soloKills ?? null,
-                participant.totalDamageDealtToChampions ?? null,
-                ch.goldPerMinute ?? null,
-                ch.killParticipation ?? null,
-                participant.summoner1Id ?? null,
-                participant.summoner2Id ?? null,
-                keystone,
-                secondaryStyle
-              ]
-            );
+            // Estatísticas completas do jogador (combate, dano, visão, objetivos)
+            await queryD1(SQL_ESTATISTICAS, valoresEstatisticas(jogador.puuid, matchId, info, participant));
           }
-          
+
+          // 🌟 Timeline bruta (+1 request): ouro/xp por minuto, ordem de itens, eventos
+          try {
+            const tl = await fetchFromRiot(`/lol/match/v5/matches/${matchId}/timeline`);
+            totalRequestsFeitas++;
+            await queryD1(
+              "INSERT OR REPLACE INTO partidas_timeline (match_id, frame_interval, timeline_json, atualizado) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+              [matchId, tl?.info?.frameInterval ?? null, JSON.stringify(tl?.info ?? {})]
+            );
+          } catch (tlErr) {
+            loggerhibrido(`   ⚠️ Timeline indisponível para ${matchId}: ${tlErr.message}`);
+          }
+
+
           processadas++;
           loggerhibrido(`   💾 [PROGRESSO: ${processadas}/${novasPartidas.length}] Guardada: ${matchId} | Campeão: ${participant?.championName || 'N/A'}`);
           
