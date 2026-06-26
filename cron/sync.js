@@ -2,8 +2,8 @@
 // TRATOR DA MADRUGADA — Ingestão + Processamento unificados (Marcos Temporais).
 //
 // Papel duplo e definitivo:
-//   1) Ingestão: para cada jogador, baixa as ÚLTIMAS 100 partidas (limite de
-//      segurança contra estouro do D1) e detecta as inéditas.
+//   1) Ingestão: para cada jogador, baixa as ÚLTIMAS 500 partidas (paginando
+//      a Riot de 100 em 100) e detecta as inéditas.
 //   2) Processamento: para cada partida inédita faz a CHAMADA DUPLA à Riot
 //      (resumo + timeline), grava metadados + estatísticas de fim de jogo e
 //      extrai os Marcos Temporais (52 colunas) nos minutos [0,5,10,15,25].
@@ -12,8 +12,8 @@
 // Ordem de prioridade: os 5 PUUIDs do NÚCLEO DO TIME rodam primeiro; os demais
 // jogadores cadastrados são processados sequencialmente em seguida.
 //
-// BACKFILL=1 reprocessa TODAS as 100 partidas (reescreve linhas via INSERT OR
-// REPLACE), útil para preencher colunas novas no histórico recente.
+// BACKFILL=1 reprocessa TODAS as partidas baixadas (reescreve linhas via INSERT
+// OR REPLACE), útil para preencher colunas novas no histórico recente.
 // ============================================================================
 
 import {
@@ -28,7 +28,8 @@ const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 const D1_DATABASE_ID = process.env.D1_DATABASE_ID;
 
 const REGION_ROUTE = 'americas';
-const LIMITE_PARTIDAS = 100; // 🔒 Limite de segurança: só as 100 últimas por jogador
+const LIMITE_PARTIDAS = 500; // 🔒 Limite de segurança: até as 500 últimas por jogador
+const PAGINA_IDS = 100;      // A Riot devolve no máx. 100 ids por chamada -> paginamos
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // 🌟 NÚCLEO DO TIME — sempre processados PRIMEIRO, nesta ordem.
@@ -114,12 +115,19 @@ async function processarJogador(jogador, fs) {
     fs.appendFileSync(logPath, texto + '\n');
   };
 
-  // 1) Últimas 100 partidas (uma única página — limite de segurança).
-  await respeitarRateLimit(logger);
-  logger(`🔍 [Riot API] Buscando as últimas ${LIMITE_PARTIDAS} partidas...`);
-  const allMatchIds = await fetchFromRiot(`/lol/match/v5/matches/by-puuid/${jogador.puuid}/ids?start=0&count=${LIMITE_PARTIDAS}`);
+  // 1) Últimas 500 partidas (a Riot limita a 100 ids por chamada, então paginamos).
+  logger(`🔍 [Riot API] Buscando as últimas ${LIMITE_PARTIDAS} partidas (paginando de ${PAGINA_IDS} em ${PAGINA_IDS})...`);
+  const allMatchIds = [];
+  for (let start = 0; start < LIMITE_PARTIDAS; start += PAGINA_IDS) {
+    await respeitarRateLimit(logger);
+    const count = Math.min(PAGINA_IDS, LIMITE_PARTIDAS - start);
+    const pagina = await fetchFromRiot(`/lol/match/v5/matches/by-puuid/${jogador.puuid}/ids?start=${start}&count=${count}`);
+    if (!pagina || pagina.length === 0) break; // acabou o histórico do jogador
+    allMatchIds.push(...pagina);
+    if (pagina.length < count) break; // última página (jogador tem menos que o limite)
+  }
   logger(`🔹 Partidas retornadas pela Riot: ${allMatchIds.length}`);
-  if (!allMatchIds || allMatchIds.length === 0) return;
+  if (allMatchIds.length === 0) return;
 
   // 2) Quais já estão no banco (para baixar só as inéditas).
   const existentes = new Set();
