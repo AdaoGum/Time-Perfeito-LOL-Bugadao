@@ -1,21 +1,33 @@
 // ============================================================================
-// BACKFILL — preenche os campos analíticos (vision_score, control_wards,
-// solo_kills, damage_champions, gold_per_min, kill_participation, summoner1/2_id,
-// perk_keystone, perk_secondary_style) nas partidas JÁ gravadas que estão NULL.
+// BACKFILL COMPLETO — preenche o histórico antigo com TODOS os campos novos:
+//   • team_position (corrige o balde "Outro" no front)
+//   • colunas da migration 002 (champion_id, challenges, multikills, dano
+//     detalhado, objetivos, sobrevivência, surrender, etc.)
+//   • metadados da partida (game_version, game_mode, bans, team_objectives)
+//   • timeline bruta (ouro/xp por minuto, ordem de itens) — salvo se faltar
+//
+// Marcador de "linha antiga": champion_id IS NULL. Toda linha gravada pelo código
+// novo tem champion_id; as antigas (anteriores à migration 002) estão NULL.
 //
 // Como rodar:
 //   RIOT_API_KEY=... CLOUDFLARE_ACCOUNT_ID=... CLOUDFLARE_API_TOKEN=... D1_DATABASE_ID=... \
 //   node cron/backfill.js
+//   (SKIP_TIMELINE=1 pula a coleta de timeline -> metade das requests, mais rápido)
 // (ou via GitHub Actions: .github/workflows/backfill.yaml, gatilho manual)
 //
-// Estratégia: re-baixa cada match_id ÚNICO uma só vez e dá UPDATE em todas as
-// linhas (puuids) daquela partida. Respeita o rate limit como o sync.js.
+// Estratégia: re-baixa cada match_id ÚNICO uma só vez e reescreve as linhas de
+// todos os puuids daquela partida via INSERT OR REPLACE. Respeita o rate limit.
+// Partidas que a Riot já expurgou retornam 404 e são contadas como falha (o dado
+// não existe mais; o front já ignora esses jogos na contagem de rotas).
 // ============================================================================
+
+import { SQL_PARTIDAS, valoresPartida, montarTeams, SQL_ESTATISTICAS, valoresEstatisticas, SQL_TIMELINE, valoresTimeline } from './lib/match-extract.js';
 
 const RIOT_API_KEY = process.env.RIOT_API_KEY;
 const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
 const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 const D1_DATABASE_ID = process.env.D1_DATABASE_ID;
+const SKIP_TIMELINE = process.env.SKIP_TIMELINE === '1' || process.env.SKIP_TIMELINE === 'true';
 
 const REGION_ROUTE = 'americas';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -55,40 +67,24 @@ async function fetchFromRiot(endpoint) {
   return response.json();
 }
 
-function extrairAnaliticos(participant) {
-  const ch = participant.challenges || {};
-  return {
-    vision_score: participant.visionScore ?? null,
-    control_wards: participant.visionWardsBoughtInGame ?? null,
-    solo_kills: ch.soloKills ?? null,
-    damage_champions: participant.totalDamageDealtToChampions ?? null,
-    gold_per_min: ch.goldPerMinute ?? null,
-    kill_participation: ch.killParticipation ?? null,
-    summoner1_id: participant.summoner1Id ?? null,
-    summoner2_id: participant.summoner2Id ?? null,
-    perk_keystone: participant.perks?.styles?.[0]?.selections?.[0]?.perk ?? null,
-    perk_secondary_style: participant.perks?.styles?.[1]?.style ?? null
-  };
-}
-
 async function rodarBackfill() {
   console.log('=========================================================');
-  console.log('🩹 [BACKFILL] Preenchendo campos analíticos faltantes...');
+  console.log('🩹 [BACKFILL COMPLETO] Reescrevendo histórico antigo...');
+  console.log(`   Timeline: ${SKIP_TIMELINE ? 'PULADA (SKIP_TIMELINE)' : 'incluída'}`);
   console.log('=========================================================');
 
-  // Linhas que ainda não têm os dados (qualquer campo-chave NULL)
+  // Linhas anteriores à migration 002 (champion_id ainda NULL).
   const pendentes = await queryD1(
-    `SELECT puuid, match_id FROM estatisticas_jogador_partida
-     WHERE vision_score IS NULL OR summoner1_id IS NULL OR perk_keystone IS NULL`
+    `SELECT puuid, match_id FROM estatisticas_jogador_partida WHERE champion_id IS NULL`
   );
   const linhas = pendentes.results || [];
-  console.log(`📋 Linhas pendentes: ${linhas.length}`);
+  console.log(`📋 Linhas pendentes (champion_id NULL): ${linhas.length}`);
   if (!linhas.length) {
-    console.log('✨ Nada a fazer. Todos os campos já estão preenchidos.');
+    console.log('✨ Nada a fazer. Histórico já está completo.');
     return;
   }
 
-  // Agrupa por match_id -> conjunto de puuids que precisam de update
+  // Agrupa por match_id -> conjunto de puuids daquela partida que precisam de update
   const porPartida = new Map();
   for (const { puuid, match_id } of linhas) {
     if (!porPartida.has(match_id)) porPartida.set(match_id, new Set());
@@ -96,30 +92,47 @@ async function rodarBackfill() {
   }
   console.log(`🎯 Partidas únicas para re-baixar: ${porPartida.size}`);
 
-  let feitas = 0, atualizadas = 0, falhas = 0;
+  // Timelines que já existem (pra não re-baixar à toa)
+  const timelinesExistentes = new Set();
+  if (!SKIP_TIMELINE) {
+    try {
+      const tl = await queryD1(`SELECT match_id FROM partidas_timeline`);
+      (tl.results || []).forEach((r) => timelinesExistentes.add(r.match_id));
+    } catch (e) { /* tabela pode não existir ainda */ }
+  }
+
+  let feitas = 0, atualizadas = 0, falhas = 0, timelines = 0;
   for (const [matchId, puuids] of porPartida) {
     feitas++;
     try {
       const matchData = await fetchFromRiot(`/lol/match/v5/matches/${matchId}`);
+      const info = matchData.info;
+
+      // Metadados globais da partida (patch, modo, bans, objetivos)
+      await queryD1(SQL_PARTIDAS, valoresPartida(matchId, info, montarTeams(info)));
+
+      // Reescreve a linha de cada puuid daquela partida
       for (const puuid of puuids) {
-        const participant = matchData.info.participants.find((p) => p.puuid === puuid);
+        const participant = info.participants.find((p) => p.puuid === puuid);
         if (!participant) continue;
-        const a = extrairAnaliticos(participant);
-        await queryD1(
-          `UPDATE estatisticas_jogador_partida
-           SET vision_score = ?, control_wards = ?, solo_kills = ?, damage_champions = ?,
-               gold_per_min = ?, kill_participation = ?, summoner1_id = ?, summoner2_id = ?,
-               perk_keystone = ?, perk_secondary_style = ?
-           WHERE puuid = ? AND match_id = ?`,
-          [
-            a.vision_score, a.control_wards, a.solo_kills, a.damage_champions,
-            a.gold_per_min, a.kill_participation, a.summoner1_id, a.summoner2_id,
-            a.perk_keystone, a.perk_secondary_style, puuid, matchId
-          ]
-        );
+        await queryD1(SQL_ESTATISTICAS, valoresEstatisticas(puuid, matchId, info, participant));
         atualizadas++;
       }
-      if (feitas % 75 === 0) console.log(`   ⏱️  Progresso: ${feitas}/${porPartida.size} partidas | ${atualizadas} linhas atualizadas`);
+
+      // Timeline (+1 request) — só se ainda não temos
+      if (!SKIP_TIMELINE && !timelinesExistentes.has(matchId)) {
+        try {
+          const tl = await fetchFromRiot(`/lol/match/v5/matches/${matchId}/timeline`);
+          await queryD1(SQL_TIMELINE, valoresTimeline(matchId, tl));
+          timelines++;
+        } catch (tlErr) {
+          console.warn(`   ⚠️ Timeline indisponível para ${matchId}: ${tlErr.message}`);
+        }
+      }
+
+      if (feitas % 50 === 0) {
+        console.log(`   ⏱️  Progresso: ${feitas}/${porPartida.size} partidas | ${atualizadas} linhas | ${timelines} timelines | ${falhas} falhas`);
+      }
     } catch (err) {
       falhas++;
       console.warn(`   ❌ Falha na partida ${matchId}: ${err.message}`);
@@ -127,7 +140,7 @@ async function rodarBackfill() {
   }
 
   console.log('=========================================================');
-  console.log(`✅ [FIM] Partidas processadas: ${feitas} | Linhas atualizadas: ${atualizadas} | Falhas: ${falhas}`);
+  console.log(`✅ [FIM] Partidas: ${feitas} | Linhas reescritas: ${atualizadas} | Timelines: ${timelines} | Falhas (404/expurgadas): ${falhas}`);
   console.log('=========================================================');
 }
 
