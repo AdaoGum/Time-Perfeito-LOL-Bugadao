@@ -62,7 +62,7 @@
 
           <button v-if="hasActiveFilters" type="button" @click="resetFilters"
             class="rounded-md border border-slate-700 bg-slate-950 px-3 py-1 text-[11px] font-bold text-amber-300 transition hover:bg-slate-800">
-            ✕ Limpar filtros
+            <i class="fa-solid fa-xmark mr-1"></i> Limpar filtros
           </button>
         </div>
       </div>
@@ -70,14 +70,14 @@
 
     <!-- ===================== ESTADO VAZIO ===================== -->
     <div v-if="!agg" class="rounded-2xl border border-slate-800 bg-slate-900/80 p-10 text-center">
-      <p class="text-3xl mb-2">🦴</p>
+      <p class="mb-2 text-3xl text-slate-500"><i class="fa-solid fa-bone"></i></p>
       <p class="font-bold text-slate-300">Nenhuma partida para os filtros selecionados.</p>
       <p class="text-xs text-slate-500 mt-1">Os ancestrais ainda estão sincronizando o histórico — ele se enche durante a busca da madrugada.</p>
     </div>
 
     <template v-else>
-      <!-- ===================== CARDS DE RESUMO ===================== -->
-      <section class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+      <!-- ===================== CARDS DE RESUMO (5 em cima, 5 embaixo) ===================== -->
+      <section class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <div class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 text-center">
           <div class="text-2xl font-black" :class="agg.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ agg.winRate }}%</div>
           <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Win Rate</div>
@@ -93,8 +93,20 @@
           <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">CS / min</div>
         </div>
         <div class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 text-center">
+          <div class="text-2xl font-black text-cyan-300">{{ agg.primaryRole }}</div>
+          <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Rota Principal</div>
+        </div>
+        <div class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 text-center">
           <div class="text-2xl font-black text-teal-300">{{ agg.kp }}%</div>
           <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Participação</div>
+        </div>
+        <div class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 text-center">
+          <div class="text-2xl font-black text-slate-200">{{ agg.avgKills }}</div>
+          <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Abates / jogo</div>
+        </div>
+        <div class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 text-center">
+          <div class="text-2xl font-black text-slate-200">{{ agg.avgDeaths }}</div>
+          <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Mortes / jogo</div>
         </div>
         <div class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 text-center">
           <div class="text-2xl font-black text-indigo-300">{{ agg.avgVision }}</div>
@@ -108,41 +120,50 @@
           <div class="text-2xl font-black text-rose-300">{{ formatK(agg.avgDmg) }}</div>
           <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Dano / jogo</div>
         </div>
-        <div class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 text-center">
-          <div class="text-2xl font-black text-slate-200">{{ agg.distinctChamps }}</div>
-          <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Campeões</div>
-        </div>
       </section>
 
       <!-- ===================== TAGS ===================== -->
       <section v-if="tags.length" class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl">
-        <h3 class="mb-3 text-sm font-bold text-slate-100">🏷️ O que define este jogador</h3>
+        <h3 class="mb-3 flex items-center gap-2 text-sm font-bold text-slate-100"><i class="fa-solid fa-tags text-slate-400"></i> O que define este jogador</h3>
         <div class="flex flex-wrap gap-2">
           <span v-for="tag in tags" :key="tag.label"
             class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold" :class="tag.cls">
-            <span>{{ tag.icon }}</span>{{ tag.label }}
+            <i :class="tag.icon"></i>{{ tag.label }}
           </span>
         </div>
       </section>
 
-      <!-- ===================== GRÁFICO 1 e 2: RADAR + DONUT DE ROTAS ===================== -->
-      <div class="grid gap-4 lg:grid-cols-2">
+      <!-- ===== LINHA A: TOP ROTAS | DISTRIBUIÇÃO POR ROTA | EVOLUÇÃO ===== -->
+      <div class="grid gap-4 lg:grid-cols-3 items-stretch">
 
-        <!-- Radar GPI -->
+        <!-- Top Rotas (vitórias x derrotas por rota) -->
         <section class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl">
-          <h3 class="mb-1 text-sm font-bold text-slate-100">📡 Perfil de Jogo (GPI)</h3>
-          <p class="mb-3 text-[11px] text-slate-500">Pontos fortes e fracos normalizados de 0 a 100 dentro da amostra atual.</p>
-          <div class="mx-auto w-full max-w-[280px]">
-            <RadarChart :axes="radar" :size="260" color="#38bdf8" />
+          <h3 class="mb-1 flex items-center gap-2 text-sm font-bold text-slate-100"><i class="fa-solid fa-route text-emerald-400"></i> Top Rotas</h3>
+          <p class="mb-3 text-[11px] text-slate-500">Vitórias x derrotas por posição na amostra.</p>
+          <div v-if="roleBars.length">
+            <div class="flex h-32 items-stretch justify-around gap-2 px-2">
+              <div v-for="r in roleBars" :key="r.role" class="flex h-full flex-1 items-end justify-center gap-1">
+                <div class="w-3 rounded-t bg-emerald-500" :style="{ height: `${Math.max(4, (r.wins / maxRoleGames) * 100)}%` }" :title="`${r.wins} vitórias`"></div>
+                <div class="w-3 rounded-t bg-rose-500" :style="{ height: `${Math.max(4, (r.losses / maxRoleGames) * 100)}%` }" :title="`${r.losses} derrotas`"></div>
+              </div>
+            </div>
+            <div class="mt-1 flex justify-around gap-2 border-t border-dashed border-slate-700 px-2 pt-2">
+              <div v-for="r in roleBars" :key="r.role" class="flex flex-1 flex-col items-center gap-0.5">
+                <img :src="miniRoleIcon(r.role)" class="h-4 w-4 opacity-90 brightness-200" :alt="r.label" :title="r.label" />
+                <span class="text-[10px] font-bold text-slate-300">{{ r.games }}</span>
+                <span class="text-[10px] font-black" :class="r.winRate >= 50 ? 'text-emerald-400' : 'text-rose-400'">{{ r.winRate }}%</span>
+              </div>
+            </div>
           </div>
+          <p v-else class="py-8 text-center text-xs text-slate-500">Sem partidas com rota definida (ex.: ARAM) na amostra.</p>
         </section>
 
         <!-- Donut de rotas -->
         <section class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl">
-          <h3 class="mb-1 text-sm font-bold text-slate-100">🧭 Distribuição por Rota</h3>
-          <p class="mb-3 text-[11px] text-slate-500">Quantas partidas (e win rate) por posição na amostra.</p>
-          <div v-if="roleData.total" class="flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:justify-around">
-            <svg viewBox="0 0 140 140" class="h-40 w-40 flex-shrink-0">
+          <h3 class="mb-1 flex items-center gap-2 text-sm font-bold text-slate-100"><i class="fa-solid fa-compass text-amber-400"></i> Distribuição por Rota</h3>
+          <p class="mb-3 text-[11px] text-slate-500">Partidas e win rate por posição na amostra.</p>
+          <div v-if="roleData.total" class="flex flex-col items-center gap-3">
+            <svg viewBox="0 0 140 140" class="h-36 w-36 flex-shrink-0">
               <g transform="rotate(-90 70 70)">
                 <circle v-for="s in roleData.segments" :key="s.role"
                   cx="70" cy="70" r="54" fill="none" :stroke="s.color" stroke-width="18"
@@ -152,7 +173,7 @@
               <text x="70" y="66" text-anchor="middle" class="fill-white" style="font-size:20px;font-weight:800">{{ roleData.total }}</text>
               <text x="70" y="83" text-anchor="middle" class="fill-slate-400" style="font-size:8px;font-weight:700">JOGOS C/ ROTA</text>
             </svg>
-            <div class="w-full max-w-[180px] space-y-1.5">
+            <div class="w-full space-y-1.5">
               <div v-for="r in roleData.list" :key="r.role" class="flex items-center gap-2 text-[11px]">
                 <span class="h-3 w-3 flex-shrink-0 rounded-sm" :style="{ background: r.color }"></span>
                 <span class="font-bold text-slate-200 w-10">{{ r.label }}</span>
@@ -163,11 +184,73 @@
           </div>
           <p v-else class="py-8 text-center text-xs text-slate-500">Sem partidas com rota definida (ex.: ARAM) na amostra.</p>
         </section>
+
+        <!-- Linha de evolução (compacta) -->
+        <section v-if="trend" class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl">
+          <div class="mb-1 flex flex-wrap items-center justify-between gap-2">
+            <h3 class="flex items-center gap-2 text-sm font-bold text-slate-100"><i class="fa-solid fa-chart-line text-blue-400"></i> Evolução ao Longo do Tempo</h3>
+            <div class="flex items-center gap-3 text-[10px] font-bold">
+              <span class="flex items-center gap-1"><span class="h-2 w-4 rounded-sm bg-blue-500"></span>WR</span>
+              <span class="flex items-center gap-1"><span class="h-0 w-4 border-t-2 border-dashed border-amber-400"></span>KDA</span>
+            </div>
+          </div>
+          <p class="mb-3 text-[11px] text-slate-500">Da mais antiga (esq.) à mais recente (dir.), em {{ trend.blocks.length }} blocos.</p>
+          <svg :viewBox="`0 0 ${trend.W} ${trend.H}`" class="h-auto w-full">
+            <line :x1="0" :x2="trend.W" :y1="trend.y50" :y2="trend.y50" stroke="#475569" stroke-width="1" stroke-dasharray="3 3" />
+            <text :x="2" :y="trend.y50 - 3" class="fill-slate-500" style="font-size:7px;font-weight:700">50%</text>
+            <path :d="trend.wrArea" fill="#3b82f626" />
+            <path :d="trend.wrPath" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" />
+            <path :d="trend.kdaPath" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linejoin="round" stroke-dasharray="4 3" />
+            <circle v-for="(p, i) in trend.wrPts" :key="'w' + i" :cx="p.x" :cy="p.y" r="2.5" fill="#3b82f6">
+              <title>Bloco {{ i + 1 }}: {{ p.wr }}% WR ({{ p.games }} jogos)</title>
+            </circle>
+            <circle v-for="(p, i) in trend.kdaPts" :key="'k' + i" :cx="p.x" :cy="p.y" r="2.5" fill="#f59e0b">
+              <title>Bloco {{ i + 1 }}: {{ p.kda }} KDA</title>
+            </circle>
+          </svg>
+        </section>
       </div>
 
-      <!-- ===================== GRÁFICO 3: BARRAS DE CAMPEÕES ===================== -->
+      <!-- ===== LINHA B: PERFIL DE JOGO (GPI) | GPI DETALHADO | DESTAQUES DE COMBATE ===== -->
+      <div class="grid gap-4 lg:grid-cols-3 items-stretch">
+
+        <!-- Radar GPI clássico (Perfil de Jogo) -->
+        <section class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl">
+          <h3 class="mb-1 flex items-center gap-2 text-sm font-bold text-slate-100"><i class="fa-solid fa-chart-pie text-amber-400"></i> Perfil de Jogo (GPI)</h3>
+          <p class="mb-3 text-[11px] text-slate-500">Win rate, KDA, farm, agressão, sobrevivência, participação e versatilidade.</p>
+          <div class="mx-auto w-full max-w-[220px]">
+            <RadarChart :axes="radarProfile" :size="220" color="#f59e0b" />
+          </div>
+        </section>
+
+        <!-- Radar GPI detalhado (combate & recursos) -->
+        <section class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl">
+          <h3 class="mb-1 flex items-center gap-2 text-sm font-bold text-slate-100"><i class="fa-solid fa-satellite-dish text-cyan-400"></i> GPI — Combate & Recursos</h3>
+          <p class="mb-3 text-[11px] text-slate-500">Inclui visão e ouro/min, normalizados de 0 a 100 na amostra atual.</p>
+          <div class="mx-auto w-full max-w-[220px]">
+            <RadarChart :axes="radar" :size="220" color="#38bdf8" />
+          </div>
+        </section>
+
+        <!-- Multikills (Destaques de Combate) -->
+        <section class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl">
+          <h3 class="mb-1 flex items-center gap-2 text-sm font-bold text-slate-100"><i class="fa-solid fa-burst text-rose-400"></i> Destaques de Combate</h3>
+          <p class="mb-3 text-[11px] text-slate-500">Total de abates especiais acumulados na amostra.</p>
+          <div class="flex h-36 items-end justify-around gap-3 border-b border-slate-800 px-2 pb-1">
+            <div v-for="b in multiBars" :key="b.label" class="flex h-full flex-1 flex-col items-center justify-end gap-1">
+              <span class="text-[11px] font-black text-slate-200">{{ b.value }}</span>
+              <div class="w-full max-w-[34px] rounded-t transition-all duration-700" :class="b.color" :style="{ height: `${Math.max(2, b.pct)}%` }"></div>
+            </div>
+          </div>
+          <div class="mt-1 flex justify-around gap-3 px-2">
+            <span v-for="b in multiBars" :key="b.label" class="flex-1 text-center text-[9px] font-bold uppercase tracking-wide text-slate-400">{{ b.label }}</span>
+          </div>
+        </section>
+      </div>
+
+      <!-- ===================== TABELA: BARRAS DE CAMPEÕES ===================== -->
       <section class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl">
-        <h3 class="mb-1 text-sm font-bold text-slate-100">⚔️ Desempenho por Campeão</h3>
+        <h3 class="mb-1 flex items-center gap-2 text-sm font-bold text-slate-100"><i class="fa-solid fa-hand-fist text-red-400"></i> Desempenho por Campeão</h3>
         <p class="mb-3 text-[11px] text-slate-500">Top {{ champBars.length }} campeões mais jogados na amostra — barra azul = % de vitórias.</p>
         <div class="space-y-2.5">
           <div v-for="c in champBars" :key="c.name">
@@ -189,83 +272,6 @@
           </div>
         </div>
       </section>
-
-      <!-- ===================== GRÁFICO 4: LINHA DE EVOLUÇÃO ===================== -->
-      <section v-if="trend" class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl">
-        <div class="mb-1 flex flex-wrap items-center justify-between gap-2">
-          <h3 class="text-sm font-bold text-slate-100">📈 Evolução ao Longo do Tempo</h3>
-          <div class="flex items-center gap-4 text-[10px] font-bold">
-            <span class="flex items-center gap-1"><span class="h-2 w-4 rounded-sm bg-blue-500"></span>Win Rate</span>
-            <span class="flex items-center gap-1"><span class="h-0 w-4 border-t-2 border-dashed border-amber-400"></span>KDA</span>
-          </div>
-        </div>
-        <p class="mb-3 text-[11px] text-slate-500">Da partida mais antiga (esq.) à mais recente (dir.), agrupadas em {{ trend.blocks.length }} blocos.</p>
-        <svg :viewBox="`0 0 ${trend.W} ${trend.H}`" class="h-auto w-full">
-          <!-- linha de referência 50% -->
-          <line :x1="0" :x2="trend.W" :y1="trend.y50" :y2="trend.y50" stroke="#475569" stroke-width="1" stroke-dasharray="3 3" />
-          <text :x="2" :y="trend.y50 - 3" class="fill-slate-500" style="font-size:7px;font-weight:700">50%</text>
-          <!-- área win rate -->
-          <path :d="trend.wrArea" fill="#3b82f626" />
-          <!-- linha win rate -->
-          <path :d="trend.wrPath" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" />
-          <!-- linha KDA -->
-          <path :d="trend.kdaPath" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linejoin="round" stroke-dasharray="4 3" />
-          <!-- pontos -->
-          <circle v-for="(p, i) in trend.wrPts" :key="'w' + i" :cx="p.x" :cy="p.y" r="2.5" fill="#3b82f6">
-            <title>Bloco {{ i + 1 }}: {{ p.wr }}% WR ({{ p.games }} jogos)</title>
-          </circle>
-          <circle v-for="(p, i) in trend.kdaPts" :key="'k' + i" :cx="p.x" :cy="p.y" r="2.5" fill="#f59e0b">
-            <title>Bloco {{ i + 1 }}: {{ p.kda }} KDA</title>
-          </circle>
-        </svg>
-      </section>
-
-      <!-- ===================== GRÁFICO 5 + FORMA ===================== -->
-      <div class="grid gap-4 lg:grid-cols-2">
-
-        <!-- Multikills (barras verticais) -->
-        <section class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl">
-          <h3 class="mb-1 text-sm font-bold text-slate-100">💥 Destaques de Combate</h3>
-          <p class="mb-3 text-[11px] text-slate-500">Total de abates especiais acumulados na amostra.</p>
-          <div class="flex h-40 items-end justify-around gap-3 border-b border-slate-800 px-2 pb-1">
-            <div v-for="b in multiBars" :key="b.label" class="flex h-full flex-1 flex-col items-center justify-end gap-1">
-              <span class="text-[11px] font-black text-slate-200">{{ b.value }}</span>
-              <div class="w-full max-w-[34px] rounded-t transition-all duration-700" :class="b.color" :style="{ height: `${Math.max(2, b.pct)}%` }"></div>
-            </div>
-          </div>
-          <div class="mt-1 flex justify-around gap-3 px-2">
-            <span v-for="b in multiBars" :key="b.label" class="flex-1 text-center text-[9px] font-bold uppercase tracking-wide text-slate-400">{{ b.label }}</span>
-          </div>
-        </section>
-
-        <!-- Forma recente (sequência de resultados) -->
-        <section class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl">
-          <h3 class="mb-1 text-sm font-bold text-slate-100">🔥 Forma Recente</h3>
-          <p class="mb-3 text-[11px] text-slate-500">Últimos resultados (mais recente à esquerda) e sequências da amostra.</p>
-          <div class="mb-4 flex flex-wrap gap-1.5">
-            <span v-for="(m, i) in form.recent" :key="i"
-              class="flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-black"
-              :class="m.win ? 'bg-blue-600/80 text-white' : 'bg-red-600/80 text-white'"
-              :title="`${m.championName} — ${m.win ? 'Vitória' : 'Derrota'}`">
-              {{ m.win ? 'V' : 'D' }}
-            </span>
-          </div>
-          <div class="grid grid-cols-3 gap-2 text-center">
-            <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-2">
-              <div class="text-lg font-black" :class="form.streakType ? 'text-blue-400' : 'text-red-400'">{{ form.streak }}{{ form.streakType ? 'V' : 'D' }}</div>
-              <div class="text-[9px] font-bold uppercase tracking-wide text-slate-400">Sequência atual</div>
-            </div>
-            <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-2">
-              <div class="text-lg font-black text-blue-400">{{ form.bestWin }}V</div>
-              <div class="text-[9px] font-bold uppercase tracking-wide text-slate-400">Melhor sequência</div>
-            </div>
-            <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-2">
-              <div class="text-lg font-black text-red-400">{{ form.bestLoss }}D</div>
-              <div class="text-[9px] font-bold uppercase tracking-wide text-slate-400">Pior sequência</div>
-            </div>
-          </div>
-        </section>
-      </div>
     </template>
   </div>
 </template>
@@ -368,6 +374,7 @@ const agg = computed(() => {
   let wins = 0, k = 0, d = 0, a = 0, cs = 0, dur = 0, gold = 0, dmg = 0, vision = 0, control = 0, timeDead = 0;
   let dbl = 0, tpl = 0, qd = 0, pt = 0, solo = 0;
   let gpmSum = 0, gpmCnt = 0, kpSum = 0, kpCnt = 0;
+  const roles = {};
   for (const m of ms) {
     if (m.win) wins++;
     k += num(m.kills); d += num(m.deaths); a += num(m.assists);
@@ -377,13 +384,16 @@ const agg = computed(() => {
     dbl += num(m.doubleKills); tpl += num(m.tripleKills); qd += num(m.quadraKills); pt += num(m.pentaKills); solo += num(m.soloKills);
     if (m.goldPerMin) { gpmSum += num(m.goldPerMin); gpmCnt++; }
     if (m.killParticipation != null) { kpSum += num(m.killParticipation); kpCnt++; }
+    if (ROLES.includes(m.teamPosition)) roles[m.teamPosition] = (roles[m.teamPosition] || 0) + 1;
   }
   const kda = d === 0 ? (k + a) : (k + a) / d;
   const csMin = dur > 0 ? cs / (dur / 60) : 0;
+  const topRole = Object.entries(roles).sort((x, y) => y[1] - x[1])[0]?.[0];
   return {
     games: n, wins, losses: n - wins, winRate: Math.round(wins / n * 100),
     kda: +kda.toFixed(2),
     avgKills: +(k / n).toFixed(1), avgDeaths: +(d / n).toFixed(1), avgAssists: +(a / n).toFixed(1),
+    primaryRole: topRole ? ROLE_LABELS[topRole] : '—',
     csMin: +csMin.toFixed(1),
     goldPerMin: gpmCnt ? Math.round(gpmSum / gpmCnt) : (dur > 0 ? Math.round(gold / (dur / 60)) : 0),
     avgDmg: Math.round(dmg / n),
@@ -409,6 +419,22 @@ const radar = computed(() => {
     { label: 'Visão', value: clamp(a.avgVision / 60 * 100) },
     { label: 'Ouro/min', value: clamp(a.goldPerMin / 500 * 100) },
     { label: 'Participação', value: clamp(a.kp) }
+  ];
+});
+
+// -------------------- Radar GPI clássico (Perfil de Jogo) --------------------
+const radarProfile = computed(() => {
+  const a = agg.value;
+  if (!a) return [];
+  const clamp = (v) => Math.max(0, Math.min(100, Math.round(v)));
+  return [
+    { label: 'Win Rate', value: clamp(a.winRate) },
+    { label: 'KDA', value: clamp(a.kda / 5 * 100) },
+    { label: 'Farm', value: clamp(a.csMin / 10 * 100) },
+    { label: 'Agressão', value: clamp(a.avgKills / 12 * 100) },
+    { label: 'Sobrevivência', value: clamp(100 - a.avgDeaths / 12 * 100) },
+    { label: 'Participação', value: clamp(a.avgAssists / 15 * 100) },
+    { label: 'Versatilidade', value: clamp(a.distinctChamps / 15 * 100) }
   ];
 });
 
@@ -458,6 +484,10 @@ const roleData = computed(() => {
   return { total, segments, list };
 });
 
+// -------------------- Top Rotas (barras vitória/derrota por rota) --------------------
+const roleBars = computed(() => roleData.value.list.map((r) => ({ ...r, losses: r.games - r.wins })));
+const maxRoleGames = computed(() => Math.max(1, ...roleBars.value.map((r) => r.games)));
+
 // -------------------- Linha de evolução --------------------
 const trend = computed(() => {
   const ms = [...sample.value].reverse(); // mais antiga -> mais recente
@@ -503,43 +533,24 @@ const multiBars = computed(() => {
   return items.map((i) => ({ ...i, pct: Math.round(i.value / max * 100) }));
 });
 
-// -------------------- Forma recente --------------------
-const form = computed(() => {
-  const recent = sample.value.slice(0, 25); // mais recente primeiro
-  let streakType = null, streak = 0;
-  for (const m of recent) {
-    if (streakType === null) { streakType = !!m.win; streak = 1; }
-    else if (!!m.win === streakType) streak++;
-    else break;
-  }
-  const chrono = [...sample.value].reverse();
-  let bestWin = 0, curW = 0, bestLoss = 0, curL = 0;
-  for (const m of chrono) {
-    if (m.win) { curW++; curL = 0; } else { curL++; curW = 0; }
-    bestWin = Math.max(bestWin, curW);
-    bestLoss = Math.max(bestLoss, curL);
-  }
-  return { recent, streakType, streak, bestWin, bestLoss };
-});
-
 // -------------------- Tags --------------------
 const tags = computed(() => {
   const a = agg.value;
   if (!a) return [];
   const t = [];
-  if (a.winRate >= 55) t.push({ label: 'Em Ascensão', icon: '📈', cls: 'border-emerald-600/50 bg-emerald-950/40 text-emerald-300' });
-  else if (a.winRate < 45 && a.games >= 15) t.push({ label: 'Fase Difícil', icon: '📉', cls: 'border-rose-600/50 bg-rose-950/40 text-rose-300' });
-  if (a.kda >= 4) t.push({ label: 'Jogador Focado', icon: '🎯', cls: 'border-amber-600/50 bg-amber-950/40 text-amber-300' });
-  if (a.avgDeaths <= 4) t.push({ label: 'Difícil de Matar', icon: '🛡️', cls: 'border-cyan-600/50 bg-cyan-950/40 text-cyan-300' });
-  if (a.avgKills >= 8) t.push({ label: 'Carregador', icon: '⚔️', cls: 'border-red-600/50 bg-red-950/40 text-red-300' });
-  if (a.csMin >= 7.5) t.push({ label: 'Mestre do Farm', icon: '🌾', cls: 'border-lime-600/50 bg-lime-950/40 text-lime-300' });
-  if (a.avgVision >= 40) t.push({ label: 'Controle de Visão', icon: '👁️', cls: 'border-indigo-600/50 bg-indigo-950/40 text-indigo-300' });
-  if (a.kp >= 60) t.push({ label: 'Sempre Presente', icon: '🤝', cls: 'border-teal-600/50 bg-teal-950/40 text-teal-300' });
-  if (a.multi.penta > 0) t.push({ label: `${a.multi.penta} Penta${a.multi.penta > 1 ? 's' : ''}`, icon: '🏆', cls: 'border-yellow-500/50 bg-yellow-950/40 text-yellow-300' });
-  if (a.distinctChamps >= 12) t.push({ label: 'Versátil', icon: '🔄', cls: 'border-fuchsia-600/50 bg-fuchsia-950/40 text-fuchsia-300' });
-  else if (a.distinctChamps > 0 && a.distinctChamps <= 3) t.push({ label: 'One-Trick', icon: '🐎', cls: 'border-purple-600/50 bg-purple-950/40 text-purple-300' });
-  if (a.winRate >= 45 && a.winRate <= 55 && a.games >= 20) t.push({ label: 'Consistente', icon: '⚖️', cls: 'border-slate-600/50 bg-slate-800/60 text-slate-300' });
-  if (!t.length) t.push({ label: 'Jogador Equilibrado', icon: '🎮', cls: 'border-slate-600/50 bg-slate-800/60 text-slate-300' });
+  if (a.winRate >= 55) t.push({ label: 'Em Ascensão', icon: 'fa-solid fa-arrow-trend-up', cls: 'border-emerald-600/50 bg-emerald-950/40 text-emerald-300' });
+  else if (a.winRate < 45 && a.games >= 15) t.push({ label: 'Fase Difícil', icon: 'fa-solid fa-arrow-trend-down', cls: 'border-rose-600/50 bg-rose-950/40 text-rose-300' });
+  if (a.kda >= 4) t.push({ label: 'Jogador Focado', icon: 'fa-solid fa-bullseye', cls: 'border-amber-600/50 bg-amber-950/40 text-amber-300' });
+  if (a.avgDeaths <= 4) t.push({ label: 'Difícil de Matar', icon: 'fa-solid fa-shield-halved', cls: 'border-cyan-600/50 bg-cyan-950/40 text-cyan-300' });
+  if (a.avgKills >= 8) t.push({ label: 'Carregador', icon: 'fa-solid fa-hand-fist', cls: 'border-red-600/50 bg-red-950/40 text-red-300' });
+  if (a.csMin >= 7.5) t.push({ label: 'Mestre do Farm', icon: 'fa-solid fa-wheat-awn', cls: 'border-lime-600/50 bg-lime-950/40 text-lime-300' });
+  if (a.avgVision >= 40) t.push({ label: 'Controle de Visão', icon: 'fa-solid fa-eye', cls: 'border-indigo-600/50 bg-indigo-950/40 text-indigo-300' });
+  if (a.kp >= 60) t.push({ label: 'Sempre Presente', icon: 'fa-solid fa-handshake', cls: 'border-teal-600/50 bg-teal-950/40 text-teal-300' });
+  if (a.multi.penta > 0) t.push({ label: `${a.multi.penta} Penta${a.multi.penta > 1 ? 's' : ''}`, icon: 'fa-solid fa-trophy', cls: 'border-yellow-500/50 bg-yellow-950/40 text-yellow-300' });
+  if (a.distinctChamps >= 12) t.push({ label: 'Versátil', icon: 'fa-solid fa-arrows-rotate', cls: 'border-fuchsia-600/50 bg-fuchsia-950/40 text-fuchsia-300' });
+  else if (a.distinctChamps > 0 && a.distinctChamps <= 3) t.push({ label: 'One-Trick', icon: 'fa-solid fa-horse', cls: 'border-purple-600/50 bg-purple-950/40 text-purple-300' });
+  if (a.winRate >= 45 && a.winRate <= 55 && a.games >= 20) t.push({ label: 'Consistente', icon: 'fa-solid fa-scale-balanced', cls: 'border-slate-600/50 bg-slate-800/60 text-slate-300' });
+  if (!t.length) t.push({ label: 'Jogador Equilibrado', icon: 'fa-solid fa-gamepad', cls: 'border-slate-600/50 bg-slate-800/60 text-slate-300' });
   return t;
 });
 </script>

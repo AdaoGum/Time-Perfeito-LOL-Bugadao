@@ -2,7 +2,7 @@
   <div class="space-y-6 text-white">
     <!-- TELA 1: PORTÃO DE PROTEÇÃO POR SENHA -->
     <section v-if="!isAuthenticated" class="mx-auto max-w-md rounded-2xl border border-orange-950/40 bg-slate-900/90 p-6 shadow-2xl text-center backdrop-blur-md mt-12">
-      <span class="text-4xl">🔒</span>
+      <span class="text-4xl text-amber-300"><i class="fa-solid fa-lock"></i></span>
       <h2 class="text-xl font-black tracking-wide text-amber-300 uppercase mt-2">Área Ancestral Restrita</h2>
       <p class="text-xs text-slate-400 mt-1">Insira a palavra rítmica da tribo para abrir os registros brutos do D1.</p>
       
@@ -136,7 +136,7 @@
                 {{ size }}
               </button>
             </div>
-            <button @click="fetchFullHistoryFromD1" class="text-cyan-400 underline hover:text-cyan-300 ml-2">Atualizar 🔄</button>
+            <button @click="fetchFullHistoryFromD1" class="text-cyan-400 underline hover:text-cyan-300 ml-2">Atualizar <i class="fa-solid fa-arrows-rotate"></i></button>
           </div>
         </div>
       </section>
@@ -424,7 +424,7 @@ function toggleQueueFilter(queueValue) {
   else selectedQueues.value.push(queueValue);
 }
 
-// 📊 MOTOR DE FILTRAGEM TOTAL
+// MOTOR DE FILTRAGEM TOTAL
 const filteredHistory = computed(() => {
   return databaseRows.value.filter(row => {
     if (selectedPlayers.value.length > 0) {

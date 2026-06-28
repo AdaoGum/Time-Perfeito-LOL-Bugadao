@@ -254,7 +254,7 @@
         class="inline-flex h-6 w-6 items-center justify-center rounded border border-slate-700 text-slate-400 hover:text-white"
         @click="showWorkerDebug = false"
         aria-label="Fechar dados brutos"
-      >✕</button>
+      ><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="overflow-auto p-4">
       <pre class="text-xs font-mono text-green-400">{{ JSON.stringify(store.searchProfile, null, 2) }}</pre>

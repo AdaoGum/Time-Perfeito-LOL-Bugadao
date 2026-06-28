@@ -22,7 +22,7 @@
             class="relative rounded-xl border bg-slate-900/80 backdrop-blur-sm p-3 transition hover:bg-slate-800/80"
             :class="monoStyles[index].ring"
           >
-            <span class="absolute -right-3 -top-3 text-2xl">{{ monoStyles[index].icon }}</span>
+            <i class="absolute -right-3 -top-3 text-2xl drop-shadow" :class="[monoStyles[index].icon, monoStyles[index].rank]"></i>
             <div class="mb-2 text-center">
               <span class="text-4xl font-black leading-none" :class="monoStyles[index].rank">#{{ index + 1 }}</span>
             </div>
@@ -100,8 +100,8 @@
         <h2 class="mb-1 text-center text-2xl font-black text-slate-600">ESSES SÃO SEUS UGA MONOS SEU BUGA</h2>
         <p class="mb-5 text-xs uppercase tracking-wider text-slate-600">Top 5 de maestria com destaque competitivo</p>
         <div class="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-          <article v-for="(icon, i) in ['👑','🥈','🥉','⛓️','🪵']" :key="i" class="relative rounded-xl border border-slate-700/50 bg-slate-900/80 backdrop-blur-sm p-3">
-            <span class="absolute -right-3 -top-3 text-2xl">{{ icon }}</span>
+          <article v-for="(icon, i) in ['fa-solid fa-crown','fa-solid fa-medal','fa-solid fa-medal','fa-solid fa-award','fa-solid fa-tree']" :key="i" class="relative rounded-xl border border-slate-700/50 bg-slate-900/80 backdrop-blur-sm p-3">
+            <i class="absolute -right-3 -top-3 text-2xl text-slate-700" :class="icon"></i>
             <div class="mb-2 text-center"><span class="text-4xl font-black leading-none text-slate-700">#{{ i + 1 }}</span></div>
             <div class="mx-auto h-16 w-16 rounded-lg border-2 border-slate-700 bg-slate-800/80"></div>
             <div class="mt-2 mx-auto h-3.5 w-20 rounded bg-slate-800"></div>
@@ -148,11 +148,11 @@ const remainder = computed(() => store.masteryDashboard.allMasteries.slice(20));
 const maxPoints = computed(() => top20.value[0]?.championPoints || 1);
 
 const monoStyles = [
-  { ring: 'border-yellow-400/80 shadow-[0_0_22px_rgba(250,204,21,0.45)]', rank: 'text-yellow-300', bar: 'from-yellow-300 to-amber-500', icon: '👑' },
-  { ring: 'border-slate-300/80 shadow-[0_0_20px_rgba(203,213,225,0.4)]', rank: 'text-slate-200', bar: 'from-slate-200 to-slate-400', icon: '🥈' },
-  { ring: 'border-orange-500/80 shadow-[0_0_20px_rgba(249,115,22,0.35)]', rank: 'text-orange-300', bar: 'from-orange-400 to-orange-600', icon: '🥉' },
-  { ring: 'border-zinc-500/80 shadow-[0_0_20px_rgba(161,161,170,0.35)]', rank: 'text-zinc-300', bar: 'from-zinc-300 to-zinc-500', icon: '⛓️' },
-  { ring: 'border-amber-900/80 shadow-[0_0_20px_rgba(120,53,15,0.35)]', rank: 'text-amber-700', bar: 'from-amber-700 to-amber-900', icon: '🪵' }
+  { ring: 'border-yellow-400/80 shadow-[0_0_22px_rgba(250,204,21,0.45)]', rank: 'text-yellow-300', bar: 'from-yellow-300 to-amber-500', icon: 'fa-solid fa-crown' },
+  { ring: 'border-slate-300/80 shadow-[0_0_20px_rgba(203,213,225,0.4)]', rank: 'text-slate-200', bar: 'from-slate-200 to-slate-400', icon: 'fa-solid fa-medal' },
+  { ring: 'border-orange-500/80 shadow-[0_0_20px_rgba(249,115,22,0.35)]', rank: 'text-orange-300', bar: 'from-orange-400 to-orange-600', icon: 'fa-solid fa-medal' },
+  { ring: 'border-zinc-500/80 shadow-[0_0_20px_rgba(161,161,170,0.35)]', rank: 'text-zinc-300', bar: 'from-zinc-300 to-zinc-500', icon: 'fa-solid fa-award' },
+  { ring: 'border-amber-900/80 shadow-[0_0_20px_rgba(120,53,15,0.35)]', rank: 'text-amber-700', bar: 'from-amber-700 to-amber-900', icon: 'fa-solid fa-tree' }
 ];
 
 function masteryPct(entry) {

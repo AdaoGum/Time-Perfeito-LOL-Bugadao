@@ -54,10 +54,11 @@
             Meta: patch <span class="font-bold text-slate-300">{{ META_DATA.patch }}</span> • atualizado em {{ META_DATA.updatedAt }}
           </p>
           <p v-if="metaStale" class="text-[10px] font-bold text-amber-400">
-            ⚠ Meta possivelmente desatualizado — gere um CSV novo (ver README)
+            <i class="fa-solid fa-triangle-exclamation"></i> Meta possivelmente desatualizado — gere um CSV novo (ver README)
           </p>
           <p v-if="isSoloDuo" class="text-[10px] font-bold" :class="soloDuoLocked ? 'text-amber-300' : 'text-slate-500'">
-            {{ soloDuoLocked ? '🔒 Lobby Solo/Duo travado em 2 jogadores' : 'Solo/Duo: preencha 2 cards para travar o lobby' }}
+            <i v-if="soloDuoLocked" class="fa-solid fa-lock"></i>
+            {{ soloDuoLocked ? 'Lobby Solo/Duo travado em 2 jogadores' : 'Solo/Duo: preencha 2 cards para travar o lobby' }}
           </p>
         </div>
 
@@ -87,7 +88,7 @@
             v-for="(par, i) in synergyResult.pares"
             :key="`par-${i}`"
             class="rounded border border-fuchsia-700/40 bg-fuchsia-950/30 px-2 py-0.5 text-[10px] font-bold text-fuchsia-300"
-          >🔗 {{ par.a }} + {{ par.b }} <span class="text-fuchsia-400/70">({{ par.tag }})</span></span>
+          ><i class="fa-solid fa-link"></i> {{ par.a }} + {{ par.b }} <span class="text-fuchsia-400/70">({{ par.tag }})</span></span>
         </div>
 
         <!-- Picks automáticos com tier de meta e breakdown -->
@@ -145,7 +146,7 @@
             class="absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-slate-950/50"
           >
             <span class="rounded border border-slate-700 bg-slate-900/80 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
-              🔒 Lobby travado
+              <i class="fa-solid fa-lock"></i> Lobby travado
             </span>
           </div>
 
