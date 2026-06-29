@@ -3,7 +3,7 @@
     <form @submit.prevent="executeSearch" class="w-full flex gap-2" :class="{ 'max-w-md mx-auto': buttonText }">
       <div class="relative flex-1">
         <!-- Ícone de Lupa interno apenas no modo compacto (quando buttonText for vazio) -->
-        <span v-if="!buttonText" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none text-xs">🔍</span>
+        <span v-if="!buttonText" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none text-xs"><i class="fa-solid fa-magnifying-glass"></i></span>
         
         <input
           v-model="inputQuery"

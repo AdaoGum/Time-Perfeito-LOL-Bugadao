@@ -56,10 +56,15 @@
           </div>
         </div>
 
-        <!-- 2) TÍTULO -->
-        <h3 class="mt-5 mb-3 text-center font-bold text-slate-300 relative z-10">Resumo Competitivo</h3>
+        <!-- 2) TÍTULO + TOTAL DE VITÓRIAS -->
+        <h3 class="mt-5 mb-3 text-center font-bold text-slate-300 relative z-10">
+          Resumo Competitivo
+          <span class="text-slate-600">·</span>
+          <span class="text-slate-400">Total de Vitórias:</span>
+          <span class="font-black text-blue-400">{{ totalWins }}</span>
+        </h3>
 
-        <!-- 3) RANKS: EMBLEMA + LABEL + LP + VITÓRIAS (Solo | Flex) -->
+        <!-- 3) RANKS: EMBLEMA + LABEL + LP + VITÓRIAS + WIN RATE (Solo | Flex) -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
           <div class="flex items-center gap-4 rounded-xl border border-slate-800/80 bg-slate-900/80 backdrop-blur-sm p-4">
             <img
@@ -74,6 +79,15 @@
                 <span class="font-bold text-slate-200">{{ store.searchProfile.statsSolo?.lp || 0 }} LP</span>
                 <span class="text-slate-600">•</span>
                 <span class="text-slate-400">{{ store.searchProfile.statsSolo?.wins || 0 }} Vitórias</span>
+              </div>
+              <div class="mt-2">
+                <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-0.5">
+                  <span>Win Rate</span>
+                  <span class="text-slate-200">{{ winRateSolo.toFixed(1) }}%</span>
+                </div>
+                <div class="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+                  <div class="h-full bg-cyan-500 transition-all duration-1000" :style="`width: ${winRateSolo}%`"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -92,51 +106,45 @@
                 <span class="text-slate-600">•</span>
                 <span class="text-slate-400">{{ store.searchProfile.statsFlex?.wins || 0 }} Vitórias</span>
               </div>
+              <div class="mt-2">
+                <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-0.5">
+                  <span>Win Rate</span>
+                  <span class="text-slate-200">{{ winRateFlex.toFixed(1) }}%</span>
+                </div>
+                <div class="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+                  <div class="h-full bg-purple-500 transition-all duration-1000" :style="`width: ${winRateFlex}%`"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- 4) TOTAIS: VITÓRIAS + KDA (20 / 100 partidas) -->
-        <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 relative z-10">
-          <div class="rounded-xl border border-slate-700 bg-slate-900/80 backdrop-blur-sm p-3 text-center flex flex-col justify-center">
-            <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400">Total Vitórias</div>
-            <div class="text-2xl font-black text-blue-400">
-              {{ (store.searchProfile.statsSolo?.wins || 0) + (store.searchProfile.statsFlex?.wins || 0) }}
-            </div>
+        <!-- 4) FORMA RECENTE (substitui o KDA; cabe embaixo dos emblemas) -->
+        <div class="mt-4 rounded-xl border border-slate-700 bg-slate-900/80 backdrop-blur-sm p-3 relative z-10">
+          <h4 class="mb-2 flex items-center gap-2 text-sm font-bold text-slate-100">
+            <i class="fa-solid fa-fire text-orange-400"></i> Forma Recente
+          </h4>
+          <div v-if="formRecent.recent.length" class="mb-3 flex flex-wrap gap-1.5">
+            <span v-for="(m, i) in formRecent.recent" :key="i"
+              class="flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-black"
+              :class="m.win ? 'bg-blue-600/80 text-white' : 'bg-red-600/80 text-white'"
+              :title="`${m.championName} — ${m.win ? 'Vitória' : 'Derrota'}`">
+              {{ m.win ? 'V' : 'D' }}
+            </span>
           </div>
-
-          <div class="rounded-xl border border-slate-700 bg-slate-900/80 backdrop-blur-sm p-3 grid grid-cols-2 gap-2 text-center">
-            <div class="flex flex-col justify-center sm:border-r border-slate-800">
-              <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400">KDA (20 Partidas)</div>
-              <div class="text-2xl font-black text-emerald-400">{{ avgKda }}</div>
+          <p v-else class="mb-3 text-[11px] text-slate-500">Sem partidas recentes para exibir.</p>
+          <div class="grid grid-cols-3 gap-2 text-center">
+            <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-2">
+              <div class="text-lg font-black" :class="formRecent.streakType ? 'text-blue-400' : 'text-red-400'">{{ formRecent.streak }}{{ formRecent.streakType ? 'V' : 'D' }}</div>
+              <div class="text-[9px] font-bold uppercase tracking-wide text-slate-400">Sequência atual</div>
             </div>
-            <div class="flex flex-col justify-center">
-              <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400">KDA (100 Partidas)</div>
-              <div v-if="analytics100" class="text-2xl font-black text-emerald-400">{{ analytics100.kda }}</div>
-              <div v-else class="text-[10px] font-medium text-slate-500 leading-tight mt-1">Disponível após sincronizar 100 jogos</div>
+            <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-2">
+              <div class="text-lg font-black text-blue-400">{{ formRecent.bestWin }}V</div>
+              <div class="text-[9px] font-bold uppercase tracking-wide text-slate-400">Melhor sequência</div>
             </div>
-          </div>
-        </div>
-
-        <!-- 5) WIN RATES (barras) -->
-        <div class="mt-4 pt-3 border-t border-slate-800 relative z-10">
-          <div class="text-center mb-2">
-            <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-0.5">
-              <span>Win Rate SoloQ:</span>
-              <span class="text-slate-200">{{ winRateSolo.toFixed(1) }}%</span>
-            </div>
-            <div class="h-2 w-full overflow-hidden rounded-full bg-slate-800">
-              <div class="h-full bg-cyan-500 transition-all duration-1000" :style="`width: ${winRateSolo}%`"></div>
-            </div>
-          </div>
-
-          <div class="text-center">
-            <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-0.5">
-              <span>Win Rate Flex:</span>
-              <span class="text-slate-200">{{ winRateFlex.toFixed(1) }}%</span>
-            </div>
-            <div class="h-2 w-full overflow-hidden rounded-full bg-slate-800">
-              <div class="h-full bg-purple-500 transition-all duration-1000" :style="`width: ${winRateFlex}%`"></div>
+            <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-2">
+              <div class="text-lg font-black text-red-400">{{ formRecent.bestLoss }}D</div>
+              <div class="text-[9px] font-bold uppercase tracking-wide text-slate-400">Pior sequência</div>
             </div>
           </div>
         </div>
@@ -166,144 +174,6 @@
       </div>
       <!-- FIM DA LINHA 1 -->
 
-      <!-- LINHA 2: CARD EXTERNO (seletor único 20/100/1000) com 2 cards internos do mesmo tamanho -->
-      <section v-if="analyticsWin" class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
-        <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <h3 class="text-xl font-bold text-slate-100">Análise de Desempenho</h3>
-          <div v-if="showWindowFilter" class="flex gap-1 rounded-lg border border-slate-700 bg-slate-950 p-0.5">
-            <button
-              v-for="w in ANALYTICS_WINDOWS"
-              :key="w"
-              type="button"
-              @click="setAnalyticsWindow(w)"
-              :disabled="!windowEnabled(w)"
-              :title="windowEnabled(w) ? `Últimos ${w} jogos` : 'Informações ainda não disponíveis'"
-              class="rounded-md px-3 py-1 text-[11px] font-bold transition"
-              :class="analyticsWindow === w ? 'bg-blue-600 text-white' : (windowEnabled(w) ? 'text-slate-400 hover:text-slate-200' : 'cursor-not-allowed text-slate-600 opacity-50')"
-            >
-              {{ w }}
-            </button>
-          </div>
-          <span v-else class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Últimos {{ analyticsWin.games }} jogos</span>
-        </div>
-
-        <div class="grid gap-4 lg:grid-cols-2 items-stretch">
-
-          <!-- CARD INTERNO 1: VISÃO ANALÍTICA (cards + top campeões) -->
-          <div class="flex h-full flex-col rounded-2xl border border-slate-800 bg-slate-950/30 p-4">
-            <h4 class="mb-3 text-lg font-bold text-slate-100">Visão Analítica</h4>
-
-            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
-                <div class="text-2xl font-black" :class="analyticsWin.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ analyticsWin.winRate }}%</div>
-                <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Win Rate</div>
-                <div class="text-[10px] text-slate-500">{{ analyticsWin.wins }}V / {{ analyticsWin.losses }}D</div>
-              </div>
-              <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
-                <div class="text-2xl font-black text-emerald-400">{{ analyticsWin.kda }}</div>
-                <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">KDA Médio</div>
-                <div class="text-[10px] text-slate-500">{{ analyticsWin.avgKills }} / {{ analyticsWin.avgDeaths }} / {{ analyticsWin.avgAssists }}</div>
-              </div>
-              <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
-                <div class="text-2xl font-black text-amber-400">{{ analyticsWin.csMin }}</div>
-                <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">CS / min</div>
-              </div>
-              <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
-                <div class="text-2xl font-black text-cyan-300">{{ analyticsWin.primaryRole }}</div>
-                <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Rota Principal</div>
-              </div>
-              <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
-                <div class="text-2xl font-black text-slate-200">{{ analyticsWin.avgKills }}</div>
-                <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Abates / jogo</div>
-              </div>
-              <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-center">
-                <div class="text-2xl font-black text-slate-200">{{ analyticsWin.avgDeaths }}</div>
-                <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Mortes / jogo</div>
-              </div>
-            </div>
-
-            <!-- Top campeões (janela) -->
-            <div v-if="topChampionsWin.length" class="mt-4">
-              <h5 class="mb-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">Top Campeões ({{ analyticsWin.games }} jogos)</h5>
-              <div class="overflow-x-auto rounded-xl border border-slate-800">
-                <table class="w-full text-left text-xs">
-                  <thead class="bg-slate-950/60 text-[9px] uppercase tracking-wider text-slate-500">
-                    <tr>
-                      <th class="px-3 py-2 font-bold">Campeão</th>
-                      <th class="px-3 py-2 font-bold text-center">Jogos</th>
-                      <th class="px-3 py-2 font-bold text-center">Win Rate</th>
-                      <th class="px-3 py-2 font-bold text-center">KDA</th>
-                      <th class="px-3 py-2 font-bold text-center">CS/min</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="champ in topChampionsWin" :key="champ.name" class="border-t border-slate-800/60 hover:bg-slate-800/30">
-                      <td class="px-3 py-2">
-                        <div class="flex items-center gap-2">
-                          <img class="h-6 w-6 rounded-full border border-slate-600" :src="championImage(champ.name)" :alt="champ.name" />
-                          <span class="font-bold text-slate-200">{{ champ.name }}</span>
-                        </div>
-                      </td>
-                      <td class="px-3 py-2 text-center font-semibold text-slate-300">{{ champ.games }}</td>
-                      <td class="px-3 py-2 text-center font-black" :class="champ.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ champ.winRate }}%</td>
-                      <td class="px-3 py-2 text-center font-bold" :class="Number(champ.kda) >= 4 ? 'text-amber-400' : 'text-slate-300'">{{ champ.kda }}</td>
-                      <td class="px-3 py-2 text-center font-semibold text-slate-300">{{ champ.csMin }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          <!-- CARD INTERNO 2: PERFIL DE JOGO (radar + top rotas) — mesmo tamanho do card de Visão Analítica -->
-          <div class="flex h-full flex-col rounded-2xl border border-slate-800 bg-slate-950/30 p-4">
-            <h4 class="mb-3 text-lg font-bold text-slate-100">Perfil de Jogo</h4>
-
-            <!-- Gráfico 1: Radar GPI (compacto, todo o conteúdo visível) -->
-            <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-              <p class="mb-1 text-center text-[10px] font-bold uppercase tracking-widest text-amber-300/80">Perfil de Jogo (GPI)</p>
-              <div class="mx-auto w-full max-w-[230px]">
-                <RadarChart :axes="radarMetricsWin" :size="240" color="#f59e0b" />
-              </div>
-            </div>
-
-            <!-- Gráfico 2: Top Rotas (vitórias x derrotas por rota) -->
-            <div v-if="roleBarsWin.length" class="mt-4 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-              <p class="mb-2 text-center text-[10px] font-bold uppercase tracking-widest text-cyan-300/80">Top Rotas</p>
-              <div class="flex h-24 items-stretch justify-around gap-2 px-2">
-                <div v-for="r in roleBarsWin" :key="r.role" class="flex h-full flex-1 items-end justify-center gap-1">
-                  <div class="w-3 rounded-t bg-emerald-500" :style="{ height: `${Math.max(4, (r.wins / maxRoleGames) * 100)}%` }" :title="`${r.wins} vitórias`"></div>
-                  <div class="w-3 rounded-t bg-rose-500" :style="{ height: `${Math.max(4, (r.losses / maxRoleGames) * 100)}%` }" :title="`${r.losses} derrotas`"></div>
-                </div>
-              </div>
-              <div class="mt-1 flex justify-around gap-2 border-t border-dashed border-slate-700 px-2 pt-2">
-                <div v-for="r in roleBarsWin" :key="r.role" class="flex flex-1 flex-col items-center gap-0.5">
-                  <img :src="getMiniRoleIcon(ROLE_POS[r.role])" class="h-4 w-4 opacity-90 brightness-200" :alt="r.role" :title="r.role" />
-                  <span class="text-[10px] font-bold text-slate-300">{{ r.games }}</span>
-                  <span class="text-[10px] font-black" :class="r.winRate >= 50 ? 'text-emerald-400' : 'text-rose-400'">{{ r.winRate }}%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </section>
-
-      <!-- LINHA 3: TAGS DE COMPORTAMENTO DO JOGADOR -->
-      <div v-if="playerTags.length" class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
-        <h3 class="mb-3 text-lg font-bold text-slate-100">Comportamento do Jogador</h3>
-        <div class="flex flex-wrap gap-2">
-          <span
-            v-for="tag in playerTags"
-            :key="tag.label"
-            class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold"
-            :class="tag.cls"
-          >
-            <span>{{ tag.icon }}</span>{{ tag.label }}
-          </span>
-        </div>
-      </div>
-
       <!-- SELETOR DE VISÃO: HISTÓRICO DE PARTIDAS x ANÁLISE DO JOGADOR -->
       <div class="flex gap-2 rounded-xl border border-slate-800 bg-slate-900/80 p-1.5 shadow-xl">
         <button
@@ -312,7 +182,7 @@
           class="flex-1 rounded-lg px-4 py-2.5 text-sm font-bold transition-all"
           :class="profileView === 'historico' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
         >
-          📜 Histórico de Partidas
+          <i class="fa-solid fa-scroll mr-1.5"></i> Histórico de Partidas
         </button>
         <button
           type="button"
@@ -320,7 +190,7 @@
           class="flex-1 rounded-lg px-4 py-2.5 text-sm font-bold transition-all"
           :class="profileView === 'analise' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
         >
-          📊 Análise do Jogador
+          <i class="fa-solid fa-chart-simple mr-1.5"></i> Análise do Jogador
         </button>
       </div>
 
@@ -523,7 +393,6 @@ import { state } from '../store.js';
 import { championImage, profileIconImage, itemImage, calculateKdaRatio, formatDuration, summonerSpellImage, runeImage } from '../utils.js';
 import { loadProfileIntoStore } from '../api.js';
 import SearchGate from './SearchGate.vue';
-import RadarChart from './RadarChart.vue';
 import PlayerAnalysis from './PlayerAnalysis.vue';
 
 const store = state;
@@ -641,180 +510,45 @@ function goToPage(p) {
   currentPage.value = Math.min(Math.max(1, p), totalPages.value);
 }
 
-// -------- Análise (base leve do D1, até 1000 jogos) com filtro de janela --------
+// -------- Base de partidas (D1, até 1000 jogos) para a Forma Recente --------
 const ROLE_LABELS = { TOP: 'Top', JUNGLE: 'Jungle', MIDDLE: 'Mid', BOTTOM: 'ADC', UTILITY: 'Sup' };
 // Só conta como rota quando a Riot devolveu uma posição válida de Summoner's Rift.
 // ARAM/Arena (sem lane) e dados antigos sem position retornam vazio/Invalid → ficam
 // fora das estatísticas de rota em vez de cair num balde "Outro".
 const roleLabelOf = (m) => ROLE_LABELS[m && m.teamPosition] || null;
-const ROLE_POS = { Top: 'TOP', Jungle: 'JUNGLE', Mid: 'MIDDLE', ADC: 'BOTTOM', Sup: 'UTILITY' };
-const ANALYTICS_WINDOWS = [20, 100, 1000];
 
 const proficiency = computed(() => store.searchProfile.proficiencyMatches || []);
-const availableGames = computed(() => proficiency.value.length);
 
-// Quantos jogos cada janela exige (a janela só liga se houver dados suficientes)
-const windowEnabled = (w) => availableGames.value >= w;
-const showWindowFilter = computed(() => availableGames.value >= ANALYTICS_WINDOWS[0]);
+// Total de vitórias ranqueadas (Solo + Flex), exibido no título do Resumo Competitivo
+const totalWins = computed(() =>
+  (store.searchProfile.statsSolo?.wins || 0) + (store.searchProfile.statsFlex?.wins || 0)
+);
 
-const analyticsWindow = ref(20);
-// Ao trocar de jogador, escolhe automaticamente a maior janela disponível
-watch(availableGames, (n) => {
-  const largest = [...ANALYTICS_WINDOWS].reverse().find((w) => n >= w);
-  analyticsWindow.value = largest || ANALYTICS_WINDOWS[0];
-}, { immediate: true });
-
-function setAnalyticsWindow(w) {
-  if (windowEnabled(w)) analyticsWindow.value = w;
-}
-
-// Jogos da janela selecionada (slice cuida de quando há menos jogos que a janela)
-const windowMatches = computed(() => proficiency.value.slice(0, analyticsWindow.value));
-
-// ----- Construtores reutilizáveis -----
-function buildAnalytics(ms) {
-  const games = ms.length;
-  if (!games) return null;
-  let wins = 0, k = 0, d = 0, a = 0, cs = 0, dur = 0;
-  const roles = {};
-  let comRota = 0; // jogos com rota válida (denominador do % por rota)
-  for (const m of ms) {
-    if (m.win) wins++;
-    k += Number(m.kills || 0);
-    d += Number(m.deaths || 0);
-    a += Number(m.assists || 0);
-    cs += Number(m.cs || 0);
-    dur += Number(m.gameDuration || 0);
-    const r = roleLabelOf(m);
-    if (r) { roles[r] = (roles[r] || 0) + 1; comRota++; }
+// Forma recente: sequência de resultados + melhores/piores streaks.
+// Usa a base analítica do D1 e cai para o histórico recente quando não há D1.
+const formRecent = computed(() => {
+  const base = proficiency.value.length ? proficiency.value : (store.searchProfile.matches || []);
+  const recent = base.slice(0, 20); // mais recente primeiro
+  let streakType = null, streak = 0;
+  for (const m of recent) {
+    if (streakType === null) { streakType = !!m.win; streak = 1; }
+    else if (!!m.win === streakType) streak++;
+    else break;
   }
-  const roleStats = Object.entries(roles)
-    .map(([name, count]) => ({ name, count, percentage: comRota ? Math.round((count / comRota) * 100) : 0 }))
-    .sort((x, y) => y.count - x.count);
-  return {
-    games,
-    winRate: Math.round((wins / games) * 100),
-    wins,
-    losses: games - wins,
-    kda: d === 0 ? (k + a).toFixed(2) : ((k + a) / d).toFixed(2),
-    avgKills: (k / games).toFixed(1),
-    avgDeaths: (d / games).toFixed(1),
-    avgAssists: (a / games).toFixed(1),
-    csMin: dur > 0 ? (cs / (dur / 60)).toFixed(1) : '0.0',
-    primaryRole: roleStats[0]?.name || '—',
-    roleStats
-  };
-}
-
-function buildTopChampions(ms) {
-  const agg = {};
-  for (const m of ms) {
-    const name = m.championName;
-    if (!name) continue;
-    if (!agg[name]) agg[name] = { name, games: 0, wins: 0, k: 0, d: 0, a: 0, cs: 0, dur: 0 };
-    const c = agg[name];
-    c.games++;
-    if (m.win) c.wins++;
-    c.k += Number(m.kills || 0);
-    c.d += Number(m.deaths || 0);
-    c.a += Number(m.assists || 0);
-    c.cs += Number(m.cs || 0);
-    c.dur += Number(m.gameDuration || 0);
+  const chrono = [...base].reverse();
+  let bestWin = 0, curW = 0, bestLoss = 0, curL = 0;
+  for (const m of chrono) {
+    if (m.win) { curW++; curL = 0; } else { curL++; curW = 0; }
+    bestWin = Math.max(bestWin, curW);
+    bestLoss = Math.max(bestLoss, curL);
   }
-  return Object.values(agg)
-    .map((c) => ({
-      name: c.name,
-      games: c.games,
-      winRate: Math.round((c.wins / c.games) * 100),
-      kda: c.d === 0 ? (c.k + c.a).toFixed(2) : ((c.k + c.a) / c.d).toFixed(2),
-      csMin: c.dur > 0 ? (c.cs / (c.dur / 60)).toFixed(1) : '0.0'
-    }))
-    .sort((a, b) => b.games - a.games)
-    .slice(0, 8);
-}
-
-function buildRadar(a, ms) {
-  if (!a) return [];
-  const distinct = new Set(ms.map((m) => m.championName).filter(Boolean)).size;
-  const clamp = (v) => Math.max(0, Math.min(100, Math.round(v)));
-  return [
-    { label: 'Win Rate', value: clamp(a.winRate) },
-    { label: 'KDA', value: clamp((Number(a.kda) / 5) * 100) },
-    { label: 'Farm', value: clamp((Number(a.csMin) / 10) * 100) },
-    { label: 'Agressão', value: clamp((Number(a.avgKills) / 12) * 100) },
-    { label: 'Sobrevivência', value: clamp(100 - (Number(a.avgDeaths) / 12) * 100) },
-    { label: 'Participação', value: clamp((Number(a.avgAssists) / 15) * 100) },
-    { label: 'Versatilidade', value: clamp((distinct / 15) * 100) }
-  ];
-}
-
-// Barras de rota (estilo "Top Roles": vitórias/derrotas por rota)
-function buildRoleBars(ms) {
-  const map = {};
-  for (const m of ms) {
-    const r = roleLabelOf(m);
-    if (!r) continue; // ignora jogos sem lane (ARAM/Arena) ou sem dado de rota
-    if (!map[r]) map[r] = { role: r, games: 0, wins: 0 };
-    map[r].games++;
-    if (m.win) map[r].wins++;
-  }
-  return Object.values(map)
-    .map((x) => ({ ...x, losses: x.games - x.wins, winRate: Math.round((x.wins / x.games) * 100) }))
-    .sort((a, b) => b.games - a.games)
-    .slice(0, 5);
-}
-
-// ----- Computeds baseados na janela selecionada -----
-const analyticsWin = computed(() => buildAnalytics(windowMatches.value));
-const topChampionsWin = computed(() => buildTopChampions(windowMatches.value));
-const radarMetricsWin = computed(() => buildRadar(analyticsWin.value, windowMatches.value));
-const roleBarsWin = computed(() => buildRoleBars(windowMatches.value));
-const maxRoleGames = computed(() => Math.max(1, ...roleBarsWin.value.map((r) => r.games)));
-
-// Mantido fixo em 100 jogos para o card "KDA (100 Partidas)" do resumo
-const analytics100 = computed(() => buildAnalytics(proficiency.value.slice(0, 100)));
-
-// ----- Tags de comportamento do jogador (derivadas da janela atual) -----
-const playerTags = computed(() => {
-  const a = analyticsWin.value;
-  if (!a) return [];
-  const tags = [];
-  const kda = Number(a.kda);
-  const csMin = Number(a.csMin);
-  const avgDeaths = Number(a.avgDeaths);
-  const avgKills = Number(a.avgKills);
-  const distinct = new Set(windowMatches.value.map((m) => m.championName).filter(Boolean)).size;
-
-  if (a.winRate >= 55) tags.push({ label: 'Em Ascensão', icon: '📈', cls: 'border-emerald-600/50 bg-emerald-950/40 text-emerald-300' });
-  if (kda >= 4) tags.push({ label: 'Jogador Focado', icon: '🎯', cls: 'border-amber-600/50 bg-amber-950/40 text-amber-300' });
-  if (avgDeaths <= 4) tags.push({ label: 'Difícil de Matar', icon: '🛡️', cls: 'border-cyan-600/50 bg-cyan-950/40 text-cyan-300' });
-  if (avgKills >= 8) tags.push({ label: 'Carregador', icon: '⚔️', cls: 'border-red-600/50 bg-red-950/40 text-red-300' });
-  if (csMin >= 7.5) tags.push({ label: 'Mestre do Farm', icon: '🌾', cls: 'border-lime-600/50 bg-lime-950/40 text-lime-300' });
-  if (distinct >= 12) tags.push({ label: 'Versátil', icon: '🔄', cls: 'border-fuchsia-600/50 bg-fuchsia-950/40 text-fuchsia-300' });
-  else if (distinct > 0 && distinct <= 3) tags.push({ label: 'One-Trick', icon: '🐎', cls: 'border-purple-600/50 bg-purple-950/40 text-purple-300' });
-  if (a.winRate >= 45 && a.winRate <= 55 && a.games >= 20) tags.push({ label: 'Consistente', icon: '⚖️', cls: 'border-slate-600/50 bg-slate-800/60 text-slate-300' });
-
-  if (!tags.length) tags.push({ label: 'Jogador Equilibrado', icon: '🎮', cls: 'border-slate-600/50 bg-slate-800/60 text-slate-300' });
-  return tags;
+  return { recent, streakType, streak, bestWin, bestLoss };
 });
 
 const hasProfile = computed(() => Boolean(store.searchProfile.puuid));
 
 const winRateSolo = computed(() => store.searchProfile.statsSolo?.winRate || 0);
 const winRateFlex = computed(() => store.searchProfile.statsFlex?.winRate || 0);
-
-const avgKda = computed(() => {
-  const matches = store.searchProfile.matches || [];
-  if (!matches.length) return '0.00';
-  let totalKills = 0, totalDeaths = 0, totalAssists = 0;
-  matches.forEach(match => {
-    totalKills += Number(match.kills || 0);
-    totalDeaths += Number(match.deaths || 0);
-    totalAssists += Number(match.assists || 0);
-  });
-  const kda = totalDeaths === 0 ? (totalKills + totalAssists) : ((totalKills + totalAssists) / totalDeaths);
-  return kda.toFixed(2);
-});
 
 const labelSolo = computed(() => {
   const s = store.searchProfile.statsSolo;
