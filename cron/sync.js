@@ -2,7 +2,7 @@
 // TRATOR DA MADRUGADA — Ingestão + Processamento unificados (Marcos Temporais).
 //
 // Papel duplo e definitivo:
-//   1) Ingestão: para cada jogador, baixa as ÚLTIMAS 500 partidas (paginando
+//   1) Ingestão: para cada jogador, baixa as ÚLTIMAS 200 partidas (paginando
 //      a Riot de 100 em 100) e detecta as inéditas.
 //   2) Processamento: para cada partida inédita faz a CHAMADA DUPLA à Riot
 //      (resumo + timeline), grava metadados + estatísticas de fim de jogo e
@@ -28,7 +28,7 @@ const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 const D1_DATABASE_ID = process.env.D1_DATABASE_ID;
 
 const REGION_ROUTE = 'americas';
-const LIMITE_PARTIDAS = 1000; // 🔒 Limite de segurança: até as 1000 últimas por jogador
+const LIMITE_PARTIDAS = 200; // 🔒 Rodada noturna: olha as 200 últimas e baixa só as inéditas
 const PAGINA_IDS = 100;      // A Riot devolve no máx. 100 ids por chamada -> paginamos
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -42,6 +42,18 @@ const PUUIDS_PRIORITARIOS = [
 ];
 
 const BACKFILL = process.env.BACKFILL === '1' || process.env.BACKFILL === 'true';
+
+// 🎯 ALVO OPCIONAL — se tiver puuids aqui (ou na env PUUIDS, separada por vírgula),
+// o trator processa SÓ esses jogadores e ignora o resto do banco.
+// Deixe VAZIO para o comportamento normal (todos os jogadores monitorados).
+const PUUIDS_ALVO = (
+  process.env.PUUIDS
+    ? process.env.PUUIDS.split(',').map(s => s.trim()).filter(Boolean)
+    : [
+        // cole aqui os puuids para rodar filtrado, ex.:
+        // '9t-kjlDiabw7Br6dj5pq4H7ulYloLp5DBVJAAydDdIjBxBp3oNXXG2Y-igp9j7XEGjGBTFuQPcxTfQ',
+      ]
+);
 
 async function queryD1(sql, params = []) {
   const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/query`;
@@ -138,11 +150,18 @@ async function processarJogador(jogador, fs) {
   if (allMatchIds.length === 0) return;
 
   // 2) Quais já estão no banco (para baixar só as inéditas).
+  // ⚠️ A checagem é POR JOGADOR (estatisticas_jogador_partida WHERE puuid), NÃO na
+  // tabela global `partidas`. Se olhasse `partidas`, uma partida jogada por 2+ membros
+  // do banco seria "carimbada" pelo primeiro a processá-la e os demais a pulariam para
+  // sempre — perdendo as estatísticas deles. (Paridade com worker.js.)
   const existentes = new Set();
   for (let i = 0; i < allMatchIds.length; i += 50) {
     const chunk = allMatchIds.slice(i, i + 50);
     const placeholders = chunk.map(() => '?').join(',');
-    const res = await queryD1(`SELECT match_id FROM partidas WHERE match_id IN (${placeholders})`, chunk);
+    const res = await queryD1(
+      `SELECT match_id FROM estatisticas_jogador_partida WHERE puuid = ? AND match_id IN (${placeholders})`,
+      [jogador.puuid, ...chunk]
+    );
     (res.results || []).forEach(row => existentes.add(row.match_id));
   }
 
@@ -211,7 +230,15 @@ async function rodarSincronizacao() {
 
     console.log('🗄️  [D1] Baixando a lista de jogadores monitorados...');
     const dbResult = await queryD1('SELECT puuid, game_name, tag_line FROM jogadores');
-    const jogadores = ordenarPorPrioridade(dbResult.results || []);
+    let jogadores = ordenarPorPrioridade(dbResult.results || []);
+
+    // 🎯 Filtro opcional: roda só os puuids-alvo, se configurados.
+    if (PUUIDS_ALVO.length) {
+      const alvo = new Set(PUUIDS_ALVO);
+      jogadores = jogadores.filter(j => alvo.has(j.puuid));
+      console.log(`🎯 [FILTRO] Rodando SÓ ${jogadores.length} de ${PUUIDS_ALVO.length} puuid(s) alvo.`);
+    }
+
     console.log(`📋 [D1] ${jogadores.length} jogador(es). Núcleo do time roda primeiro.`);
 
     let falhas = 0;
