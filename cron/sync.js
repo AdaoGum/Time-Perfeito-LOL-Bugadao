@@ -28,7 +28,7 @@ const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 const D1_DATABASE_ID = process.env.D1_DATABASE_ID;
 
 const REGION_ROUTE = 'americas';
-const LIMITE_PARTIDAS = 500; // 🔒 Limite de segurança: até as 500 últimas por jogador
+const LIMITE_PARTIDAS = 1000; // 🔒 Limite de segurança: até as 1000 últimas por jogador
 const PAGINA_IDS = 100;      // A Riot devolve no máx. 100 ids por chamada -> paginamos
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -69,7 +69,7 @@ async function respeitarRateLimit(logger) {
   }
 }
 
-async function fetchFromRiot(endpoint) {
+async function fetchFromRiot(endpoint, tentativa = 0) {
   const url = `https://${REGION_ROUTE}.api.riotgames.com${endpoint}`;
   const response = await fetch(url, { headers: { 'X-Riot-Token': RIOT_API_KEY } });
   totalRequestsFeitas++;
@@ -77,7 +77,15 @@ async function fetchFromRiot(endpoint) {
     console.warn('⚠️ [RIOT LIMIT] Chave esquentou demais! Pausando 2 min para esfriar...');
     await sleep(125000);
     totalRequestsFeitas = 0;
-    return fetchFromRiot(endpoint);
+    return fetchFromRiot(endpoint, tentativa);
+  }
+  // Erros transitórios (500, 502, 503, 504): a Riot às vezes soluça. Tenta de novo
+  // com backoff em vez de derrubar a rodada — até 3 tentativas.
+  if (response.status >= 500 && tentativa < 3) {
+    const espera = 2000 * (tentativa + 1);
+    console.warn(`⚠️ [RIOT ${response.status}] Erro transitório. Tentativa ${tentativa + 1}/3 em ${espera / 1000}s...`);
+    await sleep(espera);
+    return fetchFromRiot(endpoint, tentativa + 1);
   }
   if (!response.ok) throw new Error(`Erro na Riot API: ${response.status}`);
   return response.json();
@@ -206,12 +214,20 @@ async function rodarSincronizacao() {
     const jogadores = ordenarPorPrioridade(dbResult.results || []);
     console.log(`📋 [D1] ${jogadores.length} jogador(es). Núcleo do time roda primeiro.`);
 
+    let falhas = 0;
     for (const jogador of jogadores) {
-      await processarJogador(jogador, fs);
+      try {
+        await processarJogador(jogador, fs);
+      } catch (erroJogador) {
+        // Blindagem: um jogador que falhar (ex.: erro persistente na paginação de IDs)
+        // NÃO pode derrubar a rodada e deixar os jogadores seguintes sem sincronizar.
+        falhas++;
+        console.error(`❌ [PULANDO] ${jogador.game_name}#${jogador.tag_line} falhou: ${erroJogador.message}`);
+      }
     }
 
     console.log('\n=========================================================');
-    console.log('✅ [FINALIZADO] O trator encerrou a rodada com sucesso!');
+    console.log(`✅ [FINALIZADO] O trator encerrou a rodada${falhas ? ` com ${falhas} jogador(es) pulado(s)` : ' com sucesso'}!`);
     console.log('=========================================================');
   } catch (error) {
     console.error('\n❌ [FALHA CRÍTICA] O motor engasgou por um erro externo:', error.message);

@@ -105,7 +105,7 @@
     @mouseenter="sidebarHovered = true"
     @mouseleave="sidebarHovered = false"
   >
-    <div class="flex shrink-0 items-center justify-between border-b border-slate-800 px-3 py-3">
+    <div class="flex shrink-0 items-center border-b border-slate-800 px-3 py-3" :class="effectiveCollapsed ? 'justify-center' : 'justify-between'">
       <span v-if="!effectiveCollapsed" class="text-xs font-black uppercase tracking-wider text-slate-400">Spiritual Bar</span>
       <button
         type="button"
@@ -117,11 +117,11 @@
       </button>
     </div>
 
-    <div class="shrink-0 border-b border-slate-800 p-3">
+    <div class="flex shrink-0 flex-col gap-2 border-b border-slate-800 p-3" :class="effectiveCollapsed ? 'items-center' : ''">
       <button
         v-if="effectiveCollapsed"
         type="button"
-        class="mb-2 inline-flex h-8 w-8 items-center justify-center rounded border border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
+        class="inline-flex h-8 w-8 items-center justify-center rounded border border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
         @click="sidebarSearchOpen = !sidebarSearchOpen"
         aria-label="Abrir busca"
       >
@@ -373,7 +373,10 @@ const mainStyle = computed(() => {
     return { marginLeft: '0px', width: '100%' };
   }
 
-  const leftOffset = effectiveCollapsed.value ? 80 : 288;
+  // A margem do conteúdo segue o estado REAL fixado (não o hover).
+  // Minimizada: reserva 80px. Ao expandir via hover, a barra fica sobreposta
+  // ao conteúdo (overlay) sem empurrá-lo.
+  const leftOffset = store.ui.sidebarCollapsed ? 80 : 288;
   return {
     marginLeft: `${leftOffset}px`,
     width: `calc(100% - ${leftOffset}px)`

@@ -4,3 +4,4 @@ dist
 *.local
 .github/prompts/*
 repomix-output.xml
+local
