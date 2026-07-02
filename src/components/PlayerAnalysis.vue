@@ -133,6 +133,68 @@
         </div>
       </section>
 
+      <!-- ===================== DEFINIÇÃO: MELHORES ROTAS POR FILA ===================== -->
+      <section class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl">
+        <h3 class="mb-1 flex items-center gap-2 text-sm font-bold text-slate-100"><i class="fa-solid fa-ranking-star text-emerald-400"></i> Onde ele brilha — Rotas por Fila</h3>
+        <p class="mb-3 text-[11px] text-slate-500">As 3 rotas mais jogadas em cada fila ranqueada, com base em <b>todo o histórico</b> (independe dos filtros acima).</p>
+        <div class="grid gap-3 md:grid-cols-2">
+          <div v-for="q in queueRoleBreakdown" :key="q.key" class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+            <div class="mb-2 flex items-center gap-2 border-b border-slate-800 pb-2">
+              <span class="text-xs font-black uppercase tracking-wide" :class="q.accent">{{ q.label }}</span>
+              <span class="ml-auto text-[10px] font-semibold text-slate-500">{{ q.total }} jogos</span>
+            </div>
+            <div v-if="q.roles.length" class="space-y-2">
+              <div v-for="r in q.roles" :key="r.role" class="rounded-lg border border-slate-800 bg-slate-900/60 p-2.5">
+                <div class="mb-2 flex items-center gap-2">
+                  <img :src="miniRoleIcon(r.role)" class="h-4 w-4 brightness-200" :alt="r.label" />
+                  <span class="text-sm font-bold text-slate-200">{{ r.label }}</span>
+                  <span class="ml-auto text-[10px] text-slate-500">{{ r.games }}j · {{ r.wins }}V/{{ r.losses }}D</span>
+                </div>
+                <div class="grid grid-cols-4 gap-1 text-center">
+                  <div><div class="text-sm font-black" :class="r.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ r.winRate }}%</div><div class="text-[8px] font-bold uppercase tracking-wide text-slate-500">Win Rate</div></div>
+                  <div><div class="text-sm font-black text-emerald-400">{{ r.kda }}</div><div class="text-[8px] font-bold uppercase tracking-wide text-slate-500">KDA</div></div>
+                  <div><div class="text-sm font-black text-amber-400">{{ r.csMin }}</div><div class="text-[8px] font-bold uppercase tracking-wide text-slate-500">CS/min</div></div>
+                  <div><div class="text-sm font-black text-teal-300">{{ r.kp }}%</div><div class="text-[8px] font-bold uppercase tracking-wide text-slate-500">Partic.</div></div>
+                </div>
+              </div>
+            </div>
+            <p v-else class="py-6 text-center text-xs text-slate-500">Sem partidas ranqueadas nesta fila.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== DEFINIÇÃO: TOP CAMPEÕES POR FUNÇÃO ===================== -->
+      <section v-if="roleChampionBreakdown.length" class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl">
+        <h3 class="mb-1 flex items-center gap-2 text-sm font-bold text-slate-100"><i class="fa-solid fa-crown text-yellow-400"></i> Top Campeões por Função</h3>
+        <p class="mb-3 text-[11px] text-slate-500">Os 3 campeões mais jogados em cada função, com base em <b>todo o histórico</b> (independe dos filtros acima).</p>
+        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div v-for="fn in roleChampionBreakdown" :key="fn.role" class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+            <div class="mb-2 flex items-center gap-2 border-b border-slate-800 pb-2">
+              <img :src="miniRoleIcon(fn.role)" class="h-4 w-4 brightness-200" :alt="fn.label" />
+              <span class="text-xs font-black uppercase tracking-wide" :style="{ color: fn.color }">{{ fn.label }}</span>
+              <span class="ml-auto text-[10px] font-semibold text-slate-500">{{ fn.games }} jogos</span>
+            </div>
+            <div class="space-y-2">
+              <div v-for="c in fn.champions" :key="c.name" class="flex items-center gap-2.5 rounded-lg border border-slate-800 bg-slate-900/60 p-2">
+                <img :src="championImage(c.name)" class="h-9 w-9 flex-shrink-0 rounded-full border border-slate-600" :alt="c.name" loading="lazy" />
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center justify-between gap-1">
+                    <span class="truncate text-xs font-bold text-slate-200">{{ c.name }}</span>
+                    <span class="flex-shrink-0 text-[10px] text-slate-500">{{ c.games }}j · {{ c.wins }}V/{{ c.losses }}D</span>
+                  </div>
+                  <div class="mt-1 grid grid-cols-4 gap-1 text-center">
+                    <div><div class="text-[11px] font-black" :class="c.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ c.winRate }}%</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">WR</div></div>
+                    <div><div class="text-[11px] font-black text-emerald-400">{{ c.kda }}</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">KDA</div></div>
+                    <div><div class="text-[11px] font-black text-amber-400">{{ c.csMin }}</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">CS/m</div></div>
+                    <div><div class="text-[11px] font-black text-rose-300">{{ formatK(c.avgDmg) }}</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">Dano</div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- ===== LINHA A: TOP ROTAS | DISTRIBUIÇÃO POR ROTA | EVOLUÇÃO ===== -->
       <div class="grid gap-4 lg:grid-cols-3 items-stretch">
 
@@ -531,6 +593,69 @@ const multiBars = computed(() => {
   ];
   const max = Math.max(1, ...items.map((i) => i.value));
   return items.map((i) => ({ ...i, pct: Math.round(i.value / max * 100) }));
+});
+
+// -------------------- Definição do jogador: rotas por fila & campeões por função --------------------
+// Estes dois blocos são o "raio-x" do jogador: usam TODO o histórico de proficiência
+// (independe dos filtros interativos acima) e rankeiam por nº de jogos (mais representativo).
+function aggregateStats(matches) {
+  const n = matches.length;
+  let wins = 0, k = 0, d = 0, a = 0, cs = 0, dur = 0, dmg = 0, vision = 0;
+  let gpmSum = 0, gpmCnt = 0, kpSum = 0, kpCnt = 0;
+  for (const m of matches) {
+    if (m.win) wins++;
+    k += num(m.kills); d += num(m.deaths); a += num(m.assists);
+    cs += num(m.cs); dur += num(m.gameDuration);
+    dmg += num(m.damageChampions); vision += num(m.visionScore);
+    if (m.goldPerMin) { gpmSum += num(m.goldPerMin); gpmCnt++; }
+    if (m.killParticipation != null) { kpSum += num(m.killParticipation); kpCnt++; }
+  }
+  const kda = d === 0 ? (k + a) : (k + a) / d;
+  return {
+    games: n, wins, losses: n - wins, winRate: Math.round(wins / n * 100),
+    kda: +kda.toFixed(2),
+    csMin: +(dur > 0 ? cs / (dur / 60) : 0).toFixed(1),
+    avgDmg: Math.round(dmg / n),
+    avgVision: +(vision / n).toFixed(1),
+    kp: kpCnt ? Math.round(kpSum / kpCnt * 100) : 0
+  };
+}
+
+const QUEUE_SPLITS = [
+  { key: 'SOLO', id: 420, label: 'Ranqueada Solo/Duo', accent: 'text-sky-300' },
+  { key: 'FLEX', id: 440, label: 'Ranqueada Flex', accent: 'text-purple-300' }
+];
+
+// Top 3 rotas mais jogadas em cada fila ranqueada, com 4 stats por rota.
+const queueRoleBreakdown = computed(() =>
+  QUEUE_SPLITS.map((q) => {
+    const matches = proficiency.value.filter((m) => num(m.queueId) === q.id && ROLES.includes(m.teamPosition));
+    const byRole = {};
+    for (const m of matches) (byRole[m.teamPosition] || (byRole[m.teamPosition] = [])).push(m);
+    const roles = Object.entries(byRole)
+      .map(([role, ms]) => ({ role, label: ROLE_LABELS[role], color: ROLE_COLORS[role], ...aggregateStats(ms) }))
+      .sort((a, b) => b.games - a.games)
+      .slice(0, 3);
+    return { ...q, roles, total: matches.length };
+  })
+);
+
+// Para cada função (rota), os 3 campeões mais jogados, com 4 stats por campeão.
+const roleChampionBreakdown = computed(() => {
+  const byRole = {};
+  for (const m of proficiency.value) {
+    if (!ROLES.includes(m.teamPosition) || !m.championName) continue;
+    (byRole[m.teamPosition] || (byRole[m.teamPosition] = [])).push(m);
+  }
+  return ROLES.filter((r) => byRole[r]?.length).map((role) => {
+    const champMap = {};
+    for (const m of byRole[role]) (champMap[m.championName] || (champMap[m.championName] = [])).push(m);
+    const champions = Object.entries(champMap)
+      .map(([name, ms]) => ({ name, ...aggregateStats(ms) }))
+      .sort((a, b) => b.games - a.games)
+      .slice(0, 3);
+    return { role, label: ROLE_LABELS[role], color: ROLE_COLORS[role], games: byRole[role].length, champions };
+  });
 });
 
 // -------------------- Tags --------------------
