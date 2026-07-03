@@ -75,6 +75,14 @@ async function queryD1(sql, params = []) {
 }
 
 let totalRequestsFeitas = 0;
+
+// Contador GLOBAL compartilhado (mesma tabela api_usage lida pelo worker/front).
+// Best-effort e SEM await: nunca deve atrasar nem derrubar o backfill.
+function registrarUsoGlobal(source) {
+  queryD1('INSERT INTO api_usage (ts, count, source, action) VALUES (?, ?, ?, ?)', [Date.now(), 1, source, 'riot_fetch'])
+    .catch(() => {});
+}
+
 async function respeitarRateLimit() {
   if (totalRequestsFeitas >= 90) {
     console.log('⏳ [ESFRIANDO CHAVE] Quase no limite de 100 reqs. Pausando 2 min...');
@@ -89,6 +97,7 @@ async function fetchFromRiot(endpoint, tentativa = 0) {
     headers: { 'X-Riot-Token': RIOT_API_KEY }
   });
   totalRequestsFeitas++;
+  registrarUsoGlobal('backfill');
   if (response.status === 429) {
     console.warn('⚠️ [RIOT LIMIT] Chave esquentou. Pausando 2 min...');
     await sleep(125000);

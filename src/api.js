@@ -15,6 +15,39 @@ function normalizeWorkerError(status) {
   return 'Falha crítica amigável: não foi possível completar a operação agora.';
 }
 
+// Aplica no store o contador GLOBAL reportado pelo worker (o mesmo p/ todos).
+// `resetMs` (quanto falta p/ o reset) vira um instante absoluto p/ contagem regressiva suave.
+function applyGlobalRate(rate) {
+  if (!rate || !Number.isFinite(rate.used)) return;
+  const g = state.telemetry.global;
+  g.used = rate.used;
+  g.limit = Number.isFinite(rate.limit) ? rate.limit : g.limit;
+  g.available = Number.isFinite(rate.available) ? rate.available : Math.max(0, g.limit - g.used);
+  if (Number.isFinite(rate.windowMs)) g.windowMs = rate.windowMs;
+  if (Number.isFinite(rate.resetMs)) g.resetAt = Date.now() + rate.resetMs;
+  g.loaded = true;
+}
+
+// Consulta leve do contador global (não gasta a chave da Riot). Usada em polling.
+export async function fetchRateStatus() {
+  try {
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'rate_status' })
+    });
+    if (!response.ok) return;
+    applyGlobalRate(await response.json());
+  } catch (e) { /* silencioso: telemetria é best-effort */ }
+}
+
+// True quando o orçamento global já estourou (usado p/ bloquear buscas no front).
+// Só bloqueia se já temos um valor carregado; caso contrário deixa o worker decidir.
+export function isRateBlocked() {
+  const g = state.telemetry.global;
+  return g.loaded && g.available <= 0;
+}
+
 export async function workerRequest(action, payload) {
   const meta = TELEMETRY_META[action] || TELEMETRY_META.default;
 
@@ -25,10 +58,17 @@ export async function workerRequest(action, payload) {
   });
 
   if (!response.ok) {
-    throw new Error(normalizeWorkerError(response.status));
+    // Tenta extrair a mensagem/contador que o worker mandou (ex.: bloqueio 429 global).
+    let body = null;
+    try { body = await response.json(); } catch (e) { /* corpo não-JSON */ }
+    if (body?.rate) applyGlobalRate(body.rate);
+    throw new Error(body?.error || normalizeWorkerError(response.status));
   }
 
   const data = await response.json();
+
+  // Atualiza o contador global compartilhado com o que o worker acabou de reportar.
+  if (data?.rate) applyGlobalRate(data.rate);
 
   // Contabiliza APENAS as chamadas reais à API da Riot que o worker informou.
   // Quando os dados vêm do banco (cache D1), apiCalls é baixo/zero e não gasta o orçamento.
@@ -108,8 +148,10 @@ export function applyProfileToStore(normalizedData, rawData = {}) {
   state.searchProfile.error = null;
 }
 
-export function loadMasteriesInBackground(puuid, gameName, tagLine) {
-  return workerRequest('masteries', { puuid, gameName, tagLine })
+// `refresh=true` força a rebusca na Riot (usado quando o perfil detectou partida
+// nova); senão o worker serve as maestrias do cache D1 sem gastar a chave.
+export function loadMasteriesInBackground(puuid, gameName, tagLine, refresh = false) {
+  return workerRequest('masteries', { puuid, gameName, tagLine, refresh })
     .then((masteryData) => {
       const fromStaticChamp = (entry) => {
         if (!entry) return { championName: 'Aatrox', championLevel: 1, championPoints: 0, lastPlayTime: 0 };
@@ -138,7 +180,7 @@ export async function loadProfileIntoStore(gameName, tagLine, { loadMasteries = 
     const normalized = normalizeProfileData(data, gameName, tagLine);
     applyProfileToStore(normalized, data);
     if (loadMasteries && normalized.puuid) {
-      loadMasteriesInBackground(normalized.puuid, gameName, tagLine);
+      loadMasteriesInBackground(normalized.puuid, gameName, tagLine, data?.hadNewGames === true);
     }
     return normalized;
   } catch (error) {

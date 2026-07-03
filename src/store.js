@@ -4,7 +4,10 @@ export const state = reactive({
   // Monitor de Telemetria da API da Riot (Evita o erro de undefined no App.vue)
   telemetry: {
     timestamps: [],
-    events: []
+    events: [],
+    // Contador GLOBAL compartilhado (vindo do worker/D1): o mesmo número para
+    // todos os usuários. `loaded` só vira true após a primeira resposta do worker.
+    global: { used: 0, limit: 100, available: 100, resetAt: 0, windowMs: 120000, loaded: false }
   },
 
   // Dados do perfil unificado buscado (Jogador Global Ativo)

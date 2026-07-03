@@ -11,7 +11,74 @@ async function ensureSchema(env) {
       "CREATE TABLE IF NOT EXISTS maestrias (puuid TEXT NOT NULL, champion_id INTEGER NOT NULL, champion_level INTEGER, champion_points INTEGER, last_play_time INTEGER, atualizado TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (puuid, champion_id))"
     ).run();
   } catch (e) { /* tabela já existe */ }
+  // Contador global de chamadas à Riot (ver migrations/003_api_usage.sql).
+  try {
+    await env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS api_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, count INTEGER NOT NULL, source TEXT, action TEXT)"
+    ).run();
+    await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_api_usage_ts ON api_usage (ts)").run();
+  } catch (e) { /* tabela já existe */ }
+  // Colunas de CACHE do perfil em `jogadores` (ver migrations/004_profile_cache.sql).
+  // Sem elas o worker não consegue remontar o perfil sem gastar a chave: guardamos a
+  // plataforma (p/ pular active-shards) e vitórias/derrotas por fila (o front exibe W/L).
+  // SQLite/D1 não tem "ADD COLUMN IF NOT EXISTS" -> tentamos uma a uma e ignoramos "duplicate".
+  for (const ddl of [
+    "ALTER TABLE jogadores ADD COLUMN platform_host TEXT",
+    "ALTER TABLE jogadores ADD COLUMN solo_wins INTEGER",
+    "ALTER TABLE jogadores ADD COLUMN solo_losses INTEGER",
+    "ALTER TABLE jogadores ADD COLUMN flex_wins INTEGER",
+    "ALTER TABLE jogadores ADD COLUMN flex_losses INTEGER"
+  ]) {
+    try { await env.DB.prepare(ddl).run(); } catch (e) { /* coluna já existe */ }
+  }
   schemaReady = true;
+}
+
+// Busca no D1 (case-insensitive) um jogador já conhecido pelo nome#tag. Serve como
+// atalho para NÃO gastar a chave da Riot (account/summoner/league/shard) quando já
+// temos o cadastro salvo. Retorna a linha inteira de `jogadores` ou undefined.
+async function loadCachedPlayer(env, gameName, tagLine) {
+  try {
+    return await env.DB.prepare(
+      "SELECT * FROM jogadores WHERE game_name = ? COLLATE NOCASE AND tag_line = ? COLLATE NOCASE LIMIT 1"
+    ).bind(gameName, tagLine).first();
+  } catch (e) {
+    return null;
+  }
+}
+
+// ----------------------------------------------------------------------
+// CONTADOR GLOBAL DE CHAMADAS À RIOT (janela deslizante compartilhada no D1)
+// Reflete o consumo REAL da chave por TODOS: buscas no site + cron/backfill.
+// Assim o orçamento aparece igual para todos os usuários e podemos recusar
+// buscas quando estoura (protegendo contra o 429 da própria Riot).
+// ----------------------------------------------------------------------
+const RATE_WINDOW_MS = 120000;  // janela de 2 min (limite da chave de dev)
+const RATE_LIMIT = 100;         // 100 chamadas / 2 min
+const RIOT_ACTIONS = new Set(["profile_overview", "visão_geral_do_perfil", "profile_brief", "masteries"]);
+
+// Soma as chamadas dentro da janela e calcula quanto falta para o reset.
+async function sumUsageGlobal(env, now = Date.now()) {
+  const row = await env.DB.prepare(
+    "SELECT COALESCE(SUM(count), 0) AS used, MIN(ts) AS oldest FROM api_usage WHERE ts > ?"
+  ).bind(now - RATE_WINDOW_MS).first();
+  const used = Number(row?.used || 0);
+  const oldest = row?.oldest ? Number(row.oldest) : null;
+  const resetMs = oldest ? Math.max(0, (oldest + RATE_WINDOW_MS) - now) : 0;
+  return { used, limit: RATE_LIMIT, available: Math.max(0, RATE_LIMIT - used), resetMs, windowMs: RATE_WINDOW_MS };
+}
+
+// Grava (em background) as chamadas reais feitas por este request + poda o histórico.
+function recordUsageGlobal(env, ctx, count, source, action, now = Date.now()) {
+  if (!count || count <= 0) return;
+  ctx.waitUntil((async () => {
+    try {
+      await env.DB.prepare("INSERT INTO api_usage (ts, count, source, action) VALUES (?, ?, ?, ?)")
+        .bind(now, count, source, action || null).run();
+      // Poda oportunista: descarta o que já saiu de uma janela generosa (10 min).
+      await env.DB.prepare("DELETE FROM api_usage WHERE ts < ?").bind(now - 10 * 60 * 1000).run();
+    } catch (e) { /* telemetria é best-effort, nunca derruba o request */ }
+  })());
 }
 
 // ----------------------------------------------------------------------
@@ -205,8 +272,8 @@ export default {
     // ----------------------------------------------------------------------
     // 2. CAPTURA DE PARÂMETROS
     // ----------------------------------------------------------------------
-    let action, gameName, tagLine, puuid;
-    
+    let action, gameName, tagLine, puuid, refresh;
+
     if (request.method === "POST") {
       try {
         const body = await request.json();
@@ -214,6 +281,7 @@ export default {
         gameName = body.gameName;
         tagLine = body.tagLine;
         puuid = body.puuid;
+        refresh = body.refresh === true;
       } catch (e) {
         return new Response(JSON.stringify({ error: "JSON inválido." }), { status: 400, headers: corsHeaders });
       }
@@ -223,11 +291,36 @@ export default {
       gameName = url.searchParams.get("gameName");
       tagLine = url.searchParams.get("tagLine");
       puuid = url.searchParams.get("puuid");
+      refresh = url.searchParams.get("refresh") === "true";
     }
 
     const API_KEY = env.RIOT_API_KEY;
     if (!API_KEY) {
       return new Response(JSON.stringify({ error: "Chave RIOT_API_KEY ausente." }), { status: 401, headers: corsHeaders });
+    }
+
+    // Garante a tabela do contador global antes de qualquer leitura/escrita de uso.
+    await ensureSchema(env);
+
+    // Rota leve de status do contador global (só LÊ o D1, não gasta a chave da Riot).
+    // O front faz polling disto para todos verem o mesmo número ao vivo.
+    if (action === "rate_status") {
+      const rate = await sumUsageGlobal(env);
+      return new Response(JSON.stringify(rate), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // Antes de qualquer ação que gaste a chave, checa o orçamento GLOBAL compartilhado.
+    // Se já estourou, recusa sem chamar a Riot (o front mostra o aviso).
+    let usageBefore = { used: 0, available: RATE_LIMIT };
+    if (RIOT_ACTIONS.has(action)) {
+      usageBefore = await sumUsageGlobal(env);
+      if (usageBefore.used >= RATE_LIMIT) {
+        return new Response(JSON.stringify({
+          error: "Limite global da API da Riot atingido. Nenhuma busca pode ser feita agora — aguarde o reset.",
+          rateLimited: true,
+          rate: usageBefore
+        }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
     }
 
     const routingAmericas = "https://americas.api.riotgames.com";
@@ -247,84 +340,122 @@ export default {
       // É devolvido no JSON para o front contabilizar o orçamento de rate limit com precisão.
       let apiCalls = 0;
 
-      apiCalls++;
-      const accountRes = await fetch(`${routingAmericas}/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}?api_key=${API_KEY}`);
-      if (!accountRes.ok) {
-        return new Response(JSON.stringify({ error: "Jogador não encontrado." }), { status: accountRes.status, headers: corsHeaders });
-      }
-      
-      const accountData = await accountRes.json();
-      const playerPuuid = accountData.puuid;
-      const exactGameName = accountData.gameName;
-      const exactTagLine = accountData.tagLine;
+      // ----------------------------------------------------------------------
+      // IDENTIDADE + ESTADO: tenta servir do D1 (0 chamadas à Riot). Só bate na
+      // Riot quando o jogador ainda NÃO é conhecido (1ª visita) — aí resolve
+      // puuid (account-v1) e a plataforma (active-shards) e marca para buscar elo.
+      // ----------------------------------------------------------------------
+      const cached = await loadCachedPlayer(env, gameName, tagLine);
 
+      let playerPuuid, exactGameName, exactTagLine;
       let platformHost = 'br1';
-      try {
+      let profileIconId = 29;
+      let summonerLevel = 0;
+      let statsSolo = { wins: 0, losses: 0, winRate: 0, tier: "UNRANKED", rank: "", lp: 0 };
+      let statsFlex = { wins: 0, losses: 0, winRate: 0, tier: "UNRANKED", rank: "", lp: 0 };
+      // Sem cache (1ª visita) o elo/ícone precisam vir frescos da Riot de qualquer jeito.
+      let precisaPerfilFresco = false;
+
+      if (cached && cached.puuid) {
+        playerPuuid = cached.puuid;
+        exactGameName = cached.game_name;
+        exactTagLine = cached.tag_line;
+        platformHost = cached.platform_host || 'br1';
+        profileIconId = cached.profile_icon_id ?? 29;
+        summonerLevel = cached.summoner_level ?? 0;
+        statsSolo = { wins: cached.solo_wins ?? 0, losses: cached.solo_losses ?? 0, winRate: cached.win_rate ?? 0, tier: cached.tier || "UNRANKED", rank: cached.rank || "", lp: cached.lp ?? 0 };
+        statsFlex = { wins: cached.flex_wins ?? 0, losses: cached.flex_losses ?? 0, winRate: cached.flex_win_rate ?? 0, tier: cached.flex_tier || "UNRANKED", rank: cached.flex_rank || "", lp: cached.flex_lp ?? 0 };
+        // 1ª visita após o deploy: cache novo ainda vazio (plataforma ou V/D nunca gravados).
+        // Faz UM refresh para preencher as colunas — depois as próximas visitas ficam baratas.
+        if (cached.platform_host == null || cached.solo_wins == null) precisaPerfilFresco = true;
+      } else {
         apiCalls++;
-        const shardRes = await fetch(`${routingAmericas}/riot/account/v1/active-shards/by-game/lol/by-puuid/${playerPuuid}?api_key=${API_KEY}`);
-        if (shardRes.ok) {
-          const shardData = await shardRes.json();
-          platformHost = (shardData.platform || shardData.shard || 'br1').toString().toLowerCase();
+        const accountRes = await fetch(`${routingAmericas}/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}?api_key=${API_KEY}`);
+        if (!accountRes.ok) {
+          recordUsageGlobal(env, ctx, apiCalls, "worker", action);
+          return new Response(JSON.stringify({ error: "Jogador não encontrado." }), { status: accountRes.status, headers: corsHeaders });
         }
-      } catch (e) { }
+        const accountData = await accountRes.json();
+        playerPuuid = accountData.puuid;
+        exactGameName = accountData.gameName;
+        exactTagLine = accountData.tagLine;
+
+        try {
+          apiCalls++;
+          const shardRes = await fetch(`${routingAmericas}/riot/account/v1/active-shards/by-game/lol/by-puuid/${playerPuuid}?api_key=${API_KEY}`);
+          if (shardRes.ok) {
+            const shardData = await shardRes.json();
+            platformHost = (shardData.platform || shardData.shard || 'br1').toString().toLowerCase();
+          }
+        } catch (e) { }
+
+        precisaPerfilFresco = true;
+      }
 
       const routingPlatform = `https://${platformHost}.api.riotgames.com`;
 
-      apiCalls++;
-      const summonerRes = await fetch(`${routingPlatform}/lol/summoner/v4/summoners/by-puuid/${playerPuuid}?api_key=${API_KEY}`);
-      let profileIconId = 29;
-      let summonerLevel = 0;
-      if (summonerRes.ok) {
-        const sData = await summonerRes.json();
-        profileIconId = sData.profileIconId;
-        summonerLevel = sData.summonerLevel;
-      }
-
-      let statsSolo = { wins: 0, losses: 0, winRate: 0, tier: "UNRANKED", rank: "", lp: 0 };
-      let statsFlex = { wins: 0, losses: 0, winRate: 0, tier: "UNRANKED", rank: "", lp: 0 };
-      
-      apiCalls++;
-      const leagueRes = await fetch(`${routingPlatform}/lol/league/v4/entries/by-puuid/${playerPuuid}?api_key=${API_KEY}`);
-      if (leagueRes.ok) {
-        const leagueData = await leagueRes.json();
-        if (leagueData && leagueData.length > 0) {
-          const soloData = leagueData.find(q => q.queueType === "RANKED_SOLO_5x5");
-          if (soloData) { statsSolo = { wins: soloData.wins, losses: soloData.losses, winRate: (soloData.wins / (soloData.wins + soloData.losses)) * 100 || 0, tier: soloData.tier, rank: soloData.rank, lp: soloData.leaguePoints }; }
-          const flexData = leagueData.find(q => q.queueType === "RANKED_FLEX_SR");
-          if (flexData) { statsFlex = { wins: flexData.wins, losses: flexData.losses, winRate: (flexData.wins / (flexData.wins + flexData.losses)) * 100 || 0, tier: flexData.tier, rank: flexData.rank, lp: flexData.leaguePoints }; }
+      // Atualiza ícone/nível (summoner-v4) + elo/LP (league-v4) na Riot e persiste tudo
+      // no D1 (incluindo W/L e a plataforma, para servir do cache nas próximas visitas).
+      // Custo: 2 chamadas. Só é chamada quando há dado novo: 1ª visita ou partida nova.
+      const atualizarPerfilRiot = async () => {
+        apiCalls++;
+        const summonerRes = await fetch(`${routingPlatform}/lol/summoner/v4/summoners/by-puuid/${playerPuuid}?api_key=${API_KEY}`);
+        if (summonerRes.ok) {
+          const sData = await summonerRes.json();
+          profileIconId = sData.profileIconId;
+          summonerLevel = sData.summonerLevel;
         }
-      }
 
-      try {
-        await env.DB.prepare(`
-          INSERT INTO jogadores (puuid, game_name, tag_line, tier, rank, lp, win_rate, flex_tier, flex_rank, flex_lp, flex_win_rate, profile_icon_id, summoner_level, ultima_atualizacao)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-          ON CONFLICT(puuid) DO UPDATE SET
-            game_name = excluded.game_name,
-            tag_line = excluded.tag_line,
-            tier = excluded.tier,
-            rank = excluded.rank,
-            lp = excluded.lp,
-            win_rate = excluded.win_rate,
-            flex_tier = excluded.flex_tier,
-            flex_rank = excluded.flex_rank,
-            flex_lp = excluded.flex_lp,
-            flex_win_rate = excluded.flex_win_rate,
-            profile_icon_id = excluded.profile_icon_id,
-            summoner_level = excluded.summoner_level,
-            ultima_atualizacao = CURRENT_TIMESTAMP
-        `).bind(
-          playerPuuid, exactGameName, exactTagLine,
-          statsSolo.tier, statsSolo.rank, statsSolo.lp, statsSolo.winRate,
-          statsFlex.tier, statsFlex.rank, statsFlex.lp, statsFlex.winRate,
-          profileIconId, summonerLevel
-        ).run();
-      } catch (dbError) {
-        console.error("Erro D1:", dbError.message);
-      }
+        apiCalls++;
+        const leagueRes = await fetch(`${routingPlatform}/lol/league/v4/entries/by-puuid/${playerPuuid}?api_key=${API_KEY}`);
+        if (leagueRes.ok) {
+          const leagueData = await leagueRes.json();
+          if (leagueData && leagueData.length > 0) {
+            const soloData = leagueData.find(q => q.queueType === "RANKED_SOLO_5x5");
+            if (soloData) { statsSolo = { wins: soloData.wins, losses: soloData.losses, winRate: (soloData.wins / (soloData.wins + soloData.losses)) * 100 || 0, tier: soloData.tier, rank: soloData.rank, lp: soloData.leaguePoints }; }
+            const flexData = leagueData.find(q => q.queueType === "RANKED_FLEX_SR");
+            if (flexData) { statsFlex = { wins: flexData.wins, losses: flexData.losses, winRate: (flexData.wins / (flexData.wins + flexData.losses)) * 100 || 0, tier: flexData.tier, rank: flexData.rank, lp: flexData.leaguePoints }; }
+          }
+        }
+
+        try {
+          await env.DB.prepare(`
+            INSERT INTO jogadores (puuid, game_name, tag_line, tier, rank, lp, win_rate, flex_tier, flex_rank, flex_lp, flex_win_rate, profile_icon_id, summoner_level, platform_host, solo_wins, solo_losses, flex_wins, flex_losses, ultima_atualizacao)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(puuid) DO UPDATE SET
+              game_name = excluded.game_name,
+              tag_line = excluded.tag_line,
+              tier = excluded.tier,
+              rank = excluded.rank,
+              lp = excluded.lp,
+              win_rate = excluded.win_rate,
+              flex_tier = excluded.flex_tier,
+              flex_rank = excluded.flex_rank,
+              flex_lp = excluded.flex_lp,
+              flex_win_rate = excluded.flex_win_rate,
+              profile_icon_id = excluded.profile_icon_id,
+              summoner_level = excluded.summoner_level,
+              platform_host = excluded.platform_host,
+              solo_wins = excluded.solo_wins,
+              solo_losses = excluded.solo_losses,
+              flex_wins = excluded.flex_wins,
+              flex_losses = excluded.flex_losses,
+              ultima_atualizacao = CURRENT_TIMESTAMP
+          `).bind(
+            playerPuuid, exactGameName, exactTagLine,
+            statsSolo.tier, statsSolo.rank, statsSolo.lp, statsSolo.winRate,
+            statsFlex.tier, statsFlex.rank, statsFlex.lp, statsFlex.winRate,
+            profileIconId, summonerLevel, platformHost,
+            statsSolo.wins, statsSolo.losses, statsFlex.wins, statsFlex.losses
+          ).run();
+        } catch (dbError) {
+          console.error("Erro D1:", dbError.message);
+        }
+      };
 
       let realMatches = [];
       let proficiencyMatches = [];
+      let hadNewGames = false;
 
       if (includeMatches) {
         try {
@@ -479,13 +610,21 @@ export default {
             newIds = recentIds.filter(id => !known.has(id));
           }
 
+          // 🌟 GATILHO DE ECONOMIA: só atualizamos ícone/elo (2 chamadas) quando há
+          // partida ranqueada nova — e elo SÓ muda jogando ranqueada, que aparece aqui
+          // como ID novo. Sem jogo novo (e já conhecido), o perfil inteiro vem do cache
+          // D1 e a busca custa apenas as 2 chamadas de verificação acima.
+          hadNewGames = newIds.length > 0;
+          if (precisaPerfilFresco || hadNewGames) {
+            await atualizarPerfilRiot();
+          }
+
           // 🌟 ORÇAMENTO DE RATE LIMIT (busca normal do search):
           // Cada partida nova custa 2 chamadas à Riot (detalhe match-v5 + timeline).
-          // Antes do loop já gastamos 6 chamadas fixas: conta(1) + active-shards(1) +
-          // summoner(1) + league(1) + ids solo(1) + ids flex(1).
-          // Limitando as novas partidas a 13 -> 6 + 2*13 = 32 chamadas (≤ 33), nunca
-          // gargalando o rate limit. O histórico completo (até 1000) é preenchido pelo
-          // trator da madrugada (cron/sync.js).
+          // Quando HÁ jogo novo já gastamos até 6 fixas: verificação ids solo(1) + flex(1)
+          // + summoner(1) + league(1), mais o custo de identidade na 1ª visita (conta+shard).
+          // Limitando as novas partidas a 13 nunca gargalamos o rate limit. O histórico
+          // completo (até 1000) é preenchido pelo trator da madrugada (cron/sync.js).
           const MAX_NOVAS_PARTIDAS_BUSCA = 13;
           if (newIds.length > MAX_NOVAS_PARTIDAS_BUSCA) {
             newIds = newIds.slice(0, MAX_NOVAS_PARTIDAS_BUSCA);
@@ -588,6 +727,12 @@ export default {
         }
       }
 
+      // profile_brief (perfil leve, sem histórico): não há verificação de partidas,
+      // então na 1ª visita (sem cache) buscamos o perfil fresco; já conhecido = 0 chamadas.
+      if (!includeMatches && precisaPerfilFresco) {
+        await atualizarPerfilRiot();
+      }
+
       // 🌟 Companheiros por fila: quem mais jogou com ele (Solo/Duo 420 e Flex 440)
       let companions = { solo: [], flex: [] };
       if (includeMatches) {
@@ -622,16 +767,24 @@ export default {
         } catch (e) { }
       }
 
+      recordUsageGlobal(env, ctx, apiCalls, "worker", action);
+      const usedNow = usageBefore.used + apiCalls;
       return new Response(JSON.stringify({
         loading: false, error: null, puuid: playerPuuid, gameName: exactGameName, tagLine: exactTagLine,
         profileIconId, summonerLevel, statsSolo, statsFlex, matches: realMatches.slice(0, 100), proficiencyMatches, companions,
-        apiCalls
+        hadNewGames, apiCalls,
+        rate: { used: usedNow, limit: RATE_LIMIT, available: Math.max(0, RATE_LIMIT - usedNow), windowMs: RATE_WINDOW_MS }
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     if (action === "masteries") {
       let apiCalls = 0;
       let targetPuuid = puuid;
+      // Resolve o puuid: primeiro do D1 (0 chamadas), só depois via account-v1.
+      if (!targetPuuid && gameName && tagLine) {
+        const c = await loadCachedPlayer(env, gameName, tagLine);
+        if (c && c.puuid) targetPuuid = c.puuid;
+      }
       if (!targetPuuid && gameName && tagLine) {
         apiCalls++;
         const accRes = await fetch(`${routingAmericas}/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}?api_key=${API_KEY}`);
@@ -639,15 +792,48 @@ export default {
       }
       if (!targetPuuid) return new Response(JSON.stringify({ error: "Falta PUUID." }), { status: 400, headers: corsHeaders });
 
+      // 🌟 CACHE: sem refresh forçado (o front só força quando o perfil detectou jogo
+      // novo), servimos as maestrias guardadas no D1 — 0 chamadas à Riot.
+      if (!refresh) {
+        try {
+          const { results } = await env.DB.prepare(
+            "SELECT champion_id, champion_level, champion_points, last_play_time, season_milestone, milestone_grades, mark_required_next_level FROM maestrias WHERE puuid = ? ORDER BY champion_points DESC"
+          ).bind(targetPuuid).all();
+          if (results && results.length) {
+            const masteries = results.map(r => ({
+              championId: r.champion_id,
+              championLevel: r.champion_level,
+              championPoints: r.champion_points,
+              lastPlayTime: r.last_play_time,
+              seasonMilestone: r.season_milestone ?? null,
+              milestoneGrades: r.milestone_grades ?? null,
+              markRequiredForNextLevel: r.mark_required_next_level ?? null
+            }));
+            return new Response(JSON.stringify({
+              masteries, apiCalls: 0, fromCache: true,
+              rate: { used: usageBefore.used, limit: RATE_LIMIT, available: Math.max(0, RATE_LIMIT - usageBefore.used), windowMs: RATE_WINDOW_MS }
+            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+        } catch (e) { /* sem cache -> segue para a Riot */ }
+      }
+
+      // Plataforma: reaproveita a guardada no D1 (evita o active-shards) quando houver.
       let platformHost = 'br1';
+      let platformResolvida = false;
       try {
-        apiCalls++;
-        const shardRes = await fetch(`${routingAmericas}/riot/account/v1/active-shards/by-game/lol/by-puuid/${targetPuuid}?api_key=${API_KEY}`);
-        if (shardRes.ok) {
-          const shardData = await shardRes.json();
-          platformHost = (shardData.platform || shardData.shard || 'br1').toString().toLowerCase();
-        }
+        const prow = await env.DB.prepare("SELECT platform_host FROM jogadores WHERE puuid = ?").bind(targetPuuid).first();
+        if (prow && prow.platform_host) { platformHost = prow.platform_host; platformResolvida = true; }
       } catch (e) { }
+      if (!platformResolvida) {
+        try {
+          apiCalls++;
+          const shardRes = await fetch(`${routingAmericas}/riot/account/v1/active-shards/by-game/lol/by-puuid/${targetPuuid}?api_key=${API_KEY}`);
+          if (shardRes.ok) {
+            const shardData = await shardRes.json();
+            platformHost = (shardData.platform || shardData.shard || 'br1').toString().toLowerCase();
+          }
+        } catch (e) { }
+      }
 
       apiCalls++;
       const masteryRes = await fetch(`https://${platformHost}.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/${targetPuuid}?api_key=${API_KEY}`);
@@ -685,7 +871,12 @@ export default {
         } catch (e) { }
       })());
 
-      return new Response(JSON.stringify({ masteries, apiCalls }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      recordUsageGlobal(env, ctx, apiCalls, "worker", "masteries");
+      const usedNow = usageBefore.used + apiCalls;
+      return new Response(JSON.stringify({
+        masteries, apiCalls,
+        rate: { used: usedNow, limit: RATE_LIMIT, available: Math.max(0, RATE_LIMIT - usedNow), windowMs: RATE_WINDOW_MS }
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // ======================================================================

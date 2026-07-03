@@ -72,6 +72,13 @@ async function queryD1(sql, params = []) {
 
 let totalRequestsFeitas = 0;
 
+// Contador GLOBAL compartilhado (mesma tabela api_usage lida pelo worker/front).
+// Best-effort e SEM await: nunca deve atrasar nem derrubar a coleta.
+function registrarUsoGlobal(source) {
+  queryD1('INSERT INTO api_usage (ts, count, source, action) VALUES (?, ?, ?, ?)', [Date.now(), 1, source, 'riot_fetch'])
+    .catch(() => {});
+}
+
 // Resfriamento de chave: pausa preventiva antes de estourar o limite de 100/2min.
 async function respeitarRateLimit(logger) {
   if (totalRequestsFeitas >= 90) {
@@ -85,6 +92,7 @@ async function fetchFromRiot(endpoint, tentativa = 0) {
   const url = `https://${REGION_ROUTE}.api.riotgames.com${endpoint}`;
   const response = await fetch(url, { headers: { 'X-Riot-Token': RIOT_API_KEY } });
   totalRequestsFeitas++;
+  registrarUsoGlobal('cron');
   if (response.status === 429) {
     console.warn('⚠️ [RIOT LIMIT] Chave esquentou demais! Pausando 2 min para esfriar...');
     await sleep(125000);

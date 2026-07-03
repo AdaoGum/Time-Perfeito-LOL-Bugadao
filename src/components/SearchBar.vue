@@ -38,7 +38,7 @@
 import { ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { state } from '../store.js';
-import { workerRequest, normalizeProfileData, applyProfileToStore, loadMasteriesInBackground } from '../api.js';
+import { workerRequest, normalizeProfileData, applyProfileToStore, loadMasteriesInBackground, isRateBlocked } from '../api.js';
 
 const router = useRouter();
 
@@ -94,6 +94,19 @@ async function executeSearch() {
     return;
   }
 
+  // Orçamento global da API estourado: bloqueia antes de gastar a chave.
+  // (Defesa rápida no front; o worker também recusa com 429 caso passe.)
+  if (isRateBlocked()) {
+    const g = state.telemetry.global;
+    const secs = Math.max(0, Math.ceil((g.resetAt - Date.now()) / 1000));
+    const espera = secs > 0 ? ` Tente em ~${secs}s.` : '';
+    const msg = `Limite global da API da Riot atingido. Nenhuma busca pode ser feita agora.${espera}`;
+    localError.value = msg;
+    if (props.syncGlobalStore) state.searchProfile.error = msg;
+    emit('search-error', msg);
+    return;
+  }
+
   loading.value = true;
   localError.value = null;
   // Liga a animação global de carregamento (esqueleto/spinner do Profile.vue)
@@ -111,7 +124,7 @@ async function executeSearch() {
     emit('search-success', props.syncGlobalStore ? state.searchProfile : normalizedData);
 
     if (props.loadMasteries && normalizedData.puuid) {
-      loadMasteriesInBackground(normalizedData.puuid, gameName, tagLine);
+      loadMasteriesInBackground(normalizedData.puuid, gameName, tagLine, data?.hadNewGames === true);
     }
 
     // Coloca o jogador buscado na URL para sobreviver ao refresh.

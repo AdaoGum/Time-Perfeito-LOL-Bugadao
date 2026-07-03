@@ -197,7 +197,7 @@
           Monitor da API (Riot)
         </div>
         <div class="flex items-center font-semibold" :class="effectiveCollapsed ? 'flex-col gap-0.5 text-center text-[10px]' : 'justify-between text-sm'">
-          <span class="text-slate-300">{{ effectiveCollapsed ? 'Uso' : 'Uso (2 min)' }}</span>
+          <span class="text-slate-300">{{ effectiveCollapsed ? 'Uso' : 'Uso global (2 min)' }}</span>
           <span class="text-white">{{ telUsage }}/100</span>
         </div>
         <div v-if="!effectiveCollapsed" class="mt-1 flex items-center justify-between text-sm font-semibold">
@@ -291,6 +291,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { state } from './store.js';
+import { fetchRateStatus } from './api.js';
 import { profileIconImage, DDRAGON_VERSION } from './utils.js';
 import SearchBar from './components/SearchBar.vue';
 
@@ -471,23 +472,29 @@ function updateTelemetry() {
   telemetryTick.value++;
 }
 
+let rateInterval = null;
 onMounted(() => {
   telInterval = setInterval(updateTelemetry, 1000);
+  // Contador GLOBAL: busca ao entrar e faz polling p/ todos verem o mesmo número ao vivo.
+  fetchRateStatus();
+  rateInterval = setInterval(fetchRateStatus, 5000);
 });
 onUnmounted(() => {
   if (telInterval) clearInterval(telInterval);
+  if (rateInterval) clearInterval(rateInterval);
 });
 
+// Uso GLOBAL compartilhado (o mesmo p/ todos os usuários), reportado pelo worker/D1.
 const telUsage = computed(() => {
   telemetryTick.value;
-  const events = store.telemetry?.events || [];
-  if (events.length > 0) {
-    return events.reduce((sum, event) => sum + Number(event.cost || 0), 0);
-  }
-  return store.telemetry?.timestamps?.length || 0;
+  return store.telemetry?.global?.used || 0;
 });
 
-const telAvailable = computed(() => 100 - telUsage.value);
+const telAvailable = computed(() => {
+  telemetryTick.value;
+  const g = store.telemetry?.global;
+  return g ? g.available : 100;
+});
 
 const telAvailableClass = computed(() => {
   const a = telAvailable.value;
@@ -498,15 +505,13 @@ const telAvailableClass = computed(() => {
 
 const telTimeText = computed(() => {
   telemetryTick.value;
-  const events = store.telemetry?.events || [];
-  if (events.length === 0) return 'Status: Liberado';
-  const oldest = events[0]?.at || Date.now();
-  const msLeft = TELEMETRY_WINDOW_MS - (Date.now() - oldest);
-  return `Reset geral: ${formatTelemetryReset(msLeft)}`;
+  const g = store.telemetry?.global;
+  if (!g || g.used === 0) return 'Status: Liberado';
+  return `Reset geral: ${formatTelemetryReset(g.resetAt - Date.now())}`;
 });
 
 const telTimeClass = computed(() => {
-  if ((store.telemetry?.timestamps || []).length === 0) { // Travado com || []
+  if ((store.telemetry?.global?.used || 0) === 0) {
     return 'bg-slate-950/50 text-slate-400';
   }
   return 'bg-blue-950/40 text-blue-300 border border-blue-800/50';
