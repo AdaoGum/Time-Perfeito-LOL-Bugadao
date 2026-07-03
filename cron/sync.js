@@ -55,18 +55,50 @@ const PUUIDS_ALVO = (
       ]
 );
 
-async function queryD1(sql, params = []) {
+// Códigos internos transitórios do D1 (o Cloudflare "soluça" e pede retry):
+//   7500 = internal error | 7502 = network/overloaded. Retentamos com backoff em vez
+//   de perder a gravação da partida (paridade com o retry de 5xx do fetchFromRiot).
+const D1_CODIGOS_TRANSITORIOS = new Set([7500, 7502]);
+
+function erroD1EhTransitorio(status, data) {
+  if (status >= 500) return true;
+  const erros = (data && data.errors) || [];
+  return erros.some(e => D1_CODIGOS_TRANSITORIOS.has(e && e.code));
+}
+
+async function queryD1(sql, params = [], tentativa = 0) {
   const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/query`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${CF_API_TOKEN}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ sql, params })
-  });
-  const data = await response.json();
-  if (!response.ok || !data.success) throw new Error(`Erro no D1: ${JSON.stringify(data.errors)}`);
+  let response, data;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${CF_API_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ sql, params })
+    });
+    data = await response.json();
+  } catch (netErr) {
+    // Falha de rede (conexão caiu, DNS, etc.) — também é transitória.
+    if (tentativa < 4) {
+      const espera = 1500 * (tentativa + 1);
+      console.warn(`⚠️ [D1 REDE] ${netErr.message}. Tentativa ${tentativa + 1}/4 em ${espera / 1000}s...`);
+      await sleep(espera);
+      return queryD1(sql, params, tentativa + 1);
+    }
+    throw netErr;
+  }
+
+  if (!response.ok || !data.success) {
+    if (erroD1EhTransitorio(response.status, data) && tentativa < 4) {
+      const espera = 1500 * (tentativa + 1);
+      console.warn(`⚠️ [D1 ${response.status}] Erro transitório ${JSON.stringify(data.errors)}. Tentativa ${tentativa + 1}/4 em ${espera / 1000}s...`);
+      await sleep(espera);
+      return queryD1(sql, params, tentativa + 1);
+    }
+    throw new Error(`Erro no D1: ${JSON.stringify(data.errors)}`);
+  }
   return data.result[0];
 }
 
