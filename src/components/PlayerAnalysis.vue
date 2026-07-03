@@ -126,58 +126,85 @@
       <section class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl">
         <h3 class="mb-1 flex items-center gap-2 text-sm font-bold text-slate-100"><i class="fa-solid fa-crown text-yellow-400"></i> Rotas &amp; Campeões</h3>
         <p class="mb-3 text-[11px] text-slate-500">Top rotas e melhores campeões por função — <b class="text-slate-300">{{ queueLabel }}</b>, {{ sample.length }} jogos na amostra (segue os filtros acima).</p>
-        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
 
-          <!-- Card 1: TOP 3 ROTAS na amostra filtrada -->
-          <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-            <div class="mb-2 flex items-center gap-2 border-b border-slate-800 pb-2">
+        <div class="grid gap-3 lg:grid-cols-3 items-stretch">
+
+          <!-- ===== 1/3: TOP ROTAS (preenche toda a altura) ===== -->
+          <div class="flex flex-col rounded-xl border border-slate-800 bg-slate-950/50 p-3 lg:col-span-1">
+            <div class="mb-3 flex items-center gap-2 border-b border-slate-800 pb-2">
               <i class="fa-solid fa-ranking-star text-emerald-400"></i>
-              <span class="text-xs font-black uppercase tracking-wide text-emerald-300">Top Rotas</span>
-              <span class="ml-auto text-[10px] font-semibold text-slate-500">{{ laneBreakdown.total }} jogos</span>
+              <span class="text-[13px] font-black uppercase tracking-wide text-emerald-300">Top Rotas</span>
+              <span class="ml-auto text-[11px] font-semibold text-slate-500">{{ laneBreakdown.total }} jogos</span>
             </div>
-            <div v-if="laneBreakdown.roles.length" class="space-y-2">
-              <div v-for="r in laneBreakdown.roles" :key="r.role" class="rounded-lg border border-slate-800 bg-slate-900/60 p-2.5">
-                <div class="mb-2 flex items-center gap-2">
-                  <img :src="miniRoleIcon(r.role)" class="h-4 w-4 brightness-200" :alt="r.label" />
-                  <span class="text-sm font-bold text-slate-200">{{ r.label }}</span>
-                  <span class="ml-auto text-[10px] text-slate-500">{{ r.games }}j · {{ r.wins }}V/{{ r.losses }}D</span>
+            <div v-if="laneBreakdown.roles.length" class="flex flex-1 flex-col gap-2.5">
+              <div v-for="r in laneBreakdown.roles" :key="r.role"
+                class="flex flex-1 flex-col justify-center rounded-lg border border-slate-800 bg-slate-900/60 p-3"
+                :style="{ borderLeft: `3px solid ${r.color}` }">
+                <div class="mb-2.5 flex items-center gap-2">
+                  <img :src="miniRoleIcon(r.role)" class="h-5 w-5 brightness-200" :alt="r.label" />
+                  <span class="text-[15px] font-bold text-slate-100">{{ r.label }}</span>
+                  <span class="ml-auto text-[11px] font-semibold text-slate-500">{{ r.games }}j · {{ r.wins }}V/{{ r.losses }}D</span>
                 </div>
-                <div class="grid grid-cols-4 gap-1 text-center">
-                  <div><div class="text-sm font-black" :class="r.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ r.winRate }}%</div><div class="text-[8px] font-bold uppercase tracking-wide text-slate-500">WR</div></div>
-                  <div><div class="text-sm font-black text-emerald-400">{{ r.kda }}</div><div class="text-[8px] font-bold uppercase tracking-wide text-slate-500">KDA</div></div>
-                  <div><div class="text-sm font-black text-amber-400">{{ r.csMin }}</div><div class="text-[8px] font-bold uppercase tracking-wide text-slate-500">CS/m</div></div>
-                  <div><div class="text-sm font-black text-teal-300">{{ r.kp }}%</div><div class="text-[8px] font-bold uppercase tracking-wide text-slate-500">KP</div></div>
+                <div class="grid grid-cols-4 gap-2 text-center">
+                  <div><div class="text-lg font-black leading-none" :class="r.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ r.winRate }}%</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Win</div></div>
+                  <div><div class="text-lg font-black leading-none text-emerald-400">{{ r.kda }}</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">KDA</div></div>
+                  <div><div class="text-lg font-black leading-none text-amber-400">{{ r.csMin }}</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">CS/m</div></div>
+                  <div><div class="text-lg font-black leading-none text-teal-300">{{ r.kp }}%</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">KP</div></div>
                 </div>
               </div>
             </div>
-            <p v-else class="py-6 text-center text-xs text-slate-500">Sem partidas com rota definida na amostra.</p>
+            <p v-else class="flex flex-1 items-center justify-center py-6 text-center text-xs text-slate-500">Sem partidas com rota definida na amostra.</p>
           </div>
 
-          <!-- Cards 2..6: um por função presente na amostra, com os top 3 campeões (dados ricos) -->
-          <div v-for="fn in roleChampionBreakdown" :key="fn.role" class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-            <div class="mb-2 flex items-center gap-2 border-b border-slate-800 pb-2">
-              <img :src="miniRoleIcon(fn.role)" class="h-4 w-4 brightness-200" :alt="fn.label" />
-              <span class="text-xs font-black uppercase tracking-wide" :style="{ color: fn.color }">{{ fn.label }}</span>
-              <span class="ml-auto text-[10px] font-semibold text-slate-500">{{ fn.games }} jogos</span>
-            </div>
-            <div class="space-y-2">
-              <div v-for="c in fn.champions" :key="c.name" class="rounded-lg border border-slate-800 bg-slate-900/60 p-2">
-                <div class="mb-1.5 flex items-center gap-2">
-                  <img :src="championImage(c.name)" class="h-8 w-8 flex-shrink-0 rounded-full border border-slate-600" :alt="c.name" loading="lazy" />
-                  <span class="min-w-0 flex-1 truncate text-xs font-bold text-slate-200">{{ c.name }}</span>
-                  <span class="flex-shrink-0 text-sm font-black" :class="c.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ c.winRate }}%</span>
+          <!-- ===== 2/3: TOP CAMPEÕES — "baralho" de abas por rota ===== -->
+          <div v-if="activeRoleData" class="flex overflow-hidden rounded-xl border border-slate-800 bg-slate-950/50 lg:col-span-2">
+
+            <!-- Espinhas (rotas não selecionadas): só o ícone, clicáveis -->
+            <button v-for="fn in inactiveRoles" :key="fn.role"
+              type="button" @click="activeRole = fn.role"
+              class="group relative flex w-12 flex-shrink-0 flex-col items-center gap-2 border-r border-slate-800 bg-slate-900/70 py-3 transition hover:bg-slate-800 focus:outline-none"
+              :title="`${fn.label} — ${fn.games} jogos`">
+              <span class="absolute inset-y-0 left-0 w-1" :style="{ background: fn.color }"></span>
+              <img :src="miniRoleIcon(fn.role)" class="h-6 w-6 opacity-80 brightness-200 transition group-hover:opacity-100" :alt="fn.label" />
+              <span class="text-[11px] font-black uppercase tracking-wider text-slate-400 group-hover:text-slate-200" style="writing-mode:vertical-rl;transform:rotate(180deg)">{{ fn.label }}</span>
+              <span class="mt-auto text-[11px] font-bold text-slate-500">{{ fn.games }}</span>
+            </button>
+
+            <!-- Conteúdo da rota selecionada -->
+            <div class="min-w-0 flex-1 p-3">
+              <div class="mb-3 flex items-center gap-2 border-b border-slate-800 pb-2">
+                <img :src="miniRoleIcon(activeRoleData.role)" class="h-5 w-5 brightness-200" :alt="activeRoleData.label" />
+                <span class="text-[13px] font-black uppercase tracking-wide" :style="{ color: activeRoleData.color }">{{ activeRoleData.label }}</span>
+                <span class="text-[11px] font-semibold text-slate-500">· {{ activeRoleData.games }} jogos</span>
+                <span class="ml-auto text-[10px] font-bold uppercase tracking-wide text-slate-600">Top {{ activeRoleData.champions.length }} campeões</span>
+              </div>
+
+              <div class="space-y-2.5">
+                <div v-for="c in activeRoleData.champions" :key="c.name"
+                  class="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/60 p-2.5">
+                  <img :src="championImage(c.name)" class="h-12 w-12 flex-shrink-0 rounded-lg border border-slate-600 object-cover" :alt="c.name" loading="lazy" />
+                  <div class="min-w-0 flex-1">
+                    <div class="mb-1.5 flex items-baseline justify-between gap-2">
+                      <span class="truncate text-sm font-bold text-slate-100">{{ c.name }}</span>
+                      <span class="flex-shrink-0 text-base font-black" :class="c.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ c.winRate }}%<span class="ml-1 text-[10px] font-semibold text-slate-500">{{ c.wins }}V/{{ c.losses }}D</span></span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 text-center sm:grid-cols-6">
+                      <div><div class="text-sm font-black leading-none text-slate-200">{{ c.games }}</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Jogos</div></div>
+                      <div><div class="text-sm font-black leading-none text-emerald-400">{{ c.kda }}</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">KDA</div></div>
+                      <div><div class="text-sm font-black leading-none text-amber-400">{{ c.csMin }}</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">CS/m</div></div>
+                      <div><div class="text-sm font-black leading-none text-rose-300">{{ formatK(c.avgDmg) }}</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Dano</div></div>
+                      <div><div class="text-sm font-black leading-none text-teal-300">{{ c.kp }}%</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">KP</div></div>
+                      <div><div class="text-sm font-black leading-none text-yellow-300">{{ c.goldPerMin }}</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Ouro/m</div></div>
+                    </div>
+                  </div>
                 </div>
-                <div class="grid grid-cols-3 gap-1 text-center">
-                  <div><div class="text-[11px] font-black text-slate-300">{{ c.games }}</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">Jogos</div></div>
-                  <div><div class="text-[11px] font-black text-emerald-400">{{ c.kda }}</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">KDA</div></div>
-                  <div><div class="text-[11px] font-black text-amber-400">{{ c.csMin }}</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">CS/m</div></div>
-                  <div><div class="text-[11px] font-black text-rose-300">{{ formatK(c.avgDmg) }}</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">Dano</div></div>
-                  <div><div class="text-[11px] font-black text-teal-300">{{ c.kp }}%</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">KP</div></div>
-                  <div><div class="text-[11px] font-black text-yellow-300">{{ c.goldPerMin }}</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">Ouro/m</div></div>
-                </div>
-                <div class="mt-1 text-center text-[9px] text-slate-500">{{ c.wins }}V/{{ c.losses }}D · KDA {{ c.avgKills }}/{{ c.avgDeaths }}/{{ c.avgAssists }} · Visão {{ c.avgVision }}</div>
               </div>
             </div>
+          </div>
+
+          <!-- Sem campeões com rota na amostra -->
+          <div v-else class="flex items-center justify-center rounded-xl border border-slate-800 bg-slate-950/50 p-6 text-center text-xs text-slate-500 lg:col-span-2">
+            Sem campeões com rota definida na amostra atual.
           </div>
 
         </div>
@@ -327,7 +354,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, watchEffect } from 'vue';
 import { state } from '../store.js';
 import { championImage } from '../utils.js';
 import RadarChart from './RadarChart.vue';
@@ -645,4 +672,19 @@ const roleChampionBreakdown = computed(() => {
     return { role, label: ROLE_LABELS[role], color: ROLE_COLORS[role], games: byRole[role].length, champions };
   });
 });
+
+// -------------------- "Baralho" de abas por rota (card de campeões) --------------------
+// Rotas presentes ordenadas por nº de jogos (a mais jogada é a aba padrão).
+const rolesByGames = computed(() => [...roleChampionBreakdown.value].sort((a, b) => b.games - a.games));
+
+const activeRole = ref(null);
+// Mantém a aba ativa válida: se sumiu da amostra (ou nunca escolhida), volta para a rota mais jogada.
+// Quando o filtro do topo isola uma rota, ela é a única presente → vira a ativa automaticamente.
+watchEffect(() => {
+  const present = rolesByGames.value.map((r) => r.role);
+  if (!present.includes(activeRole.value)) activeRole.value = present[0] || null;
+});
+
+const activeRoleData = computed(() => roleChampionBreakdown.value.find((r) => r.role === activeRole.value) || null);
+const inactiveRoles = computed(() => rolesByGames.value.filter((r) => r.role !== activeRole.value));
 </script>
