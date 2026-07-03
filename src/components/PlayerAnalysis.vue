@@ -122,52 +122,38 @@
         </div>
       </section>
 
-      <!-- ===================== TAGS ===================== -->
-      <section v-if="tags.length" class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl">
-        <h3 class="mb-3 flex items-center gap-2 text-sm font-bold text-slate-100"><i class="fa-solid fa-tags text-slate-400"></i> O que define este jogador</h3>
-        <div class="flex flex-wrap gap-2">
-          <span v-for="tag in tags" :key="tag.label"
-            class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold" :class="tag.cls">
-            <i :class="tag.icon"></i>{{ tag.label }}
-          </span>
-        </div>
-      </section>
-
-      <!-- ===================== DEFINIÇÃO: MELHORES ROTAS POR FILA ===================== -->
+      <!-- ===================== ROTAS & CAMPEÕES (segue os filtros do topo) ===================== -->
       <section class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl">
-        <h3 class="mb-1 flex items-center gap-2 text-sm font-bold text-slate-100"><i class="fa-solid fa-ranking-star text-emerald-400"></i> Onde ele brilha — Rotas por Fila</h3>
-        <p class="mb-3 text-[11px] text-slate-500">As 3 rotas mais jogadas em cada fila ranqueada, com base em <b>todo o histórico</b> (independe dos filtros acima).</p>
-        <div class="grid gap-3 md:grid-cols-2">
-          <div v-for="q in queueRoleBreakdown" :key="q.key" class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+        <h3 class="mb-1 flex items-center gap-2 text-sm font-bold text-slate-100"><i class="fa-solid fa-crown text-yellow-400"></i> Rotas &amp; Campeões</h3>
+        <p class="mb-3 text-[11px] text-slate-500">Top rotas e melhores campeões por função — <b class="text-slate-300">{{ queueLabel }}</b>, {{ sample.length }} jogos na amostra (segue os filtros acima).</p>
+        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+
+          <!-- Card 1: TOP 3 ROTAS na amostra filtrada -->
+          <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
             <div class="mb-2 flex items-center gap-2 border-b border-slate-800 pb-2">
-              <span class="text-xs font-black uppercase tracking-wide" :class="q.accent">{{ q.label }}</span>
-              <span class="ml-auto text-[10px] font-semibold text-slate-500">{{ q.total }} jogos</span>
+              <i class="fa-solid fa-ranking-star text-emerald-400"></i>
+              <span class="text-xs font-black uppercase tracking-wide text-emerald-300">Top Rotas</span>
+              <span class="ml-auto text-[10px] font-semibold text-slate-500">{{ laneBreakdown.total }} jogos</span>
             </div>
-            <div v-if="q.roles.length" class="space-y-2">
-              <div v-for="r in q.roles" :key="r.role" class="rounded-lg border border-slate-800 bg-slate-900/60 p-2.5">
+            <div v-if="laneBreakdown.roles.length" class="space-y-2">
+              <div v-for="r in laneBreakdown.roles" :key="r.role" class="rounded-lg border border-slate-800 bg-slate-900/60 p-2.5">
                 <div class="mb-2 flex items-center gap-2">
                   <img :src="miniRoleIcon(r.role)" class="h-4 w-4 brightness-200" :alt="r.label" />
                   <span class="text-sm font-bold text-slate-200">{{ r.label }}</span>
                   <span class="ml-auto text-[10px] text-slate-500">{{ r.games }}j · {{ r.wins }}V/{{ r.losses }}D</span>
                 </div>
                 <div class="grid grid-cols-4 gap-1 text-center">
-                  <div><div class="text-sm font-black" :class="r.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ r.winRate }}%</div><div class="text-[8px] font-bold uppercase tracking-wide text-slate-500">Win Rate</div></div>
+                  <div><div class="text-sm font-black" :class="r.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ r.winRate }}%</div><div class="text-[8px] font-bold uppercase tracking-wide text-slate-500">WR</div></div>
                   <div><div class="text-sm font-black text-emerald-400">{{ r.kda }}</div><div class="text-[8px] font-bold uppercase tracking-wide text-slate-500">KDA</div></div>
-                  <div><div class="text-sm font-black text-amber-400">{{ r.csMin }}</div><div class="text-[8px] font-bold uppercase tracking-wide text-slate-500">CS/min</div></div>
-                  <div><div class="text-sm font-black text-teal-300">{{ r.kp }}%</div><div class="text-[8px] font-bold uppercase tracking-wide text-slate-500">Partic.</div></div>
+                  <div><div class="text-sm font-black text-amber-400">{{ r.csMin }}</div><div class="text-[8px] font-bold uppercase tracking-wide text-slate-500">CS/m</div></div>
+                  <div><div class="text-sm font-black text-teal-300">{{ r.kp }}%</div><div class="text-[8px] font-bold uppercase tracking-wide text-slate-500">KP</div></div>
                 </div>
               </div>
             </div>
-            <p v-else class="py-6 text-center text-xs text-slate-500">Sem partidas ranqueadas nesta fila.</p>
+            <p v-else class="py-6 text-center text-xs text-slate-500">Sem partidas com rota definida na amostra.</p>
           </div>
-        </div>
-      </section>
 
-      <!-- ===================== DEFINIÇÃO: TOP CAMPEÕES POR FUNÇÃO ===================== -->
-      <section v-if="roleChampionBreakdown.length" class="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl">
-        <h3 class="mb-1 flex items-center gap-2 text-sm font-bold text-slate-100"><i class="fa-solid fa-crown text-yellow-400"></i> Top Campeões por Função</h3>
-        <p class="mb-3 text-[11px] text-slate-500">Os 3 campeões mais jogados em cada função, com base em <b>todo o histórico</b> (independe dos filtros acima).</p>
-        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <!-- Cards 2..6: um por função presente na amostra, com os top 3 campeões (dados ricos) -->
           <div v-for="fn in roleChampionBreakdown" :key="fn.role" class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
             <div class="mb-2 flex items-center gap-2 border-b border-slate-800 pb-2">
               <img :src="miniRoleIcon(fn.role)" class="h-4 w-4 brightness-200" :alt="fn.label" />
@@ -175,23 +161,25 @@
               <span class="ml-auto text-[10px] font-semibold text-slate-500">{{ fn.games }} jogos</span>
             </div>
             <div class="space-y-2">
-              <div v-for="c in fn.champions" :key="c.name" class="flex items-center gap-2.5 rounded-lg border border-slate-800 bg-slate-900/60 p-2">
-                <img :src="championImage(c.name)" class="h-9 w-9 flex-shrink-0 rounded-full border border-slate-600" :alt="c.name" loading="lazy" />
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center justify-between gap-1">
-                    <span class="truncate text-xs font-bold text-slate-200">{{ c.name }}</span>
-                    <span class="flex-shrink-0 text-[10px] text-slate-500">{{ c.games }}j · {{ c.wins }}V/{{ c.losses }}D</span>
-                  </div>
-                  <div class="mt-1 grid grid-cols-4 gap-1 text-center">
-                    <div><div class="text-[11px] font-black" :class="c.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ c.winRate }}%</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">WR</div></div>
-                    <div><div class="text-[11px] font-black text-emerald-400">{{ c.kda }}</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">KDA</div></div>
-                    <div><div class="text-[11px] font-black text-amber-400">{{ c.csMin }}</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">CS/m</div></div>
-                    <div><div class="text-[11px] font-black text-rose-300">{{ formatK(c.avgDmg) }}</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">Dano</div></div>
-                  </div>
+              <div v-for="c in fn.champions" :key="c.name" class="rounded-lg border border-slate-800 bg-slate-900/60 p-2">
+                <div class="mb-1.5 flex items-center gap-2">
+                  <img :src="championImage(c.name)" class="h-8 w-8 flex-shrink-0 rounded-full border border-slate-600" :alt="c.name" loading="lazy" />
+                  <span class="min-w-0 flex-1 truncate text-xs font-bold text-slate-200">{{ c.name }}</span>
+                  <span class="flex-shrink-0 text-sm font-black" :class="c.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ c.winRate }}%</span>
                 </div>
+                <div class="grid grid-cols-3 gap-1 text-center">
+                  <div><div class="text-[11px] font-black text-slate-300">{{ c.games }}</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">Jogos</div></div>
+                  <div><div class="text-[11px] font-black text-emerald-400">{{ c.kda }}</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">KDA</div></div>
+                  <div><div class="text-[11px] font-black text-amber-400">{{ c.csMin }}</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">CS/m</div></div>
+                  <div><div class="text-[11px] font-black text-rose-300">{{ formatK(c.avgDmg) }}</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">Dano</div></div>
+                  <div><div class="text-[11px] font-black text-teal-300">{{ c.kp }}%</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">KP</div></div>
+                  <div><div class="text-[11px] font-black text-yellow-300">{{ c.goldPerMin }}</div><div class="text-[7px] font-bold uppercase tracking-wide text-slate-500">Ouro/m</div></div>
+                </div>
+                <div class="mt-1 text-center text-[9px] text-slate-500">{{ c.wins }}V/{{ c.losses }}D · KDA {{ c.avgKills }}/{{ c.avgDeaths }}/{{ c.avgAssists }} · Visão {{ c.avgVision }}</div>
               </div>
             </div>
           </div>
+
         </div>
       </section>
 
@@ -595,18 +583,17 @@ const multiBars = computed(() => {
   return items.map((i) => ({ ...i, pct: Math.round(i.value / max * 100) }));
 });
 
-// -------------------- Definição do jogador: rotas por fila & campeões por função --------------------
-// Estes dois blocos são o "raio-x" do jogador: usam TODO o histórico de proficiência
-// (independe dos filtros interativos acima) e rankeiam por nº de jogos (mais representativo).
+// -------------------- Rotas & campeões (seguem os filtros do topo via `sample`) --------------------
+// Rankeiam por nº de jogos (mais representativo) dentro da amostra filtrada.
 function aggregateStats(matches) {
   const n = matches.length;
-  let wins = 0, k = 0, d = 0, a = 0, cs = 0, dur = 0, dmg = 0, vision = 0;
+  let wins = 0, k = 0, d = 0, a = 0, cs = 0, dur = 0, dmg = 0, vision = 0, control = 0;
   let gpmSum = 0, gpmCnt = 0, kpSum = 0, kpCnt = 0;
   for (const m of matches) {
     if (m.win) wins++;
     k += num(m.kills); d += num(m.deaths); a += num(m.assists);
     cs += num(m.cs); dur += num(m.gameDuration);
-    dmg += num(m.damageChampions); vision += num(m.visionScore);
+    dmg += num(m.damageChampions); vision += num(m.visionScore); control += num(m.controlWards);
     if (m.goldPerMin) { gpmSum += num(m.goldPerMin); gpmCnt++; }
     if (m.killParticipation != null) { kpSum += num(m.killParticipation); kpCnt++; }
   }
@@ -614,36 +601,37 @@ function aggregateStats(matches) {
   return {
     games: n, wins, losses: n - wins, winRate: Math.round(wins / n * 100),
     kda: +kda.toFixed(2),
+    avgKills: +(k / n).toFixed(1), avgDeaths: +(d / n).toFixed(1), avgAssists: +(a / n).toFixed(1),
     csMin: +(dur > 0 ? cs / (dur / 60) : 0).toFixed(1),
     avgDmg: Math.round(dmg / n),
     avgVision: +(vision / n).toFixed(1),
+    avgControl: +(control / n).toFixed(1),
+    goldPerMin: gpmCnt ? Math.round(gpmSum / gpmCnt) : 0,
     kp: kpCnt ? Math.round(kpSum / kpCnt * 100) : 0
   };
 }
 
-const QUEUE_SPLITS = [
-  { key: 'SOLO', id: 420, label: 'Ranqueada Solo/Duo', accent: 'text-sky-300' },
-  { key: 'FLEX', id: 440, label: 'Ranqueada Flex', accent: 'text-purple-300' }
-];
+// Rótulo da fila atualmente selecionada no filtro (aparece no subtítulo do card).
+const QUEUE_LABELS = { ALL: 'Todas as filas', SOLO: 'Ranqueada Solo/Duo', FLEX: 'Ranqueada Flex', NORMAL: 'Normais', ARAM: 'ARAM' };
+const queueLabel = computed(() => QUEUE_LABELS[queueFilter.value] || 'Todas as filas');
 
-// Top 3 rotas mais jogadas em cada fila ranqueada, com 4 stats por rota.
-const queueRoleBreakdown = computed(() =>
-  QUEUE_SPLITS.map((q) => {
-    const matches = proficiency.value.filter((m) => num(m.queueId) === q.id && ROLES.includes(m.teamPosition));
-    const byRole = {};
-    for (const m of matches) (byRole[m.teamPosition] || (byRole[m.teamPosition] = [])).push(m);
-    const roles = Object.entries(byRole)
-      .map(([role, ms]) => ({ role, label: ROLE_LABELS[role], color: ROLE_COLORS[role], ...aggregateStats(ms) }))
-      .sort((a, b) => b.games - a.games)
-      .slice(0, 3);
-    return { ...q, roles, total: matches.length };
-  })
-);
+// Card 1: as 3 rotas mais jogadas na AMOSTRA FILTRADA (respeita todos os filtros do topo).
+const laneBreakdown = computed(() => {
+  const matches = sample.value.filter((m) => ROLES.includes(m.teamPosition));
+  const byRole = {};
+  for (const m of matches) (byRole[m.teamPosition] || (byRole[m.teamPosition] = [])).push(m);
+  const roles = Object.entries(byRole)
+    .map(([role, ms]) => ({ role, label: ROLE_LABELS[role], color: ROLE_COLORS[role], ...aggregateStats(ms) }))
+    .sort((a, b) => b.games - a.games)
+    .slice(0, 3);
+  return { roles, total: matches.length };
+});
 
-// Para cada função (rota), os 3 campeões mais jogados, com 4 stats por campeão.
+// Cards 2..6: por função presente na amostra, os 3 campeões mais jogados (respeita os filtros).
+// Se o filtro de rota isola uma função, só aparece o card dela.
 const roleChampionBreakdown = computed(() => {
   const byRole = {};
-  for (const m of proficiency.value) {
+  for (const m of sample.value) {
     if (!ROLES.includes(m.teamPosition) || !m.championName) continue;
     (byRole[m.teamPosition] || (byRole[m.teamPosition] = [])).push(m);
   }
@@ -656,26 +644,5 @@ const roleChampionBreakdown = computed(() => {
       .slice(0, 3);
     return { role, label: ROLE_LABELS[role], color: ROLE_COLORS[role], games: byRole[role].length, champions };
   });
-});
-
-// -------------------- Tags --------------------
-const tags = computed(() => {
-  const a = agg.value;
-  if (!a) return [];
-  const t = [];
-  if (a.winRate >= 55) t.push({ label: 'Em Ascensão', icon: 'fa-solid fa-arrow-trend-up', cls: 'border-emerald-600/50 bg-emerald-950/40 text-emerald-300' });
-  else if (a.winRate < 45 && a.games >= 15) t.push({ label: 'Fase Difícil', icon: 'fa-solid fa-arrow-trend-down', cls: 'border-rose-600/50 bg-rose-950/40 text-rose-300' });
-  if (a.kda >= 4) t.push({ label: 'Jogador Focado', icon: 'fa-solid fa-bullseye', cls: 'border-amber-600/50 bg-amber-950/40 text-amber-300' });
-  if (a.avgDeaths <= 4) t.push({ label: 'Difícil de Matar', icon: 'fa-solid fa-shield-halved', cls: 'border-cyan-600/50 bg-cyan-950/40 text-cyan-300' });
-  if (a.avgKills >= 8) t.push({ label: 'Carregador', icon: 'fa-solid fa-hand-fist', cls: 'border-red-600/50 bg-red-950/40 text-red-300' });
-  if (a.csMin >= 7.5) t.push({ label: 'Mestre do Farm', icon: 'fa-solid fa-wheat-awn', cls: 'border-lime-600/50 bg-lime-950/40 text-lime-300' });
-  if (a.avgVision >= 40) t.push({ label: 'Controle de Visão', icon: 'fa-solid fa-eye', cls: 'border-indigo-600/50 bg-indigo-950/40 text-indigo-300' });
-  if (a.kp >= 60) t.push({ label: 'Sempre Presente', icon: 'fa-solid fa-handshake', cls: 'border-teal-600/50 bg-teal-950/40 text-teal-300' });
-  if (a.multi.penta > 0) t.push({ label: `${a.multi.penta} Penta${a.multi.penta > 1 ? 's' : ''}`, icon: 'fa-solid fa-trophy', cls: 'border-yellow-500/50 bg-yellow-950/40 text-yellow-300' });
-  if (a.distinctChamps >= 12) t.push({ label: 'Versátil', icon: 'fa-solid fa-arrows-rotate', cls: 'border-fuchsia-600/50 bg-fuchsia-950/40 text-fuchsia-300' });
-  else if (a.distinctChamps > 0 && a.distinctChamps <= 3) t.push({ label: 'One-Trick', icon: 'fa-solid fa-horse', cls: 'border-purple-600/50 bg-purple-950/40 text-purple-300' });
-  if (a.winRate >= 45 && a.winRate <= 55 && a.games >= 20) t.push({ label: 'Consistente', icon: 'fa-solid fa-scale-balanced', cls: 'border-slate-600/50 bg-slate-800/60 text-slate-300' });
-  if (!t.length) t.push({ label: 'Jogador Equilibrado', icon: 'fa-solid fa-gamepad', cls: 'border-slate-600/50 bg-slate-800/60 text-slate-300' });
-  return t;
 });
 </script>

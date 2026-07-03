@@ -54,6 +54,15 @@
             </h2>
             <p class="text-xs text-slate-400 mt-1 font-medium">Visualização tática das filas ranqueadas ativas.</p>
           </div>
+
+          <!-- TAGS "O QUE DEFINE ESTE JOGADOR": 5 mais relevantes, empilhadas ao lado do nome -->
+          <div v-if="identityTags.length" class="flex w-full flex-row flex-wrap justify-center gap-1 sm:w-auto sm:flex-col sm:items-end sm:justify-center">
+            <span v-for="tag in identityTags" :key="tag.label"
+              class="inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-bold leading-tight" :class="tag.cls"
+              :title="`O que define este jogador — baseado em ${playerAgg?.games || 0} partidas`">
+              <i :class="tag.icon" class="text-[9px]"></i>{{ tag.label }}
+            </span>
+          </div>
         </div>
 
         <!-- 2) TÍTULO + TOTAL DE VITÓRIAS -->
@@ -518,6 +527,116 @@ const ROLE_LABELS = { TOP: 'Top', JUNGLE: 'Jungle', MIDDLE: 'Mid', BOTTOM: 'ADC'
 const roleLabelOf = (m) => ROLE_LABELS[m && m.teamPosition] || null;
 
 const proficiency = computed(() => store.searchProfile.proficiencyMatches || []);
+const num = (v) => Number(v || 0);
+
+// ---------------------------------------------------------------------------
+// "O QUE DEFINE ESTE JOGADOR" — agregado sobre TODO o histórico + motor de tags.
+// São ~30 tags possíveis; exibimos sempre as 5 de maior "score" (mais relevantes).
+// Cinco "bandas" (momentum, função, combate, farm, presença) sempre geram uma tag
+// cada → garante o mínimo de 5; as tags especiais têm score maior e sobem no ranking.
+// ---------------------------------------------------------------------------
+const playerAgg = computed(() => {
+  const ms = proficiency.value;
+  const n = ms.length;
+  if (!n) return null;
+  let wins = 0, k = 0, d = 0, a = 0, cs = 0, dur = 0, dmg = 0, vision = 0, solo = 0;
+  let dbl = 0, tpl = 0, qd = 0, pt = 0;
+  let gpmSum = 0, gpmCnt = 0, kpSum = 0, kpCnt = 0;
+  const roles = {}, champs = {};
+  for (const m of ms) {
+    if (m.win) wins++;
+    k += num(m.kills); d += num(m.deaths); a += num(m.assists);
+    cs += num(m.cs); dur += num(m.gameDuration);
+    dmg += num(m.damageChampions); vision += num(m.visionScore); solo += num(m.soloKills);
+    dbl += num(m.doubleKills); tpl += num(m.tripleKills); qd += num(m.quadraKills); pt += num(m.pentaKills);
+    if (m.goldPerMin) { gpmSum += num(m.goldPerMin); gpmCnt++; }
+    if (m.killParticipation != null) { kpSum += num(m.killParticipation); kpCnt++; }
+    if (ROLE_LABELS[m.teamPosition]) roles[m.teamPosition] = (roles[m.teamPosition] || 0) + 1;
+    if (m.championName) champs[m.championName] = (champs[m.championName] || 0) + 1;
+  }
+  const kda = d === 0 ? (k + a) : (k + a) / d;
+  const primaryRole = Object.entries(roles).sort((x, y) => y[1] - x[1])[0]?.[0] || null;
+  const topChampGames = Object.values(champs).length ? Math.max(...Object.values(champs)) : 0;
+  return {
+    games: n, winRate: Math.round(wins / n * 100), kda: +kda.toFixed(2),
+    avgKills: +(k / n).toFixed(1), avgDeaths: +(d / n).toFixed(1),
+    csMin: +(dur > 0 ? cs / (dur / 60) : 0).toFixed(1),
+    goldPerMin: gpmCnt ? Math.round(gpmSum / gpmCnt) : 0,
+    avgDmg: Math.round(dmg / n), avgVision: +(vision / n).toFixed(1),
+    kp: kpCnt ? Math.round(kpSum / kpCnt * 100) : 0,
+    avgSolo: +(solo / n).toFixed(2), multi: { triple: tpl, quadra: qd, penta: pt, double: dbl },
+    distinctChamps: Object.keys(champs).length,
+    primaryRole, topChampShare: Math.round(topChampGames / n * 100)
+  };
+});
+
+const TAG_CLS = {
+  green: 'border-emerald-600/50 bg-emerald-950/40 text-emerald-300',
+  rose: 'border-rose-600/50 bg-rose-950/40 text-rose-300',
+  amber: 'border-amber-600/50 bg-amber-950/40 text-amber-300',
+  cyan: 'border-cyan-600/50 bg-cyan-950/40 text-cyan-300',
+  red: 'border-red-600/50 bg-red-950/40 text-red-300',
+  lime: 'border-lime-600/50 bg-lime-950/40 text-lime-300',
+  indigo: 'border-indigo-600/50 bg-indigo-950/40 text-indigo-300',
+  teal: 'border-teal-600/50 bg-teal-950/40 text-teal-300',
+  yellow: 'border-yellow-500/50 bg-yellow-950/40 text-yellow-300',
+  fuchsia: 'border-fuchsia-600/50 bg-fuchsia-950/40 text-fuchsia-300',
+  purple: 'border-purple-600/50 bg-purple-950/40 text-purple-300',
+  slate: 'border-slate-600/50 bg-slate-800/60 text-slate-300',
+  sky: 'border-sky-600/50 bg-sky-950/40 text-sky-300',
+  orange: 'border-orange-600/50 bg-orange-950/40 text-orange-300'
+};
+
+const ROLE_TAGS = {
+  TOP: { label: 'Duelista de Rota', icon: 'fa-solid fa-shield-halved', color: 'amber' },
+  JUNGLE: { label: 'Caçador', icon: 'fa-solid fa-paw', color: 'green' },
+  MIDDLE: { label: 'Mago Central', icon: 'fa-solid fa-wand-magic-sparkles', color: 'cyan' },
+  BOTTOM: { label: 'Franco-Atirador', icon: 'fa-solid fa-crosshairs', color: 'rose' },
+  UTILITY: { label: 'Guardião', icon: 'fa-solid fa-hands-holding-child', color: 'purple' }
+};
+
+const identityTags = computed(() => {
+  const a = playerAgg.value;
+  if (!a) return [];
+  const c = [];
+  const add = (score, label, icon, color) => c.push({ label, icon, cls: TAG_CLS[color], score });
+
+  // --- 5 bandas garantidas (exatamente uma de cada → mínimo de 5 tags) ---
+  if (a.winRate >= 55) add(60, 'Em Ascensão', 'fa-solid fa-arrow-trend-up', 'green');
+  else if (a.winRate <= 44) add(58, 'Fase Difícil', 'fa-solid fa-arrow-trend-down', 'rose');
+  else add(22, 'Consistente', 'fa-solid fa-scale-balanced', 'slate');
+
+  const rt = ROLE_TAGS[a.primaryRole] || { label: 'Aventureiro', icon: 'fa-solid fa-compass', color: 'slate' };
+  add(30, rt.label, rt.icon, rt.color);
+
+  if (a.kda >= 4) add(50, 'Jogador Focado', 'fa-solid fa-bullseye', 'amber');
+  else if (a.kda >= 2.5) add(20, 'Combatente', 'fa-solid fa-khanda', 'slate');
+  else add(26, 'Temerário', 'fa-solid fa-fire-flame-curved', 'orange');
+
+  if (a.csMin >= 8) add(52, 'Mestre do Farm', 'fa-solid fa-wheat-awn', 'lime');
+  else if (a.csMin >= 5.5) add(18, 'Bom de Farm', 'fa-solid fa-seedling', 'slate');
+  else add(24, 'Foco em Utilidade', 'fa-solid fa-hands-holding-child', 'teal');
+
+  if (a.kp >= 65) add(48, 'Onipresente', 'fa-solid fa-handshake', 'teal');
+  else if (a.kp >= 45) add(16, 'Participativo', 'fa-solid fa-people-group', 'slate');
+  else add(28, 'Solista', 'fa-solid fa-user', 'purple');
+
+  // --- Especiais (score alto: sobem no ranking quando o jogador se destaca) ---
+  if (a.multi.penta > 0) add(100, `${a.multi.penta} Penta${a.multi.penta > 1 ? 's' : ''}`, 'fa-solid fa-trophy', 'yellow');
+  if (a.avgKills >= 8) add(56, 'Carregador', 'fa-solid fa-hand-fist', 'red');
+  if (a.avgSolo >= 1.5) add(51, 'Assassino Solo', 'fa-solid fa-user-ninja', 'red');
+  if (a.avgDmg >= 24000) add(49, 'Dano Bruto', 'fa-solid fa-fire', 'rose');
+  if (a.multi.triple + a.multi.quadra >= 3) add(46, 'Rei das Teamfights', 'fa-solid fa-burst', 'orange');
+  if (a.distinctChamps <= 3 && a.games >= 15) add(45, 'One-Trick', 'fa-solid fa-horse', 'purple');
+  if (a.avgVision >= 40) add(44, 'Controle de Visão', 'fa-solid fa-eye', 'indigo');
+  if (a.avgDeaths <= 3.2) add(42, 'Difícil de Matar', 'fa-solid fa-shield-heart', 'cyan');
+  if (a.goldPerMin >= 420) add(40, 'Máquina de Ouro', 'fa-solid fa-coins', 'yellow');
+  if (a.topChampShare >= 35 && a.games >= 15) add(39, 'Especialista', 'fa-solid fa-star', 'sky');
+  if (a.distinctChamps >= 12) add(36, 'Versátil', 'fa-solid fa-arrows-rotate', 'fuchsia');
+  if (a.games >= 150) add(24, 'Veterano', 'fa-solid fa-chess-king', 'slate');
+
+  return c.sort((x, y) => y.score - x.score).slice(0, 5);
+});
 
 // Total de vitórias ranqueadas (Solo + Flex), exibido no título do Resumo Competitivo
 const totalWins = computed(() =>
