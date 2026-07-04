@@ -48,3 +48,47 @@ export function formatDuration(seconds) {
   const s = (seconds || 0) % 60;
   return `${m}m ${String(s).padStart(2, '0')}s`;
 }
+
+// Morph shared-element (FLIP): clona visualmente `sourceEl` e o anima da posição
+// dele até a posição de `targetEl` (translate + scale). Usado para a busca da Home
+// "subir" para a topbar ao pesquisar. `targetEl` pode estar invisível (opacity-0),
+// desde que ocupe layout (não pode ser display:none) para ter rect mensurável.
+export function flipMorph(sourceEl, targetEl, { duration = 450 } = {}) {
+  if (!sourceEl || !targetEl) return Promise.resolve();
+  const from = sourceEl.getBoundingClientRect();
+  const to = targetEl.getBoundingClientRect();
+  if (!from.width || !to.width) return Promise.resolve();
+
+  const clone = sourceEl.cloneNode(true);
+  clone.style.cssText = [
+    'position:fixed',
+    `left:${from.left}px`,
+    `top:${from.top}px`,
+    `width:${from.width}px`,
+    `height:${from.height}px`,
+    'margin:0',
+    'z-index:80',
+    'pointer-events:none',
+    'transform-origin:top left',
+    `transition:transform ${duration}ms cubic-bezier(0.4,0,0.2,1),opacity ${duration}ms ease`
+  ].join(';');
+  document.body.appendChild(clone);
+
+  const dx = to.left - from.left;
+  const dy = to.top - from.top;
+  const sx = to.width / from.width;
+  const sy = to.height / from.height;
+
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        clone.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
+        clone.style.opacity = '0.9';
+      });
+    });
+    setTimeout(() => {
+      clone.remove();
+      resolve();
+    }, duration + 40);
+  });
+}

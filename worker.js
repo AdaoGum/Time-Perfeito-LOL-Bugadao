@@ -272,7 +272,7 @@ export default {
     // ----------------------------------------------------------------------
     // 2. CAPTURA DE PARÂMETROS
     // ----------------------------------------------------------------------
-    let action, gameName, tagLine, puuid, refresh;
+    let action, gameName, tagLine, puuid, refresh, q;
 
     if (request.method === "POST") {
       try {
@@ -282,6 +282,7 @@ export default {
         tagLine = body.tagLine;
         puuid = body.puuid;
         refresh = body.refresh === true;
+        q = body.q;
       } catch (e) {
         return new Response(JSON.stringify({ error: "JSON inválido." }), { status: 400, headers: corsHeaders });
       }
@@ -292,6 +293,7 @@ export default {
       tagLine = url.searchParams.get("tagLine");
       puuid = url.searchParams.get("puuid");
       refresh = url.searchParams.get("refresh") === "true";
+      q = url.searchParams.get("q");
     }
 
     const API_KEY = env.RIOT_API_KEY;
@@ -304,6 +306,33 @@ export default {
 
     // Rota leve de status do contador global (só LÊ o D1, não gasta a chave da Riot).
     // O front faz polling disto para todos verem o mesmo número ao vivo.
+    // Autocomplete de jogadores: sugere até 5 nomes do D1 que contenham o texto
+    // digitado (prefixo primeiro). Só LÊ o banco — não gasta a chave da Riot.
+    if (action === "player_suggest") {
+      const termo = String(q || "").trim();
+      if (termo.length < 1) {
+        return new Response(JSON.stringify({ suggestions: [] }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      try {
+        // Escapa curingas do LIKE para tratar o texto como literal.
+        const safe = termo.replace(/[\\%_]/g, (c) => `\\${c}`);
+        const contains = `%${safe}%`;
+        const prefix = `${safe}%`;
+        const { results } = await env.DB.prepare(`
+          SELECT game_name, tag_line, profile_icon_id, tier, rank, flex_tier, flex_rank
+          FROM jogadores
+          WHERE game_name LIKE ?1 ESCAPE '\\' COLLATE NOCASE
+             OR (game_name || '#' || tag_line) LIKE ?1 ESCAPE '\\' COLLATE NOCASE
+          ORDER BY CASE WHEN game_name LIKE ?2 ESCAPE '\\' COLLATE NOCASE THEN 0 ELSE 1 END, game_name
+          LIMIT 5
+        `).bind(contains, prefix).all();
+        return new Response(JSON.stringify({ suggestions: results || [] }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      } catch (err) {
+        // Best-effort: em erro devolve lista vazia (não quebra a busca).
+        return new Response(JSON.stringify({ suggestions: [], error: err.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+
     if (action === "rate_status") {
       const rate = await sumUsageGlobal(env);
       return new Response(JSON.stringify(rate), { headers: { ...corsHeaders, "Content-Type": "application/json" } });

@@ -189,6 +189,7 @@
               <div v-if="slot.showSearch" class="w-full">
                 <SearchBar
                   buttonText=""
+                  autocomplete
                   :load-masteries="false"
                   :sync-global-store="false"
                   @search-start="onRankedSearchStart(slot.id)"
@@ -408,7 +409,9 @@
             <div v-for="slot in blueSlots" :key="slot.id">
               <CustomSlotCard
                 :slot="slot"
-                @search="searchCustomSlot"
+                @search-start="onCustomSearchStart"
+                @search-success="onCustomSearchSuccess"
+                @search-error="onCustomSearchError"
                 @clear="clearCustomSlot"
                 @anonymous="setCustomAnonymous"
                 @dragstart="onDragStart"
@@ -426,7 +429,9 @@
             <div v-for="slot in redSlots" :key="slot.id">
               <CustomSlotCard
                 :slot="slot"
-                @search="searchCustomSlot"
+                @search-start="onCustomSearchStart"
+                @search-success="onCustomSearchSuccess"
+                @search-error="onCustomSearchError"
                 @clear="clearCustomSlot"
                 @anonymous="setCustomAnonymous"
                 @dragstart="onDragStart"
@@ -1333,40 +1338,37 @@ async function autofillCompanionsFromProfile(profileData) {
 }
 
 // ============ Saguão Custom 5v5 ============
-async function searchCustomSlot(slotId) {
+// Busca dos slots custom via componente unificado (SearchBar dentro do CustomSlotCard).
+function onCustomSearchStart(slotId) {
   const slot = customSlots.find((item) => item.id === slotId);
   if (!slot) return;
-
-  const query = slot.rawInput?.trim() || '';
-  const [nameRaw, tagRaw] = query.split('#');
-  const gameName = (nameRaw || '').trim();
-  const tagLine = (tagRaw || '').trim();
-  if (!gameName || !tagLine) {
-    slot.error = 'Use Nome#TAG.';
-    slot.showSearch = true;
-    return;
-  }
-
   slot.loading = true;
   slot.error = null;
-  try {
-    const data = await workerRequest('profile_overview', { gameName, tagLine });
-    slot.gameName = data?.gameName || gameName;
-    slot.tagLine = data?.tagLine || tagLine;
-    slot.profileIconId = data?.profileIconId || 29;
-    slot.statsSolo = data?.statsSolo || slot.statsSolo;
-    slot.statsFlex = data?.statsFlex || slot.statsFlex;
-    slot.manualTier = slot.manualTier || slot.statsSolo?.tier || 'UNRANKED';
-    slot.manualRank = slot.manualRank || slot.statsSolo?.rank || 'IV';
-    slot.manualLp = String(slot.statsSolo?.lp || 0);
-    slot.manualWinRate = String(slot.statsSolo?.winRate || 0);
-    slot.showSearch = false;
-  } catch (error) {
-    slot.error = error?.message || 'Erro ao buscar jogador.';
-    slot.showSearch = true;
-  } finally {
-    slot.loading = false;
-  }
+}
+
+function onCustomSearchSuccess(slotId, data) {
+  const slot = customSlots.find((item) => item.id === slotId);
+  if (!slot) return;
+  slot.gameName = data?.gameName || '';
+  slot.tagLine = data?.tagLine || '';
+  slot.profileIconId = data?.profileIconId || 29;
+  slot.statsSolo = data?.statsSolo || slot.statsSolo;
+  slot.statsFlex = data?.statsFlex || slot.statsFlex;
+  slot.manualTier = slot.manualTier || slot.statsSolo?.tier || 'UNRANKED';
+  slot.manualRank = slot.manualRank || slot.statsSolo?.rank || 'IV';
+  slot.manualLp = String(slot.statsSolo?.lp || 0);
+  slot.manualWinRate = String(slot.statsSolo?.winRate || 0);
+  slot.showSearch = false;
+  slot.loading = false;
+  slot.error = null;
+}
+
+function onCustomSearchError(slotId, message) {
+  const slot = customSlots.find((item) => item.id === slotId);
+  if (!slot) return;
+  slot.error = message || 'Erro ao buscar jogador.';
+  slot.showSearch = true;
+  slot.loading = false;
 }
 
 function clearCustomSlot(slotId) {

@@ -13,6 +13,7 @@
     <div class="w-full max-w-md bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-2xl">
       <SearchBar
         buttonText="Começar Jornada"
+        autocomplete
         :routeToProfile="true"
         @show-overlay="c => $emit('show-overlay', c)"
         @hide-overlay="$emit('hide-overlay')"

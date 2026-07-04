@@ -22,10 +22,12 @@
       </h2>
 
       <!-- CAIXA DE BUSCA NO CENTRO DA HOME -->
-      <div class="mb-10 w-full max-w-md bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-2xl">
+      <div data-search-morph="home" class="mb-10 w-full max-w-md bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-2xl">
         <SearchBar
           buttonText="Começar Jornada"
+          autocomplete
           :routeToProfile="true"
+          @search-start="$emit('search-start')"
           @show-overlay="c => $emit('show-overlay', c)"
           @hide-overlay="$emit('hide-overlay')"
           @show-udyr="$emit('show-udyr')"
@@ -88,7 +90,7 @@ import { useRouter } from 'vue-router';
 import SearchBar from './SearchBar.vue';
 
 const router = useRouter();
-defineEmits(['show-overlay', 'hide-overlay', 'show-udyr']);
+defineEmits(['show-overlay', 'hide-overlay', 'show-udyr', 'search-start']);
 
 
 const UDYR_BASE = 'https://ddragon.leagueoflegends.com/cdn/img/champion/splash/';

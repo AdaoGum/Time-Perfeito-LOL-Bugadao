@@ -45,29 +45,29 @@
         >X</button>
       </div>
 
-      <div v-if="slot.gameName || slot.showSearch" class="mt-2 flex gap-1">
-        <input
-          v-model="slot.rawInput"
-          class="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-white placeholder:text-slate-500"
-          placeholder="Nome#TAG"
+      <div v-if="slot.gameName || slot.showSearch" class="mt-2 space-y-1">
+        <!-- Componente de busca unificado (mesmo mecanismo + autocomplete de todo o site) -->
+        <SearchBar
+          buttonText=""
+          autocomplete
+          :load-masteries="false"
+          :sync-global-store="false"
+          @search-start="$emit('search-start', slot.id)"
+          @search-success="(data) => $emit('search-success', slot.id, data)"
+          @search-error="(msg) => $emit('search-error', slot.id, msg)"
         />
-        <button
-          type="button"
-          class="rounded border border-cyan-700 bg-cyan-900/40 px-2 py-1 text-[10px] font-black text-cyan-300 hover:bg-cyan-900/60"
-          @click="$emit('search', slot.id)"
-        >Buscar</button>
-        <button
-          v-if="!slot.gameName"
-          type="button"
-          class="rounded border border-slate-700 px-2 py-1 text-[10px] font-bold text-slate-400 hover:text-white"
-          @click="slot.showSearch = false"
-        >Fechar</button>
-        <button
-          v-if="!slot.gameName"
-          type="button"
-          class="rounded border border-amber-700 px-2 py-1 text-[10px] font-bold text-amber-300 hover:text-amber-200"
-          @click="$emit('anonymous', slot.id)"
-        >Anonimo</button>
+        <div v-if="!slot.gameName" class="flex gap-1">
+          <button
+            type="button"
+            class="rounded border border-slate-700 px-2 py-1 text-[10px] font-bold text-slate-400 hover:text-white"
+            @click="slot.showSearch = false"
+          >Fechar</button>
+          <button
+            type="button"
+            class="rounded border border-amber-700 px-2 py-1 text-[10px] font-bold text-amber-300 hover:text-amber-200"
+            @click="$emit('anonymous', slot.id)"
+          >Anonimo</button>
+        </div>
       </div>
 
       <p v-if="slot.loading" class="mt-1 text-[10px] font-bold text-cyan-300 animate-pulse">Buscando invocador...</p>
@@ -95,6 +95,7 @@
 
 <script setup>
 import { DDRAGON_VERSION } from '../utils.js';
+import SearchBar from './SearchBar.vue';
 
 defineProps({
   slot: {
@@ -103,7 +104,7 @@ defineProps({
   }
 });
 
-defineEmits(['search', 'clear', 'anonymous', 'dragstart', 'drop']);
+defineEmits(['search-start', 'search-success', 'search-error', 'clear', 'anonymous', 'dragstart', 'drop']);
 
 const ddragonVersion = DDRAGON_VERSION;
 const tierOptions = ['IRON', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'EMERALD', 'DIAMOND', 'MASTER', 'GRANDMASTER', 'CHALLENGER', 'UNRANKED'];

@@ -41,6 +41,25 @@ export async function fetchRateStatus() {
   } catch (e) { /* silencioso: telemetria é best-effort */ }
 }
 
+// Autocomplete: busca até 5 jogadores conhecidos no D1 que contenham o texto.
+// Best-effort — devolve [] em qualquer falha (não gasta a chave da Riot).
+export async function fetchPlayerSuggestions(q) {
+  const termo = (q || '').trim();
+  if (!termo) return [];
+  try {
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'player_suggest', q: termo })
+    });
+    if (!response.ok) return [];
+    const data = await response.json();
+    return Array.isArray(data?.suggestions) ? data.suggestions : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 // True quando o orçamento global já estourou (usado p/ bloquear buscas no front).
 // Só bloqueia se já temos um valor carregado; caso contrário deixa o worker decidir.
 export function isRateBlocked() {

@@ -58,21 +58,46 @@
 
   <!-- Header -->
   <header class="fixed inset-x-0 top-0 z-40 border-b border-slate-800/80 bg-slate-950/95 backdrop-blur">
-    <div class="relative mx-auto flex w-full max-w-7xl items-center gap-4 px-4 py-3 md:px-6">
+    <div class="relative flex w-full items-center gap-4 py-3 pl-4 pr-2 md:pl-6">
       <button
         type="button"
-        class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:text-white lg:hidden"
+        class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:text-white lg:hidden"
         @click="store.ui.sidebarMobileOpen = !store.ui.sidebarMobileOpen"
         aria-label="Abrir menu lateral"
       >
         <i class="fa-solid fa-bars"></i>
       </button>
 
-      <h1 class="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 whitespace-nowrap text-sm font-extrabold tracking-tight md:block md:text-base lg:text-lg">
-        <span class="bg-gradient-to-r from-lime-300 via-yellow-300 to-orange-500 bg-clip-text text-transparent">UGA BUGA Infos + Caverna dos Monos + Tribo Perfeita</span>
-      </h1>
+      <!-- Nome do site: clicável, leva para a home -->
+      <button
+        type="button"
+        @click="router.push('/')"
+        class="shrink-0 whitespace-nowrap text-sm font-extrabold tracking-tight md:text-base lg:text-lg cursor-pointer"
+        title="Ir para a página inicial"
+      >
+        <span class="bg-gradient-to-r from-lime-300 via-yellow-300 to-orange-500 bg-clip-text text-transparent">UGA BUGA</span>
+      </button>
 
-      <nav class="ml-auto flex flex-wrap gap-2">
+      <!-- Busca central: mesmo componente unificado. Invisível na Home (lá a busca
+           é a central que "sobe" para cá via morph ao pesquisar). -->
+      <div class="hidden min-w-0 flex-1 justify-center md:flex">
+        <div
+          data-search-morph="topbar"
+          class="w-full max-w-sm transition-opacity duration-300"
+          :class="route.path === '/' ? 'pointer-events-none opacity-0' : 'opacity-100'"
+        >
+          <SearchBar
+            buttonText=""
+            autocomplete
+            :routeToProfile="true"
+            @show-overlay="handleShowOverlay"
+            @hide-overlay="handleHideOverlay"
+            @show-udyr="handleShowUdyr"
+          />
+        </div>
+      </div>
+
+      <nav class="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
         <button
           v-for="tab in topTabs"
           :key="tab.id"
@@ -115,28 +140,6 @@
       >
         <i class="fa-solid" :class="store.ui.sidebarCollapsed ? 'fa-thumbtack' : 'fa-angles-left'"></i>
       </button>
-    </div>
-
-    <div class="flex shrink-0 flex-col gap-2 border-b border-slate-800 p-3" :class="effectiveCollapsed ? 'items-center' : ''">
-      <button
-        v-if="effectiveCollapsed"
-        type="button"
-        class="inline-flex h-8 w-8 items-center justify-center rounded border border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
-        @click="sidebarSearchOpen = !sidebarSearchOpen"
-        aria-label="Abrir busca"
-      >
-        <i class="fa-solid fa-magnifying-glass"></i>
-      </button>
-
-      <div v-if="!effectiveCollapsed || sidebarSearchOpen" class="space-y-2">
-        <p v-if="!effectiveCollapsed" class="text-[10px] font-black uppercase tracking-wider text-slate-500">Busca rápida</p>
-        <SearchBar
-          buttonText=""
-          @show-overlay="handleShowOverlay"
-          @hide-overlay="handleHideOverlay"
-          @show-udyr="handleShowUdyr"
-        />
-      </div>
     </div>
 
     <div v-if="store.searchProfile.puuid" class="shrink-0 border-b border-slate-800 p-3">
@@ -270,6 +273,7 @@
       <router-view v-slot="{ Component }">
         <component
           :is="Component"
+          @search-start="handleSearchStart"
           @show-overlay="handleShowOverlay"
           @hide-overlay="handleHideOverlay"
           @show-udyr="handleShowUdyr"
@@ -292,7 +296,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { state } from './store.js';
 import { fetchRateStatus } from './api.js';
-import { profileIconImage, DDRAGON_VERSION } from './utils.js';
+import { profileIconImage, DDRAGON_VERSION, flipMorph } from './utils.js';
 import SearchBar from './components/SearchBar.vue';
 
 const store = state;
@@ -304,7 +308,6 @@ const tooltipEl = ref(null);
 
 const showOverlay = ref(false);
 const countdown = ref(3);
-const sidebarSearchOpen = ref(false);
 const showWorkerDebug = ref(false);
 const sidebarHovered = ref(false);
 
@@ -343,9 +346,15 @@ function goToTab(path) {
 function toggleSidebarCollapse() {
   store.ui.sidebarCollapsed = !store.ui.sidebarCollapsed;
   localStorage.setItem('sidebar-collapsed', String(store.ui.sidebarCollapsed));
-  if (!store.ui.sidebarCollapsed) {
-    sidebarSearchOpen.value = false;
-  }
+}
+
+// Morph da busca: quando a pesquisa parte da Home, a caixa central "sobe" até a
+// busca da topbar (FLIP). Nas demais rotas a topbar já está visível — sem morph.
+function handleSearchStart() {
+  if (route.path !== '/') return;
+  const src = document.querySelector('[data-search-morph="home"]');
+  const dst = document.querySelector('[data-search-morph="topbar"]');
+  flipMorph(src, dst);
 }
 
 function updateViewport() {
@@ -388,7 +397,6 @@ watch(
   () => route.path,
   () => {
     store.ui.sidebarMobileOpen = false;
-    sidebarSearchOpen.value = false;
   }
 );
 
