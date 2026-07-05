@@ -28,3 +28,27 @@
   pointer-events: none;
   text-shadow: 0 0 18px currentColor;
 }
+
+/* Cada número do Udyr aparece por 1s: surge com pouca opacidade, fica totalmente
+   visível e some aos poucos — tudo dentro do 1 segundo em que fica na tela. */
+@keyframes udyr-count {
+  0%   { opacity: 0; transform: scale(0.85); }
+  35%  { opacity: 1; transform: scale(1); }
+  65%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.05); }
+}
+
+.udyr-count-img {
+  animation: udyr-count 1s ease-in-out forwards;
+}
+
+/* Udyr atravessa a faixa (embaixo do contador) da esquerda para a direita, em loop */
+@keyframes udyr-walk {
+  0%   { left: -140px; }
+  100% { left: 100%; }
+}
+
+.udyr-walker {
+  animation: udyr-walk 4s linear infinite;
+  will-change: left;
+}

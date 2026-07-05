@@ -229,11 +229,9 @@ async function executeSearch() {
 
   loading.value = true;
   localError.value = null;
-  // Liga a animação global de carregamento (esqueleto/spinner do Profile.vue)
+  // Liga a animação ÚNICA de busca (overlay guiado por state.searchProfile.loading).
   if (props.syncGlobalStore) state.searchProfile.loading = true;
   emit('search-start');
-  // Overlay cinemático "ancestral" (countdown) enquanto os dados chegam.
-  emit('show-overlay', 3);
 
   try {
     const data = await workerRequest(props.action, { gameName, tagLine });
@@ -244,7 +242,6 @@ async function executeSearch() {
     }
 
     emit('search-success', props.syncGlobalStore ? state.searchProfile : normalizedData);
-    emit('show-udyr');
 
     if (props.loadMasteries && normalizedData.puuid) {
       loadMasteriesInBackground(normalizedData.puuid, gameName, tagLine, data?.hadNewGames === true);
@@ -261,7 +258,6 @@ async function executeSearch() {
   } finally {
     loading.value = false;
     if (props.syncGlobalStore) state.searchProfile.loading = false;
-    emit('hide-overlay');
   }
 }
 

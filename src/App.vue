@@ -19,19 +19,13 @@
     <div class="absolute inset-0 bg-slate-950/72"></div>  
   </div>
 
-  <!-- Udyr Runner -->
-  <div ref="udyrRunner" class="pointer-events-none fixed bottom-0 z-[60] hidden h-64 w-40 overflow-hidden" style="left:-260px">
-    <img src="https://ddragon.leagueoflegends.com/cdn/img/champion/loading/Udyr_4.jpg"
-         class="h-full w-full object-cover object-top" style="transform:scaleX(-1)" alt="Udyr" />
-  </div>
-
   <!-- Card Ripple -->
   <div id="card-ripple" class="pointer-events-none fixed z-[55] hidden" style="width:10px;height:10px;border-radius:50%;transform:translate(-50%,-50%) scale(0)"></div>
 
 
-  <!-- Cinematic Overlay -->
+  <!-- Cinematic Overlay — animação ÚNICA de busca (vale para busca normal e entrada direta por link) -->
   <div
-    v-if="showOverlay"
+    v-if="overlayVisible"
     class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/88 backdrop-blur-sm transition-all"
   >
     <span class="uga-word text-cyan-400/70"  style="top:9%;  left:7%;  font-size:1.4rem; animation-duration:2.8s; animation-delay:0s">UGA</span>
@@ -44,13 +38,30 @@
     <span class="uga-word text-cyan-400/60"    style="top:52%; left:28%; font-size:0.9rem;  animation-duration:2.9s; animation-delay:1.8s">UGA</span>
     <span class="uga-word text-amber-300/60"   style="top:42%; left:83%; font-size:1.5rem;  animation-duration:2.6s; animation-delay:2.2s">Buga</span>
     <span class="uga-word text-lime-400/70"    style="top:83%; left:63%; font-size:1.15rem; animation-duration:3.3s; animation-delay:0.9s">UGA</span>
-    <div class="relative z-10 flex h-40 w-40 items-center justify-center">
+    <div class="relative z-10 flex h-72 w-72 items-center justify-center">
       <svg class="absolute inset-0 h-full w-full animate-[spin_3s_linear_infinite] text-cyan-500" viewBox="0 0 100 100">
         <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="15 10" opacity="0.8" />
         <circle cx="50" cy="50" r="38" fill="none" stroke="#3b82f6" stroke-width="4" stroke-dasharray="30 15" class="animate-[spin_2s_linear_infinite_reverse]" />
       </svg>
-      <span class="text-6xl font-black text-white drop-shadow-[0_0_15px_rgba(6,182,212,0.8)]">{{ countdown }}</span>
+      <!-- Contagem de 4s com os números do Udyr (1→4, em loop). Cada número
+           aparece por 1s: surge com pouca opacidade, fica visível e some aos poucos. -->
+      <img
+        :src="udyrCountImage"
+        :key="countdown"
+        alt="Contagem"
+        class="udyr-count-img h-60 w-60 object-contain drop-shadow-[0_0_20px_rgba(6,182,212,0.85)]"
+      />
     </div>
+
+    <!-- Udyr caminhando da esquerda para a direita, logo abaixo do contador -->
+    <div class="relative z-10 mt-6 h-24 w-full max-w-2xl overflow-hidden">
+      <img
+        src="/udyr-walking.gif"
+        alt="Udyr caminhando"
+        class="udyr-walker absolute bottom-0 h-24 w-auto drop-shadow-[0_0_20px_rgba(6,182,212,0.5)]"
+      />
+    </div>
+
     <p class="relative z-10 mt-8 animate-pulse text-center text-lg font-black tracking-[0.12em] text-cyan-300 px-4">
       Buscando as informações com os espiritos ancestrais.<br /><span class="text-lime-300">UGA BUGA</span>
     </p>
@@ -303,13 +314,48 @@ const store = state;
 const route = useRoute();
 const router = useRouter();
 
-const udyrRunner = ref(null);
 const tooltipEl = ref(null);
 
-const showOverlay = ref(false);
-const countdown = ref(3);
+// Animação de busca: cicla os 4 números do Udyr (1→4, 1s cada). Fica visível por
+// no MÍNIMO 4s (para exibir os 4 números) mesmo que a busca termine antes; se a
+// busca demorar mais, continua em loop até terminar.
+const MIN_OVERLAY_MS = 4000;
+const overlayVisible = ref(false);
+const countdown = ref(1);
+const udyrCountImage = computed(() => `/udyr%20${countdown.value}.png`);
+let countInterval = null;
+let hideTimeout = null;
+let overlayStart = 0;
 const showWorkerDebug = ref(false);
 const sidebarHovered = ref(false);
+
+function stopOverlay() {
+  overlayVisible.value = false;
+  clearInterval(countInterval);
+  countInterval = null;
+}
+
+watch(
+  () => store.searchProfile.loading,
+  (isLoading) => {
+    if (isLoading) {
+      clearTimeout(hideTimeout);
+      hideTimeout = null;
+      overlayVisible.value = true;
+      overlayStart = Date.now();
+      countdown.value = 1;
+      clearInterval(countInterval);
+      countInterval = setInterval(() => {
+        countdown.value = countdown.value >= 4 ? 1 : countdown.value + 1;
+      }, 1000);
+    } else {
+      // Segura o fechamento até completar os 4s mínimos.
+      const remaining = Math.max(0, MIN_OVERLAY_MS - (Date.now() - overlayStart));
+      clearTimeout(hideTimeout);
+      hideTimeout = setTimeout(stopOverlay, remaining);
+    }
+  }
+);
 
 // No modo minimizado, a barra expande visualmente enquanto o mouse estiver sobre ela.
 // O estado real (store.ui.sidebarCollapsed) continua governando o pin, a margem do main e o localStorage.
@@ -328,15 +374,11 @@ const sidebarTabs = [
   { id: 'ancestralidade', path: '/ancestralidade', label: 'ANCESTRALIDADE', icon: 'fa-user-secret', active: 'border-fuchsia-500 bg-fuchsia-500/10 text-fuchsia-400' },
 ];
 
-// Overlay / countdown handlers
-function handleShowOverlay(count = 3) {
-  showOverlay.value = true;
-  countdown.value = count;
-}
-
-function handleHideOverlay() {
-  showOverlay.value = false;
-}
+// A animação de busca agora é única e guiada por store.searchProfile.loading.
+// Os handlers são mantidos como no-op pois o evento @show-overlay/@hide-overlay
+// ainda existe na árvore de componentes.
+function handleShowOverlay() {}
+function handleHideOverlay() {}
 
 function goToTab(path) {
   store.ui.sidebarMobileOpen = false;
@@ -400,17 +442,9 @@ watch(
   }
 );
 
-// Udyr runner animation
-function handleShowUdyr() {
-  const runner = udyrRunner.value;
-  if (!runner) return;
-  runner.style.cssText = 'left:-260px; bottom:60px; animation:udyr-run 1.6s ease-in-out forwards;';
-  runner.classList.remove('hidden');
-  setTimeout(() => {
-    runner.classList.add('hidden');
-    runner.style.animation = '';
-  }, 1700);
-}
+// Runner do Udyr (imagem cruzando a tela após achar o jogador) foi removido.
+// Mantido como no-op para o evento @show-udyr ainda existente na árvore.
+function handleShowUdyr() {}
 
 // Mastery tooltip
 function handleShowTooltip({ event, name, level, points }) {
@@ -444,6 +478,8 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('mousemove', onMouseMove);
   window.removeEventListener('resize', updateViewport);
+  clearInterval(countInterval);
+  clearTimeout(hideTimeout);
 });
 
 // =========================================================
