@@ -93,7 +93,7 @@
           <div class="flex flex-col rounded-xl border border-slate-800 bg-slate-950/50 p-3 lg:col-span-1">
             <div class="mb-3 flex items-center gap-2 border-b border-slate-800 pb-2">
               <i class="fa-solid fa-ranking-star text-emerald-400"></i>
-              <span class="text-[13px] font-black uppercase tracking-wide text-emerald-300">Top Rotas</span>
+              <span class="text-[13px] font-black uppercase tracking-wide text-emerald-300">Desempenho das Rotas</span>
               <span class="ml-auto text-[11px] font-semibold text-slate-500">{{ laneBreakdown.total }} jogos</span>
             </div>
             <div v-if="laneBreakdown.roles.length" class="flex flex-1 flex-col gap-2.5">
@@ -141,27 +141,57 @@
                 <span class="mt-auto text-[11px] font-bold text-slate-500">{{ fn.games }}</span>
               </button>
 
-              <!-- Conteúdo da rota ativa, logo à direita da sua espinha -->
-              <div v-if="fn.role === activeRole" class="min-w-0 flex-1 border-r border-slate-800 p-3">
-                <div class="space-y-2.5">
-                  <div v-for="c in fn.champions" :key="c.name"
-                    class="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/60 p-2.5">
-                    <img :src="championImage(c.name)" class="h-12 w-12 flex-shrink-0 rounded-lg border border-slate-600 object-cover" :alt="c.name" loading="lazy" />
-                    <div class="min-w-0 flex-1">
-                      <div class="mb-1.5 flex items-baseline justify-between gap-2">
-                        <span class="truncate text-sm font-bold text-slate-100">{{ c.name }}</span>
-                        <span class="flex-shrink-0 text-base font-black" :class="c.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ c.winRate }}%<span class="ml-1 text-[10px] font-semibold text-slate-500">{{ c.wins }}V/{{ c.losses }}D</span></span>
-                      </div>
-                      <div class="grid grid-cols-3 gap-2 text-center sm:grid-cols-6">
-                        <div><div class="text-sm font-black leading-none text-slate-200">{{ c.games }}</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Jogos</div></div>
-                        <div><div class="text-sm font-black leading-none text-emerald-400">{{ c.kda }}</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">KDA</div></div>
-                        <div><div class="text-sm font-black leading-none text-amber-400">{{ c.csMin }}</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">CS/m</div></div>
-                        <div><div class="text-sm font-black leading-none text-rose-300">{{ formatK(c.avgDmg) }}</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Dano</div></div>
-                        <div><div class="text-sm font-black leading-none text-teal-300">{{ c.kp }}%</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">KP</div></div>
-                        <div><div class="text-sm font-black leading-none text-yellow-300">{{ c.goldPerMin }}</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Ouro/m</div></div>
+              <!-- Conteúdo da rota ativa, logo à direita da sua espinha.
+                   DOIS baralhos: Top Estatísticas (por performanceScore) e Top Jogados
+                   (por nº de jogos). Colapsados mostram 2 campeões com aparência de pilha;
+                   a seta expande para listar todos. -->
+              <div v-if="fn.role === activeRole" class="min-w-0 flex-1 space-y-3 border-r border-slate-800 p-3">
+                <div v-for="deck in [
+                      { key: 'best',   title: 'Top Estatísticas', icon: 'fa-crown',              accent: 'text-emerald-300', list: fn.byScore },
+                      { key: 'played', title: 'Top Jogados',       icon: 'fa-fire-flame-curved', accent: 'text-amber-300',   list: fn.byGames }
+                    ]" :key="deck.key"
+                  class="rounded-xl border border-slate-800 bg-slate-950/40 p-2.5">
+
+                  <!-- Cabeçalho do baralho -->
+                  <div class="mb-2 flex items-center gap-2 px-0.5">
+                    <i class="fa-solid text-xs" :class="[deck.icon, deck.accent]"></i>
+                    <span class="text-[12px] font-black uppercase tracking-wide" :class="deck.accent">{{ deck.title }}</span>
+                    <span class="ml-auto text-[10px] font-bold text-slate-500">{{ deck.list.length }} campeõe{{ deck.list.length === 1 ? '' : 's' }}</span>
+                  </div>
+
+                  <!-- Campeões: prévia de 2 (o resto abre na modal) -->
+                  <div class="space-y-2">
+                    <div v-for="c in deck.list.slice(0, CHAMP_PREVIEW)" :key="c.name"
+                      class="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/60 p-2.5">
+                      <img :src="championImage(c.name)" class="h-12 w-12 flex-shrink-0 rounded-lg border border-slate-600 object-cover" :alt="c.name" loading="lazy" />
+                      <div class="min-w-0 flex-1">
+                        <div class="mb-1.5 flex items-baseline justify-between gap-2">
+                          <span class="truncate text-sm font-bold text-slate-100">{{ c.name }}</span>
+                          <span class="flex-shrink-0 text-base font-black" :class="c.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ c.winRate }}%<span class="ml-1 text-[10px] font-semibold text-slate-500">{{ c.wins }}V/{{ c.losses }}D</span></span>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 text-center sm:grid-cols-6">
+                          <div><div class="text-sm font-black leading-none text-slate-200">{{ c.games }}</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Jogos</div></div>
+                          <div><div class="text-sm font-black leading-none text-emerald-400">{{ c.kda }}</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">KDA</div></div>
+                          <div><div class="text-sm font-black leading-none text-amber-400">{{ c.csMin }}</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">CS/m</div></div>
+                          <div><div class="text-sm font-black leading-none text-rose-300">{{ formatK(c.avgDmg) }}</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Dano</div></div>
+                          <div><div class="text-sm font-black leading-none text-teal-300">{{ c.kp }}%</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">KP</div></div>
+                          <div><div class="text-sm font-black leading-none text-yellow-300">{{ c.goldPerMin }}</div><div class="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Ouro/m</div></div>
+                        </div>
                       </div>
                     </div>
                   </div>
+
+                  <!-- "Baralho" + seta: abre a modal com o top 10 (só quando há mais que a prévia) -->
+                  <button v-if="deck.list.length > CHAMP_PREVIEW" type="button" @click="openChampionModal()"
+                    class="group mt-1.5 flex w-full flex-col items-center focus:outline-none"
+                    title="Ver o top 10 de cada tipo">
+                    <div class="mx-auto h-1.5 w-[90%] rounded-b-md border border-t-0 border-slate-700/80 bg-slate-900/70 transition-all group-hover:w-[94%]"></div>
+                    <div class="mx-auto h-1.5 w-[80%] rounded-b-md border border-t-0 border-slate-800/80 bg-slate-900/40 transition-all group-hover:w-[86%]"></div>
+                    <span class="mt-1 flex items-center gap-1.5 text-[11px] font-bold text-slate-400 transition group-hover:text-slate-100">
+                      +{{ deck.list.length - CHAMP_PREVIEW }} campeõe{{ deck.list.length - CHAMP_PREVIEW === 1 ? '' : 's' }}
+                      <i class="fa-solid fa-up-right-and-down-left-from-center text-[9px]"></i>
+                    </span>
+                  </button>
                 </div>
               </div>
             </template>
@@ -174,6 +204,52 @@
 
         </div>
       </section>
+
+      <!-- ===== MODAL: TOP 10 CAMPEÕES DA ROTA (por estatística e por jogos) ===== -->
+      <Teleport to="body">
+        <div v-if="championModalOpen && activeRoleData"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.self="closeChampionModal">
+          <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="closeChampionModal"></div>
+          <div class="relative z-10 flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+
+            <!-- Cabeçalho -->
+            <div class="flex items-center gap-2 border-b border-slate-800 px-5 py-3">
+              <img :src="miniRoleIcon(activeRoleData.role)" class="h-5 w-5 brightness-200" :alt="activeRoleData.label" />
+              <h4 class="text-sm font-black uppercase tracking-wide text-slate-100">{{ activeRoleData.label }} — Top 10 Campeões</h4>
+              <button type="button" @click="closeChampionModal"
+                class="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-800 hover:text-slate-100">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+            <!-- Corpo: duas colunas (estatística | jogos) -->
+            <div class="grid gap-5 overflow-y-auto p-5 md:grid-cols-2">
+              <div v-for="deck in [
+                    { title: 'Top Estatísticas', accent: 'text-emerald-300', icon: 'fa-crown', list: activeRoleData.byScore },
+                    { title: 'Top Jogados', accent: 'text-amber-300', icon: 'fa-fire-flame-curved', list: activeRoleData.byGames }
+                  ]" :key="deck.title">
+                <div class="mb-2 flex items-center gap-2">
+                  <i class="fa-solid text-xs" :class="[deck.icon, deck.accent]"></i>
+                  <span class="text-[12px] font-black uppercase tracking-wide" :class="deck.accent">{{ deck.title }}</span>
+                </div>
+                <div class="space-y-1.5">
+                  <div v-for="(c, i) in deck.list.slice(0, 10)" :key="c.name"
+                    class="flex items-center gap-2.5 rounded-lg border border-slate-800 bg-slate-950/50 p-2">
+                    <span class="w-4 flex-shrink-0 text-center text-[12px] font-black text-slate-500">{{ i + 1 }}</span>
+                    <img :src="championImage(c.name)" class="h-9 w-9 flex-shrink-0 rounded-lg border border-slate-600 object-cover" :alt="c.name" loading="lazy" />
+                    <div class="min-w-0 flex-1">
+                      <div class="truncate text-[13px] font-bold text-slate-100">{{ c.name }}</div>
+                      <div class="text-[11px] font-semibold text-slate-400">
+                        {{ c.games }}j · <span :class="c.winRate >= 50 ? 'text-blue-400' : 'text-red-400'">{{ c.winRate }}%</span> · {{ c.kda }} KDA · {{ c.csMin }} CS/m
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Teleport>
 
       <!-- ===== LINHA A: TOP ROTAS | DISTRIBUIÇÃO POR ROTA | EVOLUÇÃO ===== -->
       <div class="grid gap-4 lg:grid-cols-3 items-stretch">
@@ -613,8 +689,8 @@ function performanceScore(s) {
 }
 
 // Ranking canônico das rotas presentes na amostra, da MELHOR para a pior por
-// pontuação de desempenho. Usado pela Rota Principal, pelo card "Top Rotas" e
-// pela aba padrão do baralho.
+// WIN RATE (desempate: mais jogos, depois pontuação de desempenho). Usado pela
+// Rota Principal, pelo card "Desempenho das Rotas" e pela aba padrão do baralho.
 const roleRankings = computed(() => {
   const byRole = {};
   for (const m of sample.value) {
@@ -626,23 +702,24 @@ const roleRankings = computed(() => {
       const stats = aggregateStats(ms);
       return { role, label: ROLE_LABELS[role], color: ROLE_COLORS[role], ...stats, score: performanceScore(stats) };
     })
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.winRate - a.winRate || b.games - a.games || b.score - a.score);
 });
 
-// Rota principal = a de MELHOR desempenho (não a mais jogada).
+// Rota principal = a de MAIOR win rate (desempate por volume de jogos).
 const primaryRole = computed(() => roleRankings.value[0]?.label || '—');
 
 // Rótulo da fila atualmente selecionada no filtro (aparece no subtítulo do card).
 const QUEUE_LABELS = { ALL: 'Todas as filas', SOLO: 'Ranqueada Solo/Duo', FLEX: 'Ranqueada Flex', NORMAL: 'Normais', ARAM: 'ARAM' };
 const queueLabel = computed(() => QUEUE_LABELS[queueFilter.value] || 'Todas as filas');
 
-// Card 1: as 3 rotas de MELHOR desempenho na amostra filtrada (por pontuação, não por volume).
+// Card 1: TODAS as rotas presentes na amostra filtrada, ordenadas por desempenho.
 const laneBreakdown = computed(() => ({
-  roles: roleRankings.value.slice(0, 3),
+  roles: roleRankings.value,
   total: roleRankings.value.reduce((sum, r) => sum + r.games, 0)
 }));
 
-// Cards 2..6: por função presente na amostra, os 3 campeões mais jogados (respeita os filtros).
+// Cards 2..6: por função presente na amostra, os campeões jogados nela (respeita os filtros).
+// Expõe DOIS rankings da lista completa: por estatística (performanceScore) e por nº de jogos.
 // Se o filtro de rota isola uma função, só aparece o card dela.
 const roleChampionBreakdown = computed(() => {
   const byRole = {};
@@ -654,13 +731,20 @@ const roleChampionBreakdown = computed(() => {
     const champMap = {};
     for (const m of byRole[role]) (champMap[m.championName] || (champMap[m.championName] = [])).push(m);
     const champions = Object.entries(champMap)
-      .map(([name, ms]) => ({ name, ...aggregateStats(ms) }))
-      .sort((a, b) => b.games - a.games)
-      .slice(0, 3);
+      .map(([name, ms]) => { const s = aggregateStats(ms); return { name, ...s, score: performanceScore(s) }; });
+    const byGames = [...champions].sort((a, b) => b.games - a.games || b.score - a.score);
+    const byScore = [...champions].sort((a, b) => b.score - a.score || b.games - a.games);
     const roleStats = aggregateStats(byRole[role]);
-    return { role, label: ROLE_LABELS[role], color: ROLE_COLORS[role], games: byRole[role].length, score: performanceScore(roleStats), champions };
+    return { role, label: ROLE_LABELS[role], color: ROLE_COLORS[role], games: byRole[role].length, score: performanceScore(roleStats), champions: byGames, byGames, byScore };
   });
 });
+
+// Card de campeões: cada deck (Top Estatísticas / Top Jogados) mostra 2 campeões com
+// aparência de baralho; clicar na seta abre uma MODAL com o top 10 de cada tipo.
+const CHAMP_PREVIEW = 2;
+const championModalOpen = ref(false);
+function openChampionModal() { championModalOpen.value = true; }
+function closeChampionModal() { championModalOpen.value = false; }
 
 // -------------------- "Baralho" de abas por rota (card de campeões) --------------------
 // Espinhas em ORDEM FIXA de rota: Top, Jungle, Mid, ADC, Sup (índice em ROLES).
@@ -688,6 +772,7 @@ function selectRole(role) {
 // Ao trocar jogador/filtros/amostra, volta a abrir na MELHOR rota.
 watch([() => store.searchProfile.puuid, roleFilter, queueFilter, championFilter, sampleSize], () => {
   userPickedRole.value = false;
+  championModalOpen.value = false;
 });
 
 // Mantém a aba válida: respeita o clique do usuário enquanto a rota existir;
@@ -700,6 +785,9 @@ watchEffect(() => {
 });
 
 const activeRoleData = computed(() => roleChampionBreakdown.value.find((r) => r.role === activeRole.value) || null);
+
+// Ao trocar de rota no baralho, fecha a modal de campeões.
+watch(activeRole, () => { championModalOpen.value = false; });
 
 // -------------------- KPIs do topo (todos no mesmo componente/tamanho) --------------------
 const kpiCards = computed(() => {

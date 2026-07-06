@@ -270,8 +270,14 @@
             <!-- CABEÇALHO DO CARD: STATUS GLOBAL DA ROW -->
             <div class="flex flex-wrap items-start justify-between gap-2 border-b border-slate-800/60 pb-2.5">
               <div class="space-y-0.5">
-                <p class="font-black text-sm uppercase tracking-wider" :class="match.win ? 'text-blue-400' : 'text-red-400'">
+                <p class="font-black text-sm uppercase tracking-wider flex items-center gap-2" :class="match.win ? 'text-blue-400' : 'text-red-400'">
                   {{ match.win ? 'VITÓRIA' : 'DERROTA' }}
+                  <span v-if="matchLp(match)"
+                    class="rounded-md border px-1.5 py-0.5 text-[11px] font-black tabular-nums"
+                    :class="matchLp(match).gain ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/60' : 'text-rose-300 border-rose-700/50 bg-rose-950/60'"
+                    title="Estimativa de LP — a Riot não informa o LP ganho/perdido por partida.">
+                    {{ matchLp(match).text }} LP
+                  </span>
                 </p>
                 <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">{{ match.queueType || 'Outro Modo' }}</p>
                 
@@ -862,6 +868,20 @@ function matchBadges(match) {
   if (match.firstBloodKill) badges.push({ label: 'First Blood', color: 'text-red-400 border-red-700 bg-red-950/50' });
   if ((match.visionWardsBoughtInGame || 0) >= 3) badges.push({ label: 'Visão+', color: 'text-purple-300 border-purple-700 bg-purple-950/50' });
   return badges;
+}
+
+// LP ganho/perdido na partida. IMPORTANTE: a Riot NÃO expõe o LP por jogo no
+// match-v5 — então, para filas ranqueadas (Solo 420 / Flex 440), mostramos uma
+// ESTIMATIVA (valor típico ~20 LP) em verde (ganho, +) ou vermelho (perda, −).
+// Retorna null nas demais filas (Normal, ARAM, Arena…), onde não há LP.
+const LP_ESTIMADO = 20;
+function matchLp(match) {
+  const q = match.queueType || '';
+  const isRanked = /ranked/i.test(q) || match.queueId === 420 || match.queueId === 440;
+  if (!isRanked) return null;
+  return match.win
+    ? { text: `+${LP_ESTIMADO}`, gain: true }
+    : { text: `−${LP_ESTIMADO}`, gain: false };
 }
 
 </script>
