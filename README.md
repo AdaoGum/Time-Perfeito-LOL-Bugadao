@@ -169,8 +169,14 @@ explícita de `PUUIDS` (run manual) é escape hatch e ignora o filtro premium.
 - Job: [`cron/relatorio-discord.js`](cron/relatorio-discord.js).
 - Agendamento: [`.github/workflows/relatorio-discord.yaml`](.github/workflows/relatorio-discord.yaml)
   — diário (18:30 BRT), semanal (segunda) e mensal (dia 1). Só Ranked (Solo/Flex).
-  **Janela de análise:** diário olha os **últimos 3 dias**, semanal os **últimos 30 dias**
-  (mais amostra, menos ruído). O sync roda 05:00 e 17:00 BRT.
+  O sync roda 05:00 e 17:00 BRT.
+- **Janela de análise (`PERIODO`):** `dia` = últimos 7 dias · `semana`/`mes` = últimos 30 dias
+  · `50` = últimas 50 partidas por jogador · `geral` = todo o histórico. (`50`/`geral` não
+  têm tendência, por não serem recorte de tempo.)
+- **Seletor (`PUUIDS`):** vazio = **só premium** · lista de puuids = exatamente esses ·
+  **prefixo de nick** (ex.: `UGA`) = todos cujo game_name começa com isso (ignora premium).
+- Cada card traz a prosa + **Top 5 WR**, **Top 5 mais jogados** e **WR por rota com o melhor
+  champ de cada rota**.
   Disparo manual: GitHub → Actions → "Relatorio Tribo Discord" → Run workflow.
 
 ```bash
@@ -180,8 +186,9 @@ DRY_RUN=1 PERIODO=semana node --env-file=local/.env cron/relatorio-discord.js
 # Postar de verdade (precisa DISCORD_WEBHOOK no local/.env):
 PERIODO=semana node --env-file=local/.env cron/relatorio-discord.js
 
-# Só alguns jogadores:
-PUUIDS="puuid1,puuid2" PERIODO=dia node --env-file=local/.env cron/relatorio-discord.js
+# Alvo específico (puuids OU prefixo de nick) e outras janelas:
+PUUIDS="UGA" PERIODO=50 node --env-file=local/.env cron/relatorio-discord.js   # todos "UGA", últimas 50
+PERIODO=geral node --env-file=local/.env cron/relatorio-discord.js             # premium, todo o histórico
 ```
 
 **Secrets (GitHub → Settings → Secrets → Actions → Repository secrets):**

@@ -63,6 +63,28 @@ function lerUserMap() {
   catch { console.warn('⚠️  DISCORD_USER_MAP não é JSON válido — ignorado.'); return null; }
 }
 
+// Resolve o env PUUIDS (o "seletor"):
+//   vazio                    -> null  (relatório só dos premium)
+//   puuids (>=40 chars/token)-> a lista exata (escape hatch, ignora premium)
+//   prefixo de nick (curto)  -> LIKE 'prefixo%' no game_name (ex.: "UGA" pega todos os UGA)
+async function resolverAlvo() {
+  const raw = (process.env.PUUIDS || '').trim();
+  if (!raw) return null;
+  const tokens = raw.split(',').map(s => s.trim()).filter(Boolean);
+  if (tokens.some(t => t.length >= 40)) {
+    console.log(`🎯 Alvo: ${tokens.length} puuid(s) explícito(s).`);
+    return tokens;
+  }
+  const like = raw.replace(/[%_\\]/g, (c) => `\\${c}`) + '%';
+  const rows = await queryD1(
+    "SELECT puuid, game_name FROM jogadores WHERE game_name LIKE ? ESCAPE '\\' COLLATE NOCASE ORDER BY game_name",
+    [like]
+  );
+  console.log(`🎯 Alvo por prefixo "${raw}": ${rows.length} jogador(es)${rows.length ? ' → ' + rows.map(r => r.game_name).join(', ') : ''}.`);
+  // Prefixo sem match: sentinela pra dar relatório vazio (NÃO cair pro filtro premium).
+  return rows.length ? rows.map(r => r.puuid) : ['__nenhum__'];
+}
+
 (async () => {
   if (!CF_ACCOUNT_ID || !CF_API_TOKEN || !D1_DATABASE_ID) {
     console.error('❌ Faltam CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN / D1_DATABASE_ID.');
@@ -78,12 +100,8 @@ function lerUserMap() {
   console.log(`📜 [CRONISTA] Relatório "${PERIODO}" da tribo`);
   console.log('=========================================================');
 
-  // PUUIDS opcional (separada por vírgula): relatório só desses jogadores.
-  // Usado pelo botão do app (dispatch do workflow com jogadores selecionados).
-  const puuids = process.env.PUUIDS
-    ? process.env.PUUIDS.split(',').map(s => s.trim()).filter(Boolean)
-    : null;
-  if (puuids) console.log(`🎯 Filtrado para ${puuids.length} jogador(es) selecionado(s).`);
+  // Seletor: vazio = premium; puuids = esses; prefixo de nick = LIKE (ex.: "UGA").
+  const puuids = await resolverAlvo();
 
   const { mensagens, ativos } = await gerarRelatorio({
     queryRows: queryD1,

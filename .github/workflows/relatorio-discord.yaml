@@ -8,10 +8,16 @@ on:
   workflow_dispatch:
     inputs:
       periodo:
-        description: 'dia | semana | mes'
-        default: 'dia'
+        description: 'Janela de análise'
+        type: choice
+        options:
+          - dia      # últimos 7 dias
+          - semana   # últimos 30 dias
+          - '50'     # últimas 50 partidas por jogador
+          - geral    # todo o histórico
+        default: dia
       puuids:
-        description: 'puuids separados por vírgula (vazio = todos)'
+        description: 'Alvo: vazio = premium | puuids (vírgula) | prefixo de nick (ex: UGA)'
         default: ''
 
 jobs:

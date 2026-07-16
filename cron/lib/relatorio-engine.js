@@ -16,13 +16,15 @@
 export const QUEUES_RANKED = [420, 440];
 const DIA = 86400000;
 
-// Rótulos e janelas por período. Obs.: o relatório "diário" roda todo dia, mas
-// analisa os ÚLTIMOS 3 DIAS (janela rolante), e o "semanal" analisa os ÚLTIMOS 30
-// DIAS — mais amostra, menos ruído de dia isolado.
+// Períodos. `modo`: 'janela' (recorte por tempo, com tendência vs. período anterior),
+// 'jogos' (últimas N partidas por jogador) ou 'tudo' (todo o histórico do alvo).
+// Diário analisa os últimos 7 dias; semanal os últimos 30 — mais amostra, menos ruído.
 export const PERIODOS = {
-  dia:    { ms: 3 * DIA,  titulo: '📊 Relatório Diário',  janela: 'últimos 3 dias' },
-  semana: { ms: 30 * DIA, titulo: '📅 Relatório Semanal', janela: 'últimos 30 dias' },
-  mes:    { ms: 30 * DIA, titulo: '🗓️ Relatório Mensal',  janela: '~30 dias' }
+  dia:    { modo: 'janela', ms: 7 * DIA,  titulo: '📊 Relatório Diário',    janela: 'últimos 7 dias' },
+  semana: { modo: 'janela', ms: 30 * DIA, titulo: '📅 Relatório Semanal',   janela: 'últimos 30 dias' },
+  mes:    { modo: 'janela', ms: 30 * DIA, titulo: '🗓️ Relatório Mensal',    janela: '~30 dias' },
+  '50':   { modo: 'jogos',  n: 50,        titulo: '🎯 Relatório — 50 jogos', janela: 'últimos 50 jogos' },
+  geral:  { modo: 'tudo',                 titulo: '📚 Relatório Geral',      janela: 'todo o histórico' }
 };
 
 // Benchmarks por rota (mira). Abaixo do 1º = "a melhorar"; acima do 2º = "forte".
@@ -42,60 +44,60 @@ const ROLE_META  = { TOP: 'TOP', JUNGLE: 'JUNGLE', MIDDLE: 'MID', BOTTOM: 'ADC',
 // ---------------------------------------------------------------------------
 // SQL (placeholders `?` posicionais; params em array — igual nos dois ambientes)
 // ---------------------------------------------------------------------------
-function inClause(puuids) {
-  if (!puuids || !puuids.length) return { frag: '', params: [] };
-  return { frag: ` AND e.puuid IN (${puuids.map(() => '?').join(',')})`, params: [...puuids] };
+// Fonte de partidas (CTE `sel`) compartilhada por todas as agregações. `modo`:
+//   'janela' -> recorte [desde, ate)     'jogos' -> ranqueia p/ pegar as N últimas
+//   'tudo'   -> sem recorte (todo o histórico do alvo)
+function cteSel({ modo, desde, ate, puuids }) {
+  const cond = [`p.queue_id IN (${QUEUES_RANKED.join(',')})`, 'p.game_creation > 0'];
+  const params = [];
+  if (modo === 'janela') { cond.push('p.game_creation >= ? AND p.game_creation < ?'); params.push(desde, ate); }
+  if (puuids && puuids.length) { cond.push(`e.puuid IN (${puuids.map(() => '?').join(',')})`); params.push(...puuids); }
+  const rn = modo === 'jogos' ? ', ROW_NUMBER() OVER (PARTITION BY e.puuid ORDER BY p.game_creation DESC) AS rn' : '';
+  const sql = `WITH sel AS (
+    SELECT e.puuid, e.win, e.kills, e.deaths, e.assists, e.cs, e.vision_score,
+           e.kill_participation, e.gold_per_min, e.damage_champions,
+           e.team_position, e.champion_name, p.game_duration AS gd${rn}
+    FROM estatisticas_jogador_partida e
+    JOIN partidas p ON p.match_id = e.match_id
+    WHERE ${cond.join(' AND ')}
+  )`;
+  return { sql, params };
 }
 
-export function sqlAgregadoJogador(desde, ate, puuids, somentePremium = false) {
-  const inC = inClause(puuids);
-  const premiumFrag = somentePremium ? ' AND j.has_premium = 1' : '';
+// n (limite de últimas partidas) só existe no modo 'jogos'.
+function qAgg(cte, { n = null, somentePremium = false } = {}) {
+  const extra = [];
+  const params = [...cte.params];
+  if (n) { extra.push('s.rn <= ?'); params.push(n); }
+  if (somentePremium) extra.push('j.has_premium = 1');
   return {
-    sql: `
-      SELECT e.puuid, j.game_name, j.tag_line, j.tier, j.rank,
-        COUNT(*) jogos, SUM(e.win) vitorias,
-        SUM(e.kills) k, SUM(e.deaths) d, SUM(e.assists) a,
-        AVG(e.cs * 60.0 / NULLIF(p.game_duration,0)) cs_min,
-        AVG(e.vision_score * 60.0 / NULLIF(p.game_duration,0)) vis_min,
-        AVG(e.kill_participation) kp,
-        AVG(e.gold_per_min) gpm,
-        AVG(e.damage_champions) dmg
-      FROM estatisticas_jogador_partida e
-      JOIN partidas p ON p.match_id = e.match_id
-      JOIN jogadores j ON j.puuid = e.puuid
-      WHERE p.game_creation >= ? AND p.game_creation < ? AND p.game_creation > 0
-        AND p.queue_id IN (${QUEUES_RANKED.join(',')})${inC.frag}${premiumFrag}
-      GROUP BY e.puuid`,
-    params: [desde, ate, ...inC.params]
+    sql: `${cte.sql}
+      SELECT s.puuid, j.game_name, j.tag_line, j.tier, j.rank,
+        COUNT(*) jogos, SUM(s.win) vitorias, SUM(s.kills) k, SUM(s.deaths) d, SUM(s.assists) a,
+        AVG(s.cs * 60.0 / NULLIF(s.gd,0)) cs_min,
+        AVG(s.vision_score * 60.0 / NULLIF(s.gd,0)) vis_min,
+        AVG(s.kill_participation) kp, AVG(s.gold_per_min) gpm, AVG(s.damage_champions) dmg
+      FROM sel s JOIN jogadores j ON j.puuid = s.puuid
+      ${extra.length ? 'WHERE ' + extra.join(' AND ') : ''}
+      GROUP BY s.puuid`,
+    params
   };
 }
 
-export function sqlPorRota(desde, ate, puuids) {
-  const inC = inClause(puuids);
-  return {
-    sql: `
-      SELECT e.puuid, e.team_position, COUNT(*) n, SUM(e.win) v
-      FROM estatisticas_jogador_partida e
-      JOIN partidas p ON p.match_id = e.match_id
-      WHERE p.game_creation >= ? AND p.game_creation < ? AND p.game_creation > 0
-        AND p.queue_id IN (${QUEUES_RANKED.join(',')})${inC.frag}
-      GROUP BY e.puuid, e.team_position`,
-    params: [desde, ate, ...inC.params]
-  };
+function qRotas(cte, { n = null } = {}) {
+  const params = [...cte.params];
+  const w = n ? (params.push(n), ' WHERE s.rn <= ?') : '';
+  return { sql: `${cte.sql}
+    SELECT s.puuid, s.team_position, COUNT(*) n, SUM(s.win) v
+    FROM sel s${w} GROUP BY s.puuid, s.team_position`, params };
 }
 
-export function sqlPorChampion(desde, ate, puuids) {
-  const inC = inClause(puuids);
-  return {
-    sql: `
-      SELECT e.puuid, e.champion_name, e.team_position, COUNT(*) n, SUM(e.win) v
-      FROM estatisticas_jogador_partida e
-      JOIN partidas p ON p.match_id = e.match_id
-      WHERE p.game_creation >= ? AND p.game_creation < ? AND p.game_creation > 0
-        AND p.queue_id IN (${QUEUES_RANKED.join(',')})${inC.frag}
-      GROUP BY e.puuid, e.champion_name`,
-    params: [desde, ate, ...inC.params]
-  };
+function qChamps(cte, { n = null } = {}) {
+  const params = [...cte.params];
+  const w = n ? (params.push(n), ' WHERE s.rn <= ?') : '';
+  return { sql: `${cte.sql}
+    SELECT s.puuid, s.champion_name, s.team_position, COUNT(*) n, SUM(s.win) v
+    FROM sel s${w} GROUP BY s.puuid, s.champion_name, s.team_position`, params };
 }
 
 export function sqlMarcos10(desde, ate, puuids) {
@@ -219,14 +221,47 @@ function analisarJogador(agg, rotas, champs, marcos, prev, prevMarcos, metaTable
     tend.ouro10 = { antes: round(prevMarcos.ouro10), agora: round(marcos.ouro10), delta: round(marcos.ouro10 - prevMarcos.ouro10) };
   }
 
-  // Campeões (do próprio histórico). O "main" é o mais jogado DENTRO da rota principal
-  // (evita dizer "no Atirador, jogando mais de Renekton" quando o pico veio de outra rota).
+  // Campeões. `champs` vem por (nome, rota); agrego por nome p/ os tops gerais e
+  // mantenho por rota p/ o "melhor champ de cada lane".
   const champsOrd = [...champs].sort((a, b) => b.n - a.n);
+  const porNome = {};
+  for (const c of champs) {
+    (porNome[c.champion_name] ||= { nome: c.champion_name, n: 0, v: 0 });
+    porNome[c.champion_name].n += Number(c.n);
+    porNome[c.champion_name].v += Number(c.v);
+  }
+  const champsNome = Object.values(porNome).map(c => ({ ...c, wr: pct(c.v, c.n) }));
+
+  // Top 5 mais jogados e Top 5 melhor WR (WR exige amostra mínima p/ não premiar 1-0).
+  const topPlayed = [...champsNome].sort((a, b) => b.n - a.n).slice(0, 5);
+  const minWr = Math.max(2, Math.round(jogos * 0.05));
+  const topWr = [...champsNome].filter(c => c.n >= minWr)
+    .sort((a, b) => b.wr - a.wr || b.n - a.n).slice(0, 5);
+
+  // WR por rota + melhor champ de cada rota (melhor WR com amostra, senão o mais jogado).
+  const champsPorRota = {};
+  for (const c of champs) {
+    if (!c.team_position) continue;
+    (champsPorRota[c.team_position] ||= []).push({ nome: c.champion_name, n: Number(c.n), v: Number(c.v) });
+  }
+  const lanes = rotasOrd.map(r => {
+    const lista = (champsPorRota[r.team_position] || []).sort((a, b) => b.n - a.n);
+    // Mínimo escala com o volume da rota (evita "melhor: Talon 100%" com 2 jogos em 157).
+    const minLane = Math.max(3, Math.round(Number(r.n) * 0.1));
+    const comAmostra = lista.filter(c => c.n >= minLane).sort((a, b) => (b.v / b.n) - (a.v / a.n) || b.n - a.n);
+    const melhor = comAmostra[0] || lista[0];
+    return {
+      rota: r.team_position, label: ROLE_LABEL[r.team_position] || r.team_position,
+      n: Number(r.n), wr: pct(r.v, r.n),
+      melhorChamp: melhor ? { nome: melhor.nome, n: melhor.n, wr: pct(melhor.v, melhor.n) } : null
+    };
+  });
+
+  // "main" = mais jogado DENTRO da rota principal (evita "no Atirador, main Renekton").
   const champsRota = champsOrd.filter(c => c.team_position === rotaPrinc);
   const mainChamp = (champsRota[0] || champsOrd[0])?.champion_name || null;
-  const bestChamps = champsOrd
+  const bestChamps = champsNome
     .filter(c => c.n >= Math.max(3, Math.round(jogos * 0.1)))
-    .map(c => ({ nome: c.champion_name, n: c.n, wr: pct(c.v, c.n) }))
     .sort((a, b) => b.wr - a.wr);
 
   // Off-role que derruba a WR: 2ª rota mais jogada com amostra e WR pior que a principal.
@@ -261,7 +296,8 @@ function analisarJogador(agg, rotas, champs, marcos, prev, prevMarcos, metaTable
     nome: `${agg.game_name}#${agg.tag_line}`,
     gameName: agg.game_name,
     jogos, wr, met, classe, rotaPrinc, rotaLabel: ROLE_LABEL[rotaPrinc] || rotaPrinc,
-    tend, mainChamp, bestChamps, offRole, sugestaoMeta
+    tend, mainChamp, bestChamps, offRole, sugestaoMeta,
+    topPlayed, topWr, lanes
   };
 }
 
@@ -425,6 +461,12 @@ function mencao(a, userMap) {
   return id ? `<@${id}>` : '';
 }
 
+const fmtTopWr = (arr) => arr.length ? arr.map(c => `${c.nome} — **${c.wr}%** (${c.n})`).join('\n') : '—';
+const fmtTopPlayed = (arr) => arr.length ? arr.map(c => `${c.nome} — ${c.n} jogos (${c.wr}%)`).join('\n') : '—';
+const fmtLanes = (arr) => arr.length
+  ? arr.map(l => `${l.label}: **${l.wr}%** (${l.n})${l.melhorChamp ? ` · melhor: ${l.melhorChamp.nome} ${l.melhorChamp.wr}%` : ''}`).join('\n')
+  : '—';
+
 export function montarMensagens(analises, periodoKey, userMap) {
   const P = PERIODOS[periodoKey] || PERIODOS.dia;
   const embeds = analises.map(a => {
@@ -439,7 +481,10 @@ export function montarMensagens(analises, periodoKey, userMap) {
         { name: 'KDA', value: `${a.met.kda}`, inline: true },
         { name: 'CS/min', value: `${a.met.csMin}`, inline: true },
         { name: 'Visão/min', value: `${a.met.visMin}`, inline: true },
-        { name: 'KP', value: `${Math.round(a.met.kp * 100)}%`, inline: true }
+        { name: 'KP', value: `${Math.round(a.met.kp * 100)}%`, inline: true },
+        { name: '🏆 Top 5 WR', value: fmtTopWr(a.topWr), inline: false },
+        { name: '🔁 Top 5 mais jogados', value: fmtTopPlayed(a.topPlayed), inline: false },
+        { name: '🧭 WR por rota (melhor champ)', value: fmtLanes(a.lanes), inline: false }
       ]
     };
   });
@@ -501,32 +546,44 @@ export async function postarDiscord(webhookUrl, mensagens) {
 // ---------------------------------------------------------------------------
 export async function gerarRelatorio({ queryRows, periodo = 'dia', puuids = null, somentePremium = null, metaCsv = null, userMap = null, agora = Date.now() }) {
   const P = PERIODOS[periodo] || PERIODOS.dia;
-  const ate = agora;
-  const desde = agora - P.ms;
-  const antesDesde = desde - P.ms;   // período anterior equivalente (p/ tendência)
 
-  // Regra: quando NÃO há seleção explícita de puuids ("para todos"), o relatório
-  // cobre SÓ jogadores premium (has_premium = 1) — igual aos jobs de sync/backfill.
-  // Uma lista explícita de puuids é escape hatch e ignora o filtro premium.
+  // Regra: sem seleção explícita de puuids ("para todos") o relatório cobre SÓ premium
+  // (has_premium = 1) — igual ao sync/backfill. Alvo explícito ignora o filtro.
   const soPrem = somentePremium == null ? !puuids : somentePremium;
 
   const meta = metaCsv ? parseMetaTiers(metaCsv).table : null;
 
-  const qAgg = sqlAgregadoJogador(desde, ate, puuids, soPrem);
-  const qRotas = sqlPorRota(desde, ate, puuids);
-  const qChamps = sqlPorChampion(desde, ate, puuids);
-  const qMarcos = sqlMarcos10(desde, ate, puuids);
-  const qAggPrev = sqlAgregadoJogador(antesDesde, desde, puuids, soPrem);
-  const qMarcosPrev = sqlMarcos10(antesDesde, desde, puuids);
+  const ate = agora;
+  const desde = P.modo === 'janela' ? agora - P.ms : null;
+  const nLimite = P.modo === 'jogos' ? P.n : null;
 
-  const [aggs, rotas, champs, marcos, aggsPrev, marcosPrev] = await Promise.all([
-    queryRows(qAgg.sql, qAgg.params),
-    queryRows(qRotas.sql, qRotas.params),
-    queryRows(qChamps.sql, qChamps.params),
-    queryRows(qMarcos.sql, qMarcos.params).catch(() => []),
-    queryRows(qAggPrev.sql, qAggPrev.params).catch(() => []),
-    queryRows(qMarcosPrev.sql, qMarcosPrev.params).catch(() => [])
-  ]);
+  const cte = cteSel({ modo: P.modo, desde, ate, puuids });
+  const qA = qAgg(cte, { n: nLimite, somentePremium: soPrem });
+  const qR = qRotas(cte, { n: nLimite });
+  const qC = qChamps(cte, { n: nLimite });
+
+  const promessas = [
+    queryRows(qA.sql, qA.params),
+    queryRows(qR.sql, qR.params),
+    queryRows(qC.sql, qC.params)
+  ];
+
+  // Tendência (período anterior) + marcos @10 só fazem sentido no modo 'janela'.
+  const temJanela = P.modo === 'janela';
+  if (temJanela) {
+    const antesDesde = desde - P.ms;
+    const ctePrev = cteSel({ modo: 'janela', desde: antesDesde, ate: desde, puuids });
+    const qAP = qAgg(ctePrev, { somentePremium: soPrem });
+    const qM = sqlMarcos10(desde, ate, puuids);
+    const qMP = sqlMarcos10(antesDesde, desde, puuids);
+    promessas.push(
+      queryRows(qAP.sql, qAP.params).catch(() => []),
+      queryRows(qM.sql, qM.params).catch(() => []),
+      queryRows(qMP.sql, qMP.params).catch(() => [])
+    );
+  }
+
+  const [aggs, rotas, champs, aggsPrev = [], marcos = [], marcosPrev = []] = await Promise.all(promessas);
 
   const byPuuid = (arr) => arr.reduce((m, r) => ((m[r.puuid] ||= []).push(r), m), {});
   const rotasBy = byPuuid(rotas);
