@@ -16,10 +16,12 @@
 export const QUEUES_RANKED = [420, 440];
 const DIA = 86400000;
 
-// Rótulos e janelas por período.
+// Rótulos e janelas por período. Obs.: o relatório "diário" roda todo dia, mas
+// analisa os ÚLTIMOS 3 DIAS (janela rolante), e o "semanal" analisa os ÚLTIMOS 30
+// DIAS — mais amostra, menos ruído de dia isolado.
 export const PERIODOS = {
-  dia:    { ms: 1 * DIA,  titulo: '📊 Relatório Diário',  janela: 'últimas 24h' },
-  semana: { ms: 7 * DIA,  titulo: '📅 Relatório Semanal', janela: 'última semana' },
+  dia:    { ms: 3 * DIA,  titulo: '📊 Relatório Diário',  janela: 'últimos 3 dias' },
+  semana: { ms: 30 * DIA, titulo: '📅 Relatório Semanal', janela: 'últimos 30 dias' },
   mes:    { ms: 30 * DIA, titulo: '🗓️ Relatório Mensal',  janela: '~30 dias' }
 };
 
@@ -45,8 +47,9 @@ function inClause(puuids) {
   return { frag: ` AND e.puuid IN (${puuids.map(() => '?').join(',')})`, params: [...puuids] };
 }
 
-export function sqlAgregadoJogador(desde, ate, puuids) {
+export function sqlAgregadoJogador(desde, ate, puuids, somentePremium = false) {
   const inC = inClause(puuids);
+  const premiumFrag = somentePremium ? ' AND j.has_premium = 1' : '';
   return {
     sql: `
       SELECT e.puuid, j.game_name, j.tag_line, j.tier, j.rank,
@@ -61,7 +64,7 @@ export function sqlAgregadoJogador(desde, ate, puuids) {
       JOIN partidas p ON p.match_id = e.match_id
       JOIN jogadores j ON j.puuid = e.puuid
       WHERE p.game_creation >= ? AND p.game_creation < ? AND p.game_creation > 0
-        AND p.queue_id IN (${QUEUES_RANKED.join(',')})${inC.frag}
+        AND p.queue_id IN (${QUEUES_RANKED.join(',')})${inC.frag}${premiumFrag}
       GROUP BY e.puuid`,
     params: [desde, ate, ...inC.params]
   };
@@ -271,12 +274,12 @@ const NOME_METRICA = {
 
 function fraseAbertura(rng, a, periodoJanela) {
   if (a.jogos >= 20) return pick(rng, [
-    `Foram **${a.jogos} partidas** ranqueadas nas ${periodoJanela} — presença de sobra.`,
+    `Foram **${a.jogos} partidas** ranqueadas nos ${periodoJanela} — presença de sobra.`,
     `**${a.jogos} jogos** no período: você não deu descanso pra fila.`,
     `Com **${a.jogos} partidas**, você foi um dos pilares de atividade da tribo.`
   ]);
   if (a.jogos >= 5) return pick(rng, [
-    `Foram **${a.jogos} partidas** ranqueadas nas ${periodoJanela}.`,
+    `Foram **${a.jogos} partidas** ranqueadas nos ${periodoJanela}.`,
     `**${a.jogos} jogos** no período — um ritmo saudável.`
   ]);
   return pick(rng, [
@@ -496,19 +499,24 @@ export async function postarDiscord(webhookUrl, mensagens) {
 //   opts: { queryRows, periodo, puuids?, metaCsv?, agora? }
 //   retorna { mensagens, ativos, periodo, patchMeta }
 // ---------------------------------------------------------------------------
-export async function gerarRelatorio({ queryRows, periodo = 'dia', puuids = null, metaCsv = null, userMap = null, agora = Date.now() }) {
+export async function gerarRelatorio({ queryRows, periodo = 'dia', puuids = null, somentePremium = null, metaCsv = null, userMap = null, agora = Date.now() }) {
   const P = PERIODOS[periodo] || PERIODOS.dia;
   const ate = agora;
   const desde = agora - P.ms;
   const antesDesde = desde - P.ms;   // período anterior equivalente (p/ tendência)
 
+  // Regra: quando NÃO há seleção explícita de puuids ("para todos"), o relatório
+  // cobre SÓ jogadores premium (has_premium = 1) — igual aos jobs de sync/backfill.
+  // Uma lista explícita de puuids é escape hatch e ignora o filtro premium.
+  const soPrem = somentePremium == null ? !puuids : somentePremium;
+
   const meta = metaCsv ? parseMetaTiers(metaCsv).table : null;
 
-  const qAgg = sqlAgregadoJogador(desde, ate, puuids);
+  const qAgg = sqlAgregadoJogador(desde, ate, puuids, soPrem);
   const qRotas = sqlPorRota(desde, ate, puuids);
   const qChamps = sqlPorChampion(desde, ate, puuids);
   const qMarcos = sqlMarcos10(desde, ate, puuids);
-  const qAggPrev = sqlAgregadoJogador(antesDesde, desde, puuids);
+  const qAggPrev = sqlAgregadoJogador(antesDesde, desde, puuids, soPrem);
   const qMarcosPrev = sqlMarcos10(antesDesde, desde, puuids);
 
   const [aggs, rotas, champs, marcos, aggsPrev, marcosPrev] = await Promise.all([

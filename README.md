@@ -162,11 +162,15 @@ Job que lê o D1 e posta um relatório analítico por jogador (pontos fortes/fra
 evolução vs. período anterior, recomendações de champ/rota cruzadas com o meta) num
 canal do Discord via **webhook**. Texto gerado por regras (NLG "IA sem IA"), sem LLM.
 
+Cobre **só jogadores premium** (`has_premium = 1`), igual ao sync/backfill. Uma lista
+explícita de `PUUIDS` (run manual) é escape hatch e ignora o filtro premium.
+
 - Motor: [`cron/lib/relatorio-engine.js`](cron/lib/relatorio-engine.js) (JS puro).
 - Job: [`cron/relatorio-discord.js`](cron/relatorio-discord.js).
 - Agendamento: [`.github/workflows/relatorio-discord.yaml`](.github/workflows/relatorio-discord.yaml)
   — diário (18:30 BRT), semanal (segunda) e mensal (dia 1). Só Ranked (Solo/Flex).
-  O sync roda 05:00 e 17:00 BRT (o das 17:00 deixa o relatório das 18:30 com o dia fresco).
+  **Janela de análise:** diário olha os **últimos 3 dias**, semanal os **últimos 30 dias**
+  (mais amostra, menos ruído). O sync roda 05:00 e 17:00 BRT.
   Disparo manual: GitHub → Actions → "Relatorio Tribo Discord" → Run workflow.
 
 ```bash
