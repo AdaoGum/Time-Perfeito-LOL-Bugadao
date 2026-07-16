@@ -40,6 +40,14 @@
         >
           <i class="fa-solid fa-users-gear mr-1"></i> Jogadores
         </button>
+        <button
+          type="button"
+          @click="activeTab = 'operacoes'; ensurePlayersLoaded()"
+          class="rounded-lg px-4 py-2 text-xs font-black uppercase tracking-wider transition"
+          :class="activeTab === 'operacoes' ? 'bg-fuchsia-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
+        >
+          <i class="fa-solid fa-paper-plane mr-1"></i> Operações
+        </button>
       </nav>
 
       <!-- ABA 1: HISTÓRICO DE PARTIDAS -->
@@ -423,6 +431,76 @@
           </AsyncState>
         </section>
       </template>
+
+      <!-- ABA 3: OPERAÇÕES (enviar relatório / disparar jobs via GitHub Actions) -->
+      <template v-else-if="activeTab === 'operacoes'">
+        <section class="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl space-y-6">
+          <div>
+            <h2 class="text-xl font-black text-fuchsia-300 uppercase">Operações da Tribo</h2>
+            <p class="text-xs text-slate-400">Dispare o relatório do Discord (com jogadores selecionados) e os jobs do sistema. Tudo roda no GitHub Actions — chega em ~1 min.</p>
+          </div>
+
+          <div v-if="dispatchMsg" class="rounded-lg border p-3 text-xs font-bold"
+               :class="dispatchMsg.type === 'ok' ? 'border-emerald-800 bg-emerald-950/30 text-emerald-300' : 'border-red-900 bg-red-950/30 text-red-300'">
+            {{ dispatchMsg.text }}
+          </div>
+
+          <!-- ENVIAR RELATÓRIO -->
+          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
+            <h3 class="text-sm font-black text-white uppercase tracking-wide"><i class="fa-brands fa-discord text-indigo-400 mr-1"></i> Enviar relatório ao Discord</h3>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-[10px] font-black uppercase text-slate-400">Período:</span>
+              <button v-for="p in ['dia','semana','mes']" :key="p" type="button" @click="reportPeriodo = p"
+                class="rounded px-3 py-1 text-[10px] font-black uppercase transition"
+                :class="reportPeriodo === p ? 'bg-fuchsia-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-slate-200'">
+                {{ p === 'dia' ? 'Diário' : p === 'semana' ? 'Semanal' : 'Mensal' }}
+              </button>
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between mb-1.5">
+                <span class="text-[10px] font-black uppercase text-slate-400">Jogadores ({{ selectedReportPuuids.length || 'todos' }})</span>
+                <div class="flex gap-2 text-[10px] font-bold">
+                  <button type="button" @click="selectedReportPuuids = players.map(p => p.puuid)" class="text-cyan-400 hover:underline">Todos</button>
+                  <button type="button" @click="selectedReportPuuids = []" class="text-amber-400 hover:underline">Limpar</button>
+                </div>
+              </div>
+              <div class="max-h-52 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950 p-2 grid grid-cols-2 sm:grid-cols-3 gap-1">
+                <button v-for="p in sortedPlayers" :key="p.puuid" type="button" @click="toggleReportPuuid(p.puuid)"
+                  class="flex items-center gap-1.5 rounded px-2 py-1 text-left text-[11px] font-bold transition"
+                  :class="selectedReportPuuids.includes(p.puuid) ? 'bg-fuchsia-950/40 text-fuchsia-200' : 'text-slate-400 hover:bg-slate-900/60'">
+                  <input type="checkbox" :checked="selectedReportPuuids.includes(p.puuid)" class="pointer-events-none rounded border-slate-700 bg-slate-900 text-fuchsia-500" />
+                  <span class="truncate">{{ p.game_name }}</span>
+                </button>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-1">Vazio = todos os que jogaram no período.</p>
+            </div>
+
+            <button type="button" @click="enviarRelatorio" :disabled="dispatching"
+              class="w-full rounded-lg bg-indigo-600 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-indigo-500 transition disabled:opacity-40 disabled:cursor-wait">
+              <span v-if="dispatching">Disparando...</span>
+              <span v-else><i class="fa-solid fa-paper-plane mr-1"></i> Enviar relatório {{ reportPeriodo === 'dia' ? 'diário' : reportPeriodo === 'semana' ? 'semanal' : 'mensal' }}</span>
+            </button>
+          </div>
+
+          <!-- DISPARAR JOBS -->
+          <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
+            <h3 class="text-sm font-black text-white uppercase tracking-wide"><i class="fa-solid fa-gears text-amber-400 mr-1"></i> Disparar jobs do sistema</h3>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" @click="dispararJob('riot-sync.yaml')" :disabled="dispatching"
+                class="rounded-lg bg-slate-700 px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-100 hover:bg-slate-600 transition disabled:opacity-40 disabled:cursor-wait">
+                <i class="fa-solid fa-database mr-1"></i> Rodar Sync (coletar partidas)
+              </button>
+              <button type="button" @click="dispararJob('relatorio-discord.yaml')" :disabled="dispatching"
+                class="rounded-lg bg-slate-700 px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-100 hover:bg-slate-600 transition disabled:opacity-40 disabled:cursor-wait">
+                <i class="fa-solid fa-bullhorn mr-1"></i> Relatório completo (todos)
+              </button>
+            </div>
+            <p class="text-[10px] text-slate-500">Requer o worker configurado com GITHUB_TOKEN/GITHUB_REPO (ver planner). Os jobs rodam no GitHub Actions.</p>
+          </div>
+        </section>
+      </template>
     </template>
   </div>
 </template>
@@ -545,6 +623,40 @@ async function fetchPlayers() {
 function ensurePlayersLoaded() {
   if (playersLoaded.value || loadingPlayers.value) return;
   fetchPlayers();
+}
+
+// --- Aba Operações: disparar workflows (relatório / jobs) ---
+const reportPeriodo = ref('semana');
+const selectedReportPuuids = ref([]);
+const dispatching = ref(false);
+const dispatchMsg = ref(null);
+
+function toggleReportPuuid(puuid) {
+  const i = selectedReportPuuids.value.indexOf(puuid);
+  if (i > -1) selectedReportPuuids.value.splice(i, 1);
+  else selectedReportPuuids.value.push(puuid);
+}
+
+async function dispararWorkflow(workflow, extra = {}) {
+  dispatching.value = true;
+  dispatchMsg.value = null;
+  try {
+    await workerRequest('admin_disparar_workflow', { workflow, password: sessionPassword.value, ...extra });
+    dispatchMsg.value = { type: 'ok', text: 'Disparado! O job está rodando no GitHub Actions — deve chegar no Discord em ~1 min.' };
+  } catch (err) {
+    dispatchMsg.value = { type: 'erro', text: 'Falha ao disparar: ' + err.message };
+  } finally {
+    dispatching.value = false;
+  }
+}
+
+function enviarRelatorio() {
+  return dispararWorkflow('relatorio-discord.yaml', { periodo: reportPeriodo.value, puuids: selectedReportPuuids.value });
+}
+
+function dispararJob(workflow) {
+  const extra = workflow === 'relatorio-discord.yaml' ? { periodo: reportPeriodo.value } : {};
+  return dispararWorkflow(workflow, extra);
 }
 
 async function togglePremium(row) {

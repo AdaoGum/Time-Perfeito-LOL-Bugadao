@@ -112,6 +112,8 @@ O front nunca fala direto com a Riot (protege a chave e evita CORS). O `worker.j
 | `profile_brief` | Perfil leve (sem histórico) |
 | `masteries` | Maestrias (também persistidas no D1) |
 | `admin_all_history` | Dashboard "Ancestralidade" (agregação do D1) |
+| `admin_players_list` / `admin_set_premium` | Aba "Jogadores": lista e marca premium |
+| `admin_disparar_workflow` | Aba "Operações": dispara jobs do GitHub (relatório / sync) |
 
 ---
 
@@ -152,6 +154,39 @@ node --env-file=local/.env cron/backfill.js
 - Para rodar filtrado por jogadores específicos: `PUUIDS="puuid1,puuid2" node ... cron/sync.js`.
 - O coletor tem controle de rate limit próprio (pausa ~2 min perto de 100 req/2min;
   trata 429 e 5xx com backoff).
+
+---
+
+## 📜 Relatório da Tribo no Discord
+
+Job que lê o D1 e posta um relatório analítico por jogador (pontos fortes/fracos,
+evolução vs. período anterior, recomendações de champ/rota cruzadas com o meta) num
+canal do Discord via **webhook**. Texto gerado por regras (NLG "IA sem IA"), sem LLM.
+
+- Motor: [`cron/lib/relatorio-engine.js`](cron/lib/relatorio-engine.js) (JS puro).
+- Job: [`cron/relatorio-discord.js`](cron/relatorio-discord.js).
+- Agendamento: [`.github/workflows/relatorio-discord.yaml`](.github/workflows/relatorio-discord.yaml)
+  — diário (03:00 BRT), semanal (segunda) e mensal (dia 1). Só Ranked (Solo/Flex).
+
+```bash
+# Testar local sem postar (imprime o relatório):
+DRY_RUN=1 PERIODO=semana node --env-file=local/.env cron/relatorio-discord.js
+
+# Postar de verdade (precisa DISCORD_WEBHOOK no local/.env):
+PERIODO=semana node --env-file=local/.env cron/relatorio-discord.js
+
+# Só alguns jogadores:
+PUUIDS="puuid1,puuid2" PERIODO=dia node --env-file=local/.env cron/relatorio-discord.js
+```
+
+**Secrets (GitHub → Settings → Secrets → Actions):** `DISCORD_WEBHOOK` (obrigatório),
+`DISCORD_USER_MAP` (opcional, JSON `{"NomeInvocador":"idDiscord"}` p/ @menção).
+
+**Aba "Operações" (Ancestralidade):** dispara o relatório (com jogadores selecionados)
+e os jobs, via `admin_disparar_workflow` no worker → `workflow_dispatch` do GitHub.
+Requer no worker os secrets `GITHUB_TOKEN` (PAT fine-grained, Actions:write) e
+`GITHUB_REPO` (`owner/repo`). Passo a passo completo em
+[`local/othersprompts/PLANNER-relatorio-discord.md`](local/othersprompts/PLANNER-relatorio-discord.md).
 
 ---
 

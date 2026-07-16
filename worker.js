@@ -275,7 +275,7 @@ export default {
     // ----------------------------------------------------------------------
     // 2. CAPTURA DE PARÂMETROS
     // ----------------------------------------------------------------------
-    let action, gameName, tagLine, puuid, refresh, q, premium, password;
+    let action, gameName, tagLine, puuid, refresh, q, premium, password, workflow, periodo, puuidsList;
 
     if (request.method === "POST") {
       try {
@@ -288,6 +288,9 @@ export default {
         q = body.q;
         premium = body.premium;
         password = body.password;
+        workflow = body.workflow;
+        periodo = body.periodo;
+        puuidsList = body.puuids;
       } catch (e) {
         return new Response(JSON.stringify({ error: "JSON inválido." }), { status: 400, headers: corsHeaders });
       }
@@ -981,6 +984,55 @@ if (action === "admin_all_history") {
         const novoValor = premium ? 1 : 0;
         await env.DB.prepare("UPDATE jogadores SET has_premium = ? WHERE puuid = ?").bind(novoValor, puuid).run();
         return new Response(JSON.stringify({ success: true, puuid, has_premium: novoValor }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // ======================================================================
+    // ROTA: DISPARAR WORKFLOW DO GITHUB (aba "Operações")
+    // Aba dispara os jobs (sync / relatório) via workflow_dispatch da API do GitHub.
+    // Espera { workflow, periodo?, puuids?[], password }. Segredos no worker:
+    //   env.GITHUB_TOKEN (PAT fine-grained com Actions:write) e env.GITHUB_REPO ("owner/repo").
+    // Só permite workflows conhecidos (whitelist) — nada de dispatch arbitrário.
+    // ======================================================================
+    if (action === "admin_disparar_workflow") {
+      const senhaOk = String(password || "") === String(env.ADMIN_PASSWORD || "ugabuga");
+      if (!senhaOk) {
+        return new Response(JSON.stringify({ error: "Senha inválida." }), { status: 403, headers: corsHeaders });
+      }
+      if (!env.GITHUB_TOKEN || !env.GITHUB_REPO) {
+        return new Response(JSON.stringify({ error: "Worker sem GITHUB_TOKEN/GITHUB_REPO configurados (ver PLANNER)." }), { status: 501, headers: corsHeaders });
+      }
+      const PERMITIDOS = new Set(["relatorio-discord.yaml", "riot-sync.yaml"]);
+      if (!PERMITIDOS.has(workflow)) {
+        return new Response(JSON.stringify({ error: "Workflow não permitido." }), { status: 400, headers: corsHeaders });
+      }
+      // Monta os inputs só com o que o workflow aceita (relatório usa periodo/puuids).
+      const inputs = {};
+      if (workflow === "relatorio-discord.yaml") {
+        inputs.periodo = ["dia", "semana", "mes"].includes(String(periodo)) ? String(periodo) : "dia";
+        if (Array.isArray(puuidsList) && puuidsList.length) inputs.puuids = puuidsList.join(",");
+      }
+      try {
+        const ghRes = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/actions/workflows/${workflow}/dispatches`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${env.GITHUB_TOKEN}`,
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "time-perfeito-lol-worker",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ ref: env.GITHUB_BRANCH || "main", inputs })
+        });
+        if (ghRes.status !== 204) {
+          const txt = await ghRes.text();
+          return new Response(JSON.stringify({ error: `GitHub respondeu ${ghRes.status}: ${txt}` }), { status: 502, headers: corsHeaders });
+        }
+        return new Response(JSON.stringify({ success: true, workflow, inputs }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       } catch (err) {

@@ -1,0 +1,52 @@
+name: Relatorio Tribo Discord
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # diário  → 03:00 Brasília (após o sync das 00:30)
+    - cron: '0 6 * * 1'   # semanal → segunda-feira
+    - cron: '0 6 1 * *'   # mensal  → dia 1
+  workflow_dispatch:
+    inputs:
+      periodo:
+        description: 'dia | semana | mes'
+        default: 'dia'
+      puuids:
+        description: 'puuids separados por vírgula (vazio = todos)'
+        default: ''
+
+jobs:
+  relatorio:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js v20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Descobre o período a partir de QUAL cron disparou (ou do input manual).
+      - name: Definir periodo
+        id: periodo
+        run: |
+          if [ -n "${{ github.event.inputs.periodo }}" ]; then
+            echo "valor=${{ github.event.inputs.periodo }}" >> "$GITHUB_OUTPUT"
+          else
+            case "${{ github.event.schedule }}" in
+              "0 6 1 * *") echo "valor=mes"    >> "$GITHUB_OUTPUT" ;;
+              "0 6 * * 1") echo "valor=semana" >> "$GITHUB_OUTPUT" ;;
+              *)           echo "valor=dia"    >> "$GITHUB_OUTPUT" ;;
+            esac
+          fi
+
+      - name: Enviar relatorio
+        run: node cron/relatorio-discord.js
+        env:
+          PERIODO: ${{ steps.periodo.outputs.valor }}
+          PUUIDS: ${{ github.event.inputs.puuids }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_USER_MAP: ${{ secrets.DISCORD_USER_MAP }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
