@@ -498,16 +498,33 @@ export function montarMensagens(analises, periodoKey, userMap) {
     timestamp: new Date().toISOString()
   };
 
+  // Paginação: o Discord limita a SOMA de caracteres de TODOS os embeds de uma
+  // mensagem a 6000 (não é por embed). Quebramos por tamanho acumulado (e ≤10 embeds).
   const todos = [header, ...embeds];
+  const LIMITE_CHARS = 5500;   // folga sob os 6000
+  const empacotar = (lista) => ({ username: 'Cronista da Tribo', embeds: lista, allowed_mentions: { parse: ['users'] } });
+
   const mensagens = [];
-  for (let i = 0; i < todos.length; i += 10) {
-    mensagens.push({
-      username: 'Cronista da Tribo',
-      embeds: todos.slice(i, i + 10),
-      allowed_mentions: { parse: ['users'] }
-    });
+  let atual = [];
+  let soma = 0;
+  for (const e of todos) {
+    const sz = embedSize(e);
+    if (atual.length && (soma + sz > LIMITE_CHARS || atual.length >= 10)) {
+      mensagens.push(empacotar(atual));
+      atual = []; soma = 0;
+    }
+    atual.push(e);
+    soma += sz;
   }
+  if (atual.length) mensagens.push(empacotar(atual));
   return mensagens;
+}
+
+// Soma de caracteres que o Discord conta no limite de 6000 por mensagem.
+function embedSize(e) {
+  let n = (e.title || '').length + (e.description || '').length + (e.footer?.text || '').length;
+  for (const f of e.fields || []) n += (f.name || '').length + (f.value || '').length;
+  return n;
 }
 
 // ---------------------------------------------------------------------------
