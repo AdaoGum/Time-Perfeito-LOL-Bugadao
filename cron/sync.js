@@ -269,14 +269,19 @@ async function rodarSincronizacao() {
     if (!fs.existsSync('logs')) fs.mkdirSync('logs');
 
     console.log('🗄️  [D1] Baixando a lista de jogadores monitorados...');
-    const dbResult = await queryD1('SELECT puuid, game_name, tag_line FROM jogadores');
+    const dbResult = await queryD1('SELECT puuid, game_name, tag_line, has_premium FROM jogadores');
     let jogadores = ordenarPorPrioridade(dbResult.results || []);
 
-    // 🎯 Filtro opcional: roda só os puuids-alvo, se configurados.
+    // 🎯 Filtro opcional: roda só os puuids-alvo, se configurados (escape hatch manual,
+    //    ignora o premium). Sem alvos, o job automático processa SÓ jogadores premium.
     if (PUUIDS_ALVO.length) {
       const alvo = new Set(PUUIDS_ALVO);
       jogadores = jogadores.filter(j => alvo.has(j.puuid));
       console.log(`🎯 [FILTRO] Rodando SÓ ${jogadores.length} de ${PUUIDS_ALVO.length} puuid(s) alvo.`);
+    } else {
+      const antes = jogadores.length;
+      jogadores = jogadores.filter(j => Number(j.has_premium) === 1);
+      console.log(`⭐ [PREMIUM] ${jogadores.length}/${antes} jogador(es) premium — só eles rodam no job automático.`);
     }
 
     console.log(`📋 [D1] ${jogadores.length} jogador(es). Núcleo do time roda primeiro.`);

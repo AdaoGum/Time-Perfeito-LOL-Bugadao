@@ -59,6 +59,7 @@ Cadastro e estado ranqueado **atual** de cada jogador. Atualizada via `UPSERT`
 | `puuid` | TEXT **PK** | ID único do jogador na Riot. |
 | `game_name` | TEXT | Nome de jogo (parte antes do `#`). |
 | `tag_line` | TEXT | Tag (parte depois do `#`). |
+| `has_premium` | INTEGER | Flag premium (`0`/`1`, default `0`). Só premium roda nos jobs de madrugada (`cron/sync.js`) e no backfill. Novo jogador buscado nasce `0`; promoção manual na aba "Jogadores" da Ancestralidade (rota `admin_set_premium`). Ver `migrations/005_has_premium.sql`. *(SQLite anexa a coluna ao fim da tabela; logicamente ela vem logo após `tag_line`.)* |
 | `tier` | TEXT | Elo Solo/Duo (ex.: `GOLD`, `DIAMOND`). |
 | `rank` | TEXT | Divisão Solo/Duo (`I`..`IV`). |
 | `lp` | INTEGER | League Points Solo/Duo. |

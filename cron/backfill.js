@@ -224,16 +224,19 @@ async function preencherPartida(matchId, puuidsNecessarios, contadores) {
   console.log('🩹 BACKFILL CENTRADO NA PARTIDA (estatísticas + marcos)');
   console.log('=========================================================');
 
-  const jogadoresRes = await queryD1('SELECT puuid, game_name, tag_line FROM jogadores');
+  const jogadoresRes = await queryD1('SELECT puuid, game_name, tag_line, has_premium FROM jogadores');
   let jogadores = jogadoresRes.results || [];
 
-  // 🎯 Filtro do vetor de alvos: vazio = todos; preenchido = só esses puuids.
+  // 🎯 Filtro do vetor de alvos: preenchido = só esses puuids (escape hatch manual,
+  //    ignora o premium). Vetor vazio = processa SÓ jogadores premium.
   if (PUUIDS_ALVO.length) {
     const alvo = new Set(PUUIDS_ALVO);
     jogadores = jogadores.filter((j) => alvo.has(j.puuid));
     console.log(`🎯 [FILTRO] ${jogadores.length} de ${PUUIDS_ALVO.length} puuid(s) alvo encontrados no banco.`);
   } else {
-    console.log(`📋 ${jogadores.length} jogador(es) registrado(s) (vetor vazio → TODOS).`);
+    const antes = jogadores.length;
+    jogadores = jogadores.filter((j) => Number(j.has_premium) === 1);
+    console.log(`⭐ [PREMIUM] ${jogadores.length}/${antes} jogador(es) premium (vetor vazio → só premium).`);
   }
 
   const { neededByMatch } = await descobrirLacunas(jogadores);

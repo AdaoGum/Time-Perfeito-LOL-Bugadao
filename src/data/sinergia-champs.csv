@@ -5,12 +5,14 @@ Ahri,AP,3,3,0,4,2,2,1,3,MID,2,3,
 Akali,AP,2,1,1,5,2,0,0,2,MID;TOP,1,3,burst_assassino
 Akshan,AD,2,2,0,4,1,3,1,3,MID;TOP,1,3,
 Alistar,AP,5,0,5,1,4,2,4,1,SUP,4,3,fornece_knockup;peel_forte
+Ambessa,AD,4,1,3,4,2,1,1,3,TOP;MID,3,3,pick_cc;followup_engage
 Amumu,AP,5,0,4,2,2,2,2,3,JUNGLE;SUP,5,3,
 Anivia,AP,2,2,1,4,4,3,3,5,MID,4,3,setup_area;dano_area;waveclear_global
 Annie,AP,4,2,1,5,1,2,2,3,MID;SUP,3,3,burst_assassino;setup_area
 Aphelios,AD,2,3,0,4,1,2,1,4,ADC,1,4,hypercarry;aproveita_buff_ataque
 Ashe,AD,4,4,0,2,2,3,3,3,ADC;SUP,4,3,engage_global;pick_cc
 Aurelion Sol,AP,2,3,1,4,3,2,2,5,MID,1,4,hypercarry;waveclear_global
+Aurora,AP,3,3,0,4,3,2,2,3,MID;TOP,3,3,setup_area
 Azir,AP,3,3,1,3,4,2,3,4,MID,3,4,fornece_knockup;waveclear_global
 Bard,AP,4,2,2,2,3,4,3,2,SUP,3,3,
 Bel'Veth,AD,3,0,3,4,1,1,1,3,JUNGLE,2,3,
@@ -78,6 +80,7 @@ Malphite,AP,5,0,5,2,1,2,3,2,TOP;MID,5,3,fornece_knockup;engage_global
 Malzahar,AP,3,2,1,4,2,3,2,4,MID,2,3,dano_area;waveclear_global
 Maokai,AP,5,2,5,2,3,3,3,3,JUNGLE;TOP;SUP,4,3,setup_area;engage_global
 Master Yi,AD,1,0,2,5,1,0,0,2,JUNGLE,1,3,hypercarry;aproveita_buff_ataque
+Mel,AP,2,4,0,4,3,3,2,4,MID;SUP,3,3,dano_area
 Milio,AP,2,2,0,1,4,5,5,2,SUP,1,3,enchanter;peel_forte
 Miss Fortune,AD,3,3,0,4,1,1,1,3,ADC,2,3,dano_area
 Mordekaiser,AP,2,1,4,4,1,1,1,3,TOP;JUNGLE,1,3,
@@ -121,6 +124,7 @@ Singed,AP,3,2,4,2,3,2,2,3,TOP,2,3,
 Sion,AD,4,2,5,2,2,2,2,4,TOP;JUNGLE,4,3,fornece_knockup
 Sivir,AD,1,3,0,3,2,2,1,5,ADC,1,3,buffa_ataque;waveclear_global
 Skarner,AD,4,1,5,2,2,2,2,2,JUNGLE;TOP,5,3,pick_cc
+Smolder,AD,1,4,0,4,2,1,0,4,ADC,1,5,hypercarry;dano_area
 Sona,AP,2,3,0,2,2,5,3,2,SUP,1,3,enchanter;dano_area
 Soraka,AP,1,3,0,1,3,5,4,2,SUP,1,3,enchanter
 Swain,AP,3,3,4,3,2,2,2,3,MID;SUP;TOP,3,3,
@@ -157,6 +161,7 @@ Xin Zhao,AD,3,1,4,4,1,1,1,2,JUNGLE,2,2,
 Yasuo,AD,3,2,2,4,2,1,2,3,MID;TOP;ADC,2,3,aproveita_knockup
 Yone,AD,4,2,2,4,2,1,1,3,MID;TOP,2,3,aproveita_knockup
 Yorick,AD,1,2,4,3,1,1,1,3,TOP,1,3,splitpush
+Yunara,AD,1,2,0,3,2,1,1,3,ADC,1,4,hypercarry;aproveita_buff_ataque
 Yuumi,AP,1,3,0,1,2,5,3,1,SUP,1,3,enchanter
 Zac,AP,4,1,5,2,2,2,3,3,JUNGLE;TOP;SUP,4,3,fornece_knockup;engage_global
 Zed,AD,1,3,0,5,2,0,0,3,MID,1,2,burst_assassino

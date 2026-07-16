@@ -140,6 +140,8 @@ Requisição: `POST WORKER_URL` com JSON `{ action, gameName?, tagLine?, puuid? 
 | `profile_brief` | Perfil leve (sem histórico de partidas) | Igual, sem `matches` |
 | `masteries` | Maestrias do jogador (persiste no D1 em background) | `{ masteries[], apiCalls }` |
 | `admin_all_history` | Dashboard "Ancestralidade": junta `jogadores` + `estatisticas_jogador_partida` | Linhas agregadas do D1 |
+| `admin_players_list` | Aba "Jogadores": cadastro de `jogadores` (1 linha/jogador, inclui `has_premium`) | `{ success, players[] }` |
+| `admin_set_premium` | Marca/desmarca premium. Body `{ puuid, premium, password }`; senha = `env.ADMIN_PASSWORD` (fallback `ugabuga`) | `{ success, puuid, has_premium }` |
 
 Erros são normalizados pelo front (`api.js:normalizeWorkerError`): 404 (invocador não
 encontrado), 429 (muitas consultas), 401/403 (chave expirada).

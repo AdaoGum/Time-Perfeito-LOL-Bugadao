@@ -27,7 +27,10 @@ async function ensureSchema(env) {
     "ALTER TABLE jogadores ADD COLUMN solo_wins INTEGER",
     "ALTER TABLE jogadores ADD COLUMN solo_losses INTEGER",
     "ALTER TABLE jogadores ADD COLUMN flex_wins INTEGER",
-    "ALTER TABLE jogadores ADD COLUMN flex_losses INTEGER"
+    "ALTER TABLE jogadores ADD COLUMN flex_losses INTEGER",
+    // Flag premium (ver migrations/005_has_premium.sql): só premium roda nos jobs
+    // de madrugada/backfill. Novo jogador buscado no site nasce com 0 (não-premium).
+    "ALTER TABLE jogadores ADD COLUMN has_premium INTEGER NOT NULL DEFAULT 0"
   ]) {
     try { await env.DB.prepare(ddl).run(); } catch (e) { /* coluna já existe */ }
   }
@@ -272,7 +275,7 @@ export default {
     // ----------------------------------------------------------------------
     // 2. CAPTURA DE PARÂMETROS
     // ----------------------------------------------------------------------
-    let action, gameName, tagLine, puuid, refresh, q;
+    let action, gameName, tagLine, puuid, refresh, q, premium, password;
 
     if (request.method === "POST") {
       try {
@@ -283,6 +286,8 @@ export default {
         puuid = body.puuid;
         refresh = body.refresh === true;
         q = body.q;
+        premium = body.premium;
+        password = body.password;
       } catch (e) {
         return new Response(JSON.stringify({ error: "JSON inválido." }), { status: 400, headers: corsHeaders });
       }
@@ -929,8 +934,54 @@ if (action === "admin_all_history") {
           ORDER BY p.game_creation DESC
         `).all();
         
-        return new Response(JSON.stringify({ success: true, history: results || [] }), { 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        return new Response(JSON.stringify({ success: true, history: results || [] }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // ======================================================================
+    // ROTA: LISTA DE JOGADORES (aba "Jogadores" da Ancestralidade)
+    // Só LÊ o cadastro de `jogadores` (não gasta a chave da Riot). 1 linha/jogador.
+    // ======================================================================
+    if (action === "admin_players_list") {
+      try {
+        const { results } = await env.DB.prepare(`
+          SELECT
+            puuid, game_name, tag_line, tier, rank, lp, win_rate,
+            flex_tier, flex_rank, flex_lp, flex_win_rate,
+            profile_icon_id, summoner_level, has_premium, ultima_atualizacao
+          FROM jogadores
+          ORDER BY has_premium DESC, game_name COLLATE NOCASE ASC
+        `).all();
+        return new Response(JSON.stringify({ success: true, players: results || [] }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // ======================================================================
+    // ROTA: MARCAR/DESMARCAR PREMIUM de um jogador (escrita protegida por senha)
+    // Espera { puuid, premium: true|false, password }. A senha é comparada com
+    // env.ADMIN_PASSWORD (fallback "ugabuga", a mesma do portão da Ancestralidade).
+    // ======================================================================
+    if (action === "admin_set_premium") {
+      const senhaOk = String(password || "") === String(env.ADMIN_PASSWORD || "ugabuga");
+      if (!senhaOk) {
+        return new Response(JSON.stringify({ error: "Senha inválida." }), { status: 403, headers: corsHeaders });
+      }
+      if (!puuid) {
+        return new Response(JSON.stringify({ error: "puuid ausente." }), { status: 400, headers: corsHeaders });
+      }
+      try {
+        const novoValor = premium ? 1 : 0;
+        await env.DB.prepare("UPDATE jogadores SET has_premium = ? WHERE puuid = ?").bind(novoValor, puuid).run();
+        return new Response(JSON.stringify({ success: true, puuid, has_premium: novoValor }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       } catch (err) {
         return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });

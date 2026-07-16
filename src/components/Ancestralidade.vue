@@ -22,6 +22,28 @@
 
     <!-- TELA 2: O DASHBOARD COMPLETO (SÓ REVELADO COM A SENHA CORRETA) -->
     <template v-else>
+      <!-- BARRA DE ABAS -->
+      <nav class="flex flex-wrap gap-1 rounded-xl border border-slate-800 bg-slate-950/60 p-1">
+        <button
+          type="button"
+          @click="activeTab = 'historico'"
+          class="rounded-lg px-4 py-2 text-xs font-black uppercase tracking-wider transition"
+          :class="activeTab === 'historico' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
+        >
+          <i class="fa-solid fa-clock-rotate-left mr-1"></i> Histórico de Partidas
+        </button>
+        <button
+          type="button"
+          @click="activeTab = 'jogadores'; ensurePlayersLoaded()"
+          class="rounded-lg px-4 py-2 text-xs font-black uppercase tracking-wider transition"
+          :class="activeTab === 'jogadores' ? 'bg-amber-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
+        >
+          <i class="fa-solid fa-users-gear mr-1"></i> Jogadores
+        </button>
+      </nav>
+
+      <!-- ABA 1: HISTÓRICO DE PARTIDAS -->
+      <template v-if="activeTab === 'historico'">
       <section class="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl relative z-40">
         <h2 class="text-xl font-black text-cyan-300 uppercase">Ancestralidade de Dados (D1 Studio)</h2>
         <p class="text-xs text-slate-400">Varredura profunda cruzando registros globais de invocadores e estatísticas táticas.</p>
@@ -144,13 +166,17 @@
       <!-- FECHAMENTO DOS DROPDOWNS AO CLICAR FORA -->
       <div v-if="showPlayerDropdown || showQueueDropdown" class="fixed inset-0 z-30" @click="showPlayerDropdown = false; showQueueDropdown = false"></div>
 
-      <!-- ELEMENTO DE CARREGAMENTO -->
-      <div v-if="loadingData" class="text-center py-12">
-        <p class="animate-pulse font-black text-cyan-300 text-sm">Consultando tabelas brutas da nuvem...</p>
-      </div>
-
+      <!-- LOADING / ERRO / LISTAGEM padronizados pelo AsyncState -->
+      <AsyncState
+        :loading="loadingData"
+        :error="dataError"
+        loading-text="Consultando tabelas brutas da nuvem..."
+        error-title="Falha ao consultar o histórico"
+        accent="cyan"
+        @retry="fetchFullHistoryFromD1"
+      >
       <!-- LISTAGEM EM FORMATO GRID COMPACTO (1 COLUNA MOBILE, 2 COLUNAS PC) -->
-      <div v-else class="grid grid-cols-1 xl:grid-cols-2 gap-4 relative z-10">
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 relative z-10">
         <p v-if="!paginatedHistory.length" class="col-span-full text-center text-slate-500 py-12 font-bold bg-slate-900/40 rounded-xl border border-dashed border-slate-800">
           Nenhum registro bruto corresponde aos filtros aplicados nas colunas.
         </p>
@@ -312,6 +338,91 @@
           </button>
         </div>
       </div>
+      </AsyncState>
+      </template>
+
+      <!-- ABA 2: JOGADORES (tabela ordenável + toggle premium) -->
+      <template v-else-if="activeTab === 'jogadores'">
+        <section class="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 class="text-xl font-black text-amber-300 uppercase">Jogadores Monitorados</h2>
+              <p class="text-xs text-slate-400">
+                Marque quem é <strong class="text-emerald-300">premium</strong> — só eles rodam nos jobs de madrugada e no backfill.
+                Clique nos títulos das colunas para ordenar.
+              </p>
+            </div>
+            <div class="flex items-center gap-3 text-[11px] font-bold">
+              <span class="text-slate-400">Total: <strong class="text-white">{{ players.length }}</strong></span>
+              <span class="text-slate-400">Premium: <strong class="text-emerald-400">{{ premiumCount }}</strong></span>
+              <button @click="fetchPlayers" class="text-cyan-400 underline hover:text-cyan-300">Atualizar <i class="fa-solid fa-arrows-rotate"></i></button>
+            </div>
+          </div>
+
+          <AsyncState
+            :loading="loadingPlayers"
+            :error="playersError"
+            loading-text="Carregando cadastro de jogadores do D1..."
+            error-title="Falha ao carregar os jogadores"
+            accent="amber"
+            @retry="fetchPlayers"
+          >
+          <div class="mt-4 overflow-x-auto rounded-xl border border-slate-800">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-950/70 text-[10px] uppercase tracking-wider text-slate-400">
+                <tr>
+                  <th
+                    v-for="col in PLAYER_COLUMNS"
+                    :key="col.key"
+                    @click="sortPlayersBy(col.key)"
+                    class="px-3 py-2.5 font-black cursor-pointer select-none hover:text-white whitespace-nowrap"
+                  >
+                    {{ col.label }}
+                    <span v-if="playerSort.key === col.key" class="text-amber-400">{{ playerSort.dir === 'asc' ? '▲' : '▼' }}</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-900">
+                <tr
+                  v-for="row in sortedPlayers"
+                  :key="row.puuid"
+                  class="transition hover:bg-slate-900/50"
+                  :class="Number(row.has_premium) === 1 ? 'bg-emerald-950/10' : ''"
+                >
+                  <td class="px-3 py-2 font-bold text-white whitespace-nowrap">
+                    {{ row.game_name }}<span class="text-slate-500 font-semibold">#{{ row.tag_line }}</span>
+                  </td>
+                  <td class="px-3 py-2 text-slate-300 whitespace-nowrap">{{ formatRank(row.tier, row.rank) }}</td>
+                  <td class="px-3 py-2 text-slate-300">{{ Number(row.lp || 0) }}</td>
+                  <td class="px-3 py-2 text-slate-300">{{ Number(row.win_rate || 0).toFixed(1) }}%</td>
+                  <td class="px-3 py-2 text-slate-400 whitespace-nowrap">{{ formatRank(row.flex_tier, row.flex_rank) }}</td>
+                  <td class="px-3 py-2 text-slate-400">{{ Number(row.summoner_level || 0) }}</td>
+                  <td class="px-3 py-2 text-slate-500 whitespace-nowrap text-[10px]">{{ formatTimestamp(row.ultima_atualizacao) }}</td>
+                  <td class="px-3 py-2">
+                    <button
+                      type="button"
+                      @click="togglePremium(row)"
+                      :disabled="savingPuuid === row.puuid"
+                      class="rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider transition disabled:opacity-40 disabled:cursor-wait cursor-pointer"
+                      :class="Number(row.has_premium) === 1 ? 'bg-emerald-600 text-white hover:bg-emerald-500' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'"
+                    >
+                      <span v-if="savingPuuid === row.puuid">…</span>
+                      <span v-else-if="Number(row.has_premium) === 1"><i class="fa-solid fa-star"></i> Premium</span>
+                      <span v-else>Free</span>
+                    </button>
+                  </td>
+                </tr>
+                <tr v-if="!sortedPlayers.length">
+                  <td :colspan="PLAYER_COLUMNS.length" class="px-3 py-10 text-center text-slate-500 font-bold">
+                    Nenhum jogador cadastrado ainda.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          </AsyncState>
+        </section>
+      </template>
     </template>
   </div>
 </template>
@@ -320,6 +431,7 @@
 import { ref, computed, watch } from 'vue';
 import { workerRequest } from '../api.js';
 import { state } from '../store.js';
+import AsyncState from './AsyncState.vue';
 import { championImage, itemImage, calculateKdaRatio, formatDuration, summonerSpellImage, runeImage } from '../utils.js';
 
 const store = state;
@@ -350,7 +462,107 @@ const isAuthenticated = ref(false);
 const passwordInput = ref('');
 const loginError = ref(null);
 const loadingData = ref(false);
+const dataError = ref(null);
 const databaseRows = ref([]);
+
+// --- Abas (Histórico de partidas | Jogadores) ---
+const activeTab = ref('historico');
+
+// --- Aba Jogadores: cadastro + premium ---
+const players = ref([]);
+const loadingPlayers = ref(false);
+const playersError = ref(null);
+const playersLoaded = ref(false);
+const savingPuuid = ref(null);
+const sessionPassword = ref('');        // guardada no login p/ autorizar a escrita de premium
+const playerSort = ref({ key: 'nome', dir: 'asc' });
+
+// Peso numérico do elo para ordenar (IRON..CHALLENGER > divisão > LP).
+const TIER_ORDER = ['IRON', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'EMERALD', 'DIAMOND', 'MASTER', 'GRANDMASTER', 'CHALLENGER'];
+function rankWeight(tier, rank, lp) {
+  if (!tier || String(tier).toUpperCase() === 'UNRANKED') return -1;
+  const t = TIER_ORDER.indexOf(String(tier).toUpperCase());
+  const div = { I: 4, II: 3, III: 2, IV: 1 }[String(rank || '').toUpperCase()] || 0;
+  return (t < 0 ? 0 : t) * 100000 + div * 1000 + Number(lp || 0);
+}
+
+// Colunas ordenáveis da tabela de jogadores (get = valor usado na ordenação).
+const PLAYER_COLUMNS = [
+  { key: 'nome', label: 'Jogador', numeric: false, get: r => `${r.game_name}#${r.tag_line}`.toLowerCase() },
+  { key: 'solo', label: 'Elo Solo', numeric: true, get: r => rankWeight(r.tier, r.rank, r.lp) },
+  { key: 'lp', label: 'LP', numeric: true, get: r => Number(r.lp || 0) },
+  { key: 'wr', label: 'WR Solo', numeric: true, get: r => Number(r.win_rate || 0) },
+  { key: 'flex', label: 'Elo Flex', numeric: true, get: r => rankWeight(r.flex_tier, r.flex_rank, r.flex_lp) },
+  { key: 'nivel', label: 'Nível', numeric: true, get: r => Number(r.summoner_level || 0) },
+  { key: 'atualizado', label: 'Atualizado', numeric: false, get: r => r.ultima_atualizacao || '' },
+  { key: 'premium', label: 'Premium', numeric: true, get: r => Number(r.has_premium || 0) }
+];
+
+const premiumCount = computed(() => players.value.filter(p => Number(p.has_premium) === 1).length);
+
+const sortedPlayers = computed(() => {
+  const col = PLAYER_COLUMNS.find(c => c.key === playerSort.value.key) || PLAYER_COLUMNS[0];
+  const mult = playerSort.value.dir === 'asc' ? 1 : -1;
+  return [...players.value].sort((a, b) => {
+    const va = col.get(a);
+    const vb = col.get(b);
+    if (col.numeric) return (va - vb) * mult;
+    return String(va).localeCompare(String(vb)) * mult;
+  });
+});
+
+function sortPlayersBy(key) {
+  if (playerSort.value.key === key) {
+    playerSort.value = { key, dir: playerSort.value.dir === 'asc' ? 'desc' : 'asc' };
+  } else {
+    playerSort.value = { key, dir: 'asc' };
+  }
+}
+
+function formatTimestamp(ts) {
+  if (!ts) return '—';
+  return String(ts).slice(0, 16).replace('T', ' ');
+}
+
+async function fetchPlayers() {
+  loadingPlayers.value = true;
+  playersError.value = null;
+  try {
+    const res = await workerRequest('admin_players_list', {});
+    if (Array.isArray(res?.players)) {
+      players.value = res.players;
+      playersLoaded.value = true;
+    }
+  } catch (err) {
+    console.error('Falha ao listar jogadores:', err.message);
+    playersError.value = err.message || 'Falha ao consultar o banco.';
+  } finally {
+    loadingPlayers.value = false;
+  }
+}
+
+// Carrega a lista só na 1ª vez que a aba Jogadores é aberta.
+function ensurePlayersLoaded() {
+  if (playersLoaded.value || loadingPlayers.value) return;
+  fetchPlayers();
+}
+
+async function togglePremium(row) {
+  const novo = Number(row.has_premium) === 1 ? 0 : 1;
+  savingPuuid.value = row.puuid;
+  try {
+    const res = await workerRequest('admin_set_premium', {
+      puuid: row.puuid,
+      premium: novo === 1,
+      password: sessionPassword.value
+    });
+    if (res?.success) row.has_premium = res.has_premium;
+  } catch (err) {
+    alert('Não foi possível alterar o premium: ' + err.message);
+  } finally {
+    savingPuuid.value = null;
+  }
+}
 
 // Estados de Visibilidade dos Dropdowns Suspensos
 const showPlayerDropdown = ref(false);
@@ -384,6 +596,7 @@ function checkSecretPassword() {
   if (passwordInput.value === 'ugabuga') {
     isAuthenticated.value = true;
     loginError.value = null;
+    sessionPassword.value = passwordInput.value;   // reusada p/ autorizar escrita de premium
     fetchFullHistoryFromD1();
   } else {
     loginError.value = 'Chave incorreta. Os espíritos do D1 negaram seu acesso.';
@@ -392,6 +605,7 @@ function checkSecretPassword() {
 
 async function fetchFullHistoryFromD1() {
   loadingData.value = true;
+  dataError.value = null;
   try {
     const response = await workerRequest('admin_all_history', {});
     if (response?.history) {
@@ -399,6 +613,7 @@ async function fetchFullHistoryFromD1() {
     }
   } catch (err) {
     console.error('Falha ao raspar D1:', err.message);
+    dataError.value = err.message || 'Falha ao consultar o banco.';
   } finally {
     loadingData.value = false;
   }
