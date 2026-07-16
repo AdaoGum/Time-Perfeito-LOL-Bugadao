@@ -2,9 +2,9 @@ name: Relatorio Tribo Discord
 
 on:
   schedule:
-    - cron: '0 6 * * *'   # diário  → 03:00 Brasília (após o sync das 00:30)
-    - cron: '0 6 * * 1'   # semanal → segunda-feira
-    - cron: '0 6 1 * *'   # mensal  → dia 1
+    - cron: '30 21 * * *'   # diário  → 18:30 Brasília (UTC-3)
+    - cron: '30 21 * * 1'   # semanal → segunda-feira 18:30 BRT
+    - cron: '30 21 1 * *'   # mensal  → dia 1 às 18:30 BRT
   workflow_dispatch:
     inputs:
       periodo:
@@ -34,9 +34,9 @@ jobs:
             echo "valor=${{ github.event.inputs.periodo }}" >> "$GITHUB_OUTPUT"
           else
             case "${{ github.event.schedule }}" in
-              "0 6 1 * *") echo "valor=mes"    >> "$GITHUB_OUTPUT" ;;
-              "0 6 * * 1") echo "valor=semana" >> "$GITHUB_OUTPUT" ;;
-              *)           echo "valor=dia"    >> "$GITHUB_OUTPUT" ;;
+              "30 21 1 * *") echo "valor=mes"    >> "$GITHUB_OUTPUT" ;;
+              "30 21 * * 1") echo "valor=semana" >> "$GITHUB_OUTPUT" ;;
+              *)             echo "valor=dia"    >> "$GITHUB_OUTPUT" ;;
             esac
           fi
 

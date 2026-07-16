@@ -113,7 +113,6 @@ O front nunca fala direto com a Riot (protege a chave e evita CORS). O `worker.j
 | `masteries` | Maestrias (também persistidas no D1) |
 | `admin_all_history` | Dashboard "Ancestralidade" (agregação do D1) |
 | `admin_players_list` / `admin_set_premium` | Aba "Jogadores": lista e marca premium |
-| `admin_disparar_workflow` | Aba "Operações": dispara jobs do GitHub (relatório / sync) |
 
 ---
 
@@ -166,7 +165,9 @@ canal do Discord via **webhook**. Texto gerado por regras (NLG "IA sem IA"), sem
 - Motor: [`cron/lib/relatorio-engine.js`](cron/lib/relatorio-engine.js) (JS puro).
 - Job: [`cron/relatorio-discord.js`](cron/relatorio-discord.js).
 - Agendamento: [`.github/workflows/relatorio-discord.yaml`](.github/workflows/relatorio-discord.yaml)
-  — diário (03:00 BRT), semanal (segunda) e mensal (dia 1). Só Ranked (Solo/Flex).
+  — diário (18:30 BRT), semanal (segunda) e mensal (dia 1). Só Ranked (Solo/Flex).
+  O sync roda 05:00 e 17:00 BRT (o das 17:00 deixa o relatório das 18:30 com o dia fresco).
+  Disparo manual: GitHub → Actions → "Relatorio Tribo Discord" → Run workflow.
 
 ```bash
 # Testar local sem postar (imprime o relatório):
@@ -179,14 +180,10 @@ PERIODO=semana node --env-file=local/.env cron/relatorio-discord.js
 PUUIDS="puuid1,puuid2" PERIODO=dia node --env-file=local/.env cron/relatorio-discord.js
 ```
 
-**Secrets (GitHub → Settings → Secrets → Actions):** `DISCORD_WEBHOOK` (obrigatório),
-`DISCORD_USER_MAP` (opcional, JSON `{"NomeInvocador":"idDiscord"}` p/ @menção).
-
-**Aba "Operações" (Ancestralidade):** dispara o relatório (com jogadores selecionados)
-e os jobs, via `admin_disparar_workflow` no worker → `workflow_dispatch` do GitHub.
-Requer no worker os secrets `GITHUB_TOKEN` (PAT fine-grained, Actions:write) e
-`GITHUB_REPO` (`owner/repo`). Passo a passo completo em
-[`local/othersprompts/PLANNER-relatorio-discord.md`](local/othersprompts/PLANNER-relatorio-discord.md).
+**Secrets (GitHub → Settings → Secrets → Actions → Repository secrets):**
+`DISCORD_WEBHOOK` (obrigatório), `DISCORD_USER_MAP` (opcional, JSON
+`{"NomeInvocador":"idDiscord"}` p/ @menção). Nada de worker/Cloudflare envolvido —
+o relatório roda só no GitHub Actions.
 
 ---
 

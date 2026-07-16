@@ -142,7 +142,6 @@ Requisição: `POST WORKER_URL` com JSON `{ action, gameName?, tagLine?, puuid? 
 | `admin_all_history` | Dashboard "Ancestralidade": junta `jogadores` + `estatisticas_jogador_partida` | Linhas agregadas do D1 |
 | `admin_players_list` | Aba "Jogadores": cadastro de `jogadores` (1 linha/jogador, inclui `has_premium`) | `{ success, players[] }` |
 | `admin_set_premium` | Marca/desmarca premium. Body `{ puuid, premium, password }`; senha = `env.ADMIN_PASSWORD` (fallback `ugabuga`) | `{ success, puuid, has_premium }` |
-| `admin_disparar_workflow` | Aba "Operações": dispara workflow do GitHub via API. Body `{ workflow, periodo?, puuids?[], password }`. Precisa de `env.GITHUB_TOKEN` + `env.GITHUB_REPO`. Whitelist: `relatorio-discord.yaml`, `riot-sync.yaml` | `{ success, workflow, inputs }` |
 
 Erros são normalizados pelo front (`api.js:normalizeWorkerError`): 404 (invocador não
 encontrado), 429 (muitas consultas), 401/403 (chave expirada).
