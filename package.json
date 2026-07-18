@@ -10,7 +10,9 @@
     "postbuild": "node -e \"require('fs').copyFileSync('dist/index.html','dist/404.html')\"",
     "preview": "vite preview",
     "test": "node --test \"src/utils/__tests__/*.test.js\"",
-    "meta:archive": "node scripts/archive-meta.js"
+    "meta:archive": "node scripts/archive-meta.js",
+    "deploy:worker": "wrangler deploy",
+    "deploy:worker:dry": "wrangler deploy --dry-run"
   },
   "keywords": [],
   "author": "",
@@ -26,6 +28,7 @@
     "@tailwindcss/vite": "^4.3.0",
     "autoprefixer": "^10.5.0",
     "postcss": "^8.5.15",
-    "tailwindcss": "^4.3.0"
+    "tailwindcss": "^4.3.0",
+    "wrangler": "^4.112.0"
   }
 }

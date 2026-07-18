@@ -17,7 +17,7 @@ on:
           - geral    # todo o histórico
         default: dia
       puuids:
-        description: 'Alvo: vazio = premium | puuids (vírgula) | prefixo de nick (ex: UGA)'
+        description: 'Alvo: vazio = premium | puuids (vírgula) | Nome#Tag exato (ex: UGA Fulano#2109) | prefixo de nick (ex: UGA)'
         default: ''
 
 jobs:

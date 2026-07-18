@@ -30,8 +30,33 @@
     </template>
 
     <template v-else>
-      <!-- LINHA 1: PERFIL (2/3) + COMPANHEIROS DE BATALHA (1/3) — mesma altura -->
-      <div class="grid gap-4 xl:grid-cols-3 items-stretch">
+      <!-- ALTERNADOR NO CANTO: Histórico ↔ Estatísticas (só nas páginas internas) -->
+      <div v-if="view !== 'seletor'" class="sticky top-2 z-40 -mb-3 flex justify-end">
+        <div class="flex gap-1 rounded-xl border border-slate-700 bg-slate-950/95 p-1 shadow-2xl backdrop-blur">
+          <button
+            type="button"
+            @click="goView('')"
+            title="Voltar ao seletor do perfil"
+            class="rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-400 transition hover:text-slate-200"
+          ><i class="fa-solid fa-arrow-left"></i></button>
+          <button
+            type="button"
+            @click="goView('historico')"
+            class="rounded-lg px-3 py-1.5 text-xs font-bold transition"
+            :class="view === 'historico' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
+          ><i class="fa-solid fa-scroll mr-1"></i> Histórico</button>
+          <button
+            type="button"
+            @click="goView('estatisticas')"
+            class="rounded-lg px-3 py-1.5 text-xs font-bold transition"
+            :class="view === 'estatisticas' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
+          ><i class="fa-solid fa-chart-simple mr-1"></i> Estatísticas</button>
+        </div>
+      </div>
+
+      <!-- LINHA 1: PERFIL (2/3) + COMPANHEIROS DE BATALHA (1/3) — seletor e histórico.
+           Na página de Estatísticas entra o card SIMPLES logo abaixo. -->
+      <div v-if="view !== 'estatisticas'" class="grid gap-4 xl:grid-cols-3 items-stretch">
       <section class="xl:col-span-2 h-full rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl relative overflow-hidden">
         <div class="absolute inset-0 bg-gradient-to-tr from-slate-950/20 to-transparent pointer-events-none"></div>
 
@@ -183,31 +208,128 @@
       </div>
       <!-- FIM DA LINHA 1 -->
 
-      <!-- SELETOR DE VISÃO: HISTÓRICO DE PARTIDAS x ANÁLISE DO JOGADOR -->
-      <div class="flex gap-2 rounded-xl border border-slate-800 bg-slate-900/80 p-1.5 shadow-xl">
+      <!-- CARD SIMPLES DO PERFIL (topo da página de Estatísticas) -->
+      <section
+        v-if="view === 'estatisticas'"
+        class="flex flex-col items-center gap-4 rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-xl backdrop-blur-sm sm:flex-row"
+      >
+        <div class="relative flex-shrink-0">
+          <img
+            :src="profileIconImage(store.searchProfile.profileIconId)"
+            @error="(e) => e.target.src = profileIconImage(29)"
+            class="h-16 w-16 rounded-xl border-2 border-slate-800 object-cover shadow-xl"
+          >
+          <span class="absolute -bottom-1.5 -right-1.5 rounded-full border-2 border-slate-800 bg-blue-600 px-1.5 py-0.5 text-[9px] font-black text-white shadow">
+            {{ store.searchProfile.summonerLevel || 0 }}
+          </span>
+        </div>
+        <div class="min-w-0 flex-1 text-center sm:text-left">
+          <h2 class="truncate text-xl font-black tracking-wide text-white">
+            {{ store.searchProfile.gameName }}<span class="ml-1 text-sm font-bold text-slate-500">#{{ store.searchProfile.tagLine }}</span>
+          </h2>
+          <p class="text-[11px] font-medium text-slate-400">Estatísticas do jogador — base de {{ proficiency.length }} partida{{ proficiency.length === 1 ? '' : 's' }}</p>
+        </div>
+        <div class="flex flex-shrink-0 gap-4 text-center">
+          <div>
+            <p class="text-[9px] font-black uppercase tracking-wider text-cyan-400">Solo/Duo</p>
+            <p class="text-sm font-black text-amber-500">{{ labelSolo }}</p>
+            <p class="text-[10px] font-semibold text-slate-400">{{ store.searchProfile.statsSolo?.lp || 0 }} LP · {{ winRateSolo.toFixed(0) }}%</p>
+          </div>
+          <div>
+            <p class="text-[9px] font-black uppercase tracking-wider text-purple-400">Flex</p>
+            <p class="text-sm font-black text-white">{{ labelFlex }}</p>
+            <p class="text-[10px] font-semibold text-slate-400">{{ store.searchProfile.statsFlex?.lp || 0 }} LP · {{ winRateFlex.toFixed(0) }}%</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- BANNER DE PENDÊNCIAS: quantos jogos ainda não estão no banco + botão de buscar 10 -->
+      <section class="flex flex-col gap-3 rounded-xl border p-3.5 shadow-xl backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between"
+        :class="store.searchProfile.pendingCount > 0 ? 'border-amber-700/50 bg-amber-950/20' : 'border-emerald-800/40 bg-emerald-950/15'">
+        <div class="min-w-0">
+          <p v-if="store.searchProfile.pendingCount > 0" class="text-sm font-bold text-amber-300">
+            <i class="fa-solid fa-hourglass-half mr-1.5"></i>
+            {{ store.searchProfile.pendingCount }} jogo{{ store.searchProfile.pendingCount > 1 ? 's' : '' }} ranqueado{{ store.searchProfile.pendingCount > 1 ? 's' : '' }} ainda não buscado{{ store.searchProfile.pendingCount > 1 ? 's' : '' }}
+          </p>
+          <p v-else class="text-sm font-bold text-emerald-300">
+            <i class="fa-solid fa-circle-check mr-1.5"></i> Histórico ranqueado em dia
+          </p>
+          <p class="mt-0.5 text-[11px] font-medium text-slate-400">
+            <template v-if="store.searchProfile.hasPremium">
+              <i class="fa-solid fa-star mr-1 text-amber-400"></i>Jogador premium — o histórico completo é sincronizado toda madrugada.
+            </template>
+            <template v-else>
+              Jogador padrão — os dados são atualizados sob demanda (últimos 10 por vez).
+            </template>
+          </p>
+          <p v-if="fetchError" class="mt-1 text-[11px] font-bold text-red-400">{{ fetchError }}</p>
+        </div>
+        <button
+          v-if="store.searchProfile.pendingCount > 0"
+          type="button"
+          @click="buscarNovas"
+          :disabled="store.searchProfile.fetchingMatches || rateInsuficiente"
+          :title="rateInsuficiente ? 'Orçamento da API quase esgotado — aguarde o reset (~2 min).' : 'Baixa as 10 partidas ranqueadas mais recentes'"
+          class="inline-flex flex-shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-lg transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <span v-if="store.searchProfile.fetchingMatches" class="flex items-center gap-2">
+            <span class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent"></span> Buscando...
+          </span>
+          <span v-else><i class="fa-solid fa-cloud-arrow-down mr-1"></i> Buscar últimos 10 jogos</span>
+        </button>
+      </section>
+
+      <!-- SELETOR: dois caminhos — Histórico ou Estatísticas -->
+      <div v-if="view === 'seletor'" class="grid gap-4 sm:grid-cols-2">
         <button
           type="button"
-          @click="profileView = 'historico'"
-          class="flex-1 rounded-lg px-4 py-2.5 text-sm font-bold transition-all"
-          :class="profileView === 'historico' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
+          @click="goView('historico')"
+          class="group flex flex-col items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-8 shadow-xl backdrop-blur-sm transition hover:border-blue-500/60 hover:bg-slate-800/60"
         >
-          <i class="fa-solid fa-scroll mr-1.5"></i> Histórico de Partidas
+          <span class="flex h-14 w-14 items-center justify-center rounded-2xl border border-blue-800/50 bg-blue-950/40 text-2xl text-blue-400 transition group-hover:scale-110">
+            <i class="fa-solid fa-scroll"></i>
+          </span>
+          <span class="text-lg font-black text-slate-100">Histórico de Partidas</span>
+          <span class="text-center text-xs font-medium text-slate-400">Últimas partidas com KDA, itens, confrontos por rota e paginação.</span>
         </button>
         <button
           type="button"
-          @click="profileView = 'analise'"
-          class="flex-1 rounded-lg px-4 py-2.5 text-sm font-bold transition-all"
-          :class="profileView === 'analise' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
+          @click="goView('estatisticas')"
+          class="group flex flex-col items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-8 shadow-xl backdrop-blur-sm transition hover:border-cyan-500/60 hover:bg-slate-800/60"
         >
-          <i class="fa-solid fa-chart-simple mr-1.5"></i> Análise do Jogador
+          <span class="flex h-14 w-14 items-center justify-center rounded-2xl border border-cyan-800/50 bg-cyan-950/40 text-2xl text-cyan-400 transition group-hover:scale-110">
+            <i class="fa-solid fa-chart-simple"></i>
+          </span>
+          <span class="text-lg font-black text-slate-100">Estatísticas do Jogador</span>
+          <span class="text-center text-xs font-medium text-slate-400">Gráficos, radar, rotas, campeões e tendências sobre todo o histórico.</span>
         </button>
       </div>
 
-      <!-- ABA: ANÁLISE DO JOGADOR (gráficos, radar, tags e filtros) -->
-      <PlayerAnalysis v-if="profileView === 'analise'" />
+      <!-- PÁGINA: ESTATÍSTICAS (hiato quando não há base; senão a análise completa) -->
+      <template v-if="view === 'estatisticas'">
+        <div v-if="statsEmHiato" class="rounded-2xl border border-slate-800 bg-slate-900/80 p-10 text-center shadow-xl">
+          <p class="mb-3 text-4xl text-slate-500"><i class="fa-solid fa-chart-simple"></i></p>
+          <p class="font-bold text-slate-200">As estatísticas deste jogador ainda não foram montadas.</p>
+          <p class="mx-auto mt-1 max-w-md text-xs text-slate-500">
+            Não há partidas no banco para analisar. Busque as últimas 10 partidas ranqueadas para montar os gráficos — jogadores premium recebem o histórico completo na sincronização da madrugada.
+          </p>
+          <button
+            type="button"
+            @click="montarEstatisticas"
+            :disabled="store.searchProfile.fetchingMatches || rateInsuficiente"
+            class="mt-5 inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg transition hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span v-if="store.searchProfile.fetchingMatches" class="flex items-center gap-2">
+              <span class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent"></span> Montando...
+            </span>
+            <span v-else><i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Buscar 10 jogos e montar estatísticas</span>
+          </button>
+        </div>
+        <PlayerAnalysis v-else />
+      </template>
 
       <!-- HISTÓRICO DE PARTIDAS EM FORMATO GRID FLEXÍVEL LADO A LADO -->
-      <section v-show="profileView === 'historico'" class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
+      <section v-if="view === 'historico'" class="rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-sm p-5 shadow-xl">
         <div class="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h3 class="text-xl font-bold text-slate-100">Histórico de Partidas</h3>
           
@@ -406,16 +528,59 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { state } from '../store.js';
 import { championImage, profileIconImage, itemImage, calculateKdaRatio, formatDuration, summonerSpellImage, runeImage } from '../utils.js';
-import { loadProfileIntoStore } from '../api.js';
+import { loadProfileIntoStore, fetchRecentMatches } from '../api.js';
 import SearchGate from './SearchGate.vue';
 import PlayerAnalysis from './PlayerAnalysis.vue';
 
 const store = state;
 
-// Visão de nível superior do perfil: histórico de partidas x análise aprofundada
-const profileView = ref('historico');
 const route = useRoute();
 const router = useRouter();
+
+// Visão da página vinda da URL: 'seletor' (sem sufixo) | 'historico' | 'estatisticas'.
+// Manter na URL deixa cada visão compartilhável e à prova de refresh.
+const view = computed(() => route.params.view || 'seletor');
+
+function goView(v) {
+  const gn = store.searchProfile.gameName || route.params.gameName || '';
+  const tl = store.searchProfile.tagLine || route.params.tagLine || '';
+  if (!gn || !tl) return;
+  router.push(`/profile/${encodeURIComponent(gn)}/${encodeURIComponent(tl)}${v ? `/${v}` : ''}`);
+}
+
+// ---- Botão "buscar últimos 10 jogos" (banner de pendências + hiato) ----
+const fetchError = ref(null);
+const statsLiberado = ref(false);
+
+// Custo máximo da ação é ~24 chamadas: bloqueia o botão quando o orçamento
+// global compartilhado não comporta (o worker recusaria com 429 de todo jeito).
+const rateInsuficiente = computed(() => {
+  const g = store.telemetry.global;
+  return g.loaded && g.available < 26;
+});
+
+async function buscarNovas() {
+  fetchError.value = null;
+  try {
+    await fetchRecentMatches();
+  } catch (e) {
+    fetchError.value = e.message;
+  }
+}
+
+// CTA do hiato: busca as 10 e libera a análise mesmo que venham poucos jogos
+// ("faz tudo com os últimos 10, ou os que tiverem lá no banco").
+async function montarEstatisticas() {
+  await buscarNovas();
+  statsLiberado.value = true;
+}
+
+// Hiato: nenhuma partida na base analítica E o usuário ainda não pediu a montagem.
+// Quem tem dados no banco (premium ou não) vê a análise montada direto.
+const statsEmHiato = computed(() => proficiency.value.length === 0 && !statsLiberado.value);
+
+// Trocou de jogador: o hiato re-avalia do zero.
+watch(() => store.searchProfile.puuid, () => { statsLiberado.value = false; fetchError.value = null; });
 
 // Lista de companheiros clicáveis (mescla solo+flex do worker, que inclui a #TAG).
 // Cai para battleCompanions (sem tag, não-clicável) se o worker não trouxe nada.

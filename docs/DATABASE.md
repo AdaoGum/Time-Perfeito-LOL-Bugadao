@@ -180,7 +180,9 @@ Colunas (na ordem do `INSERT`):
 
 ### `maestrias`
 Maestria por (jogador × campeão) — **1 linha por (puuid, champion_id)**. Criada e
-mantida pelo `worker.js` (`ensureSchema`). Origem: champion-mastery-v4.
+mantida pelo `worker.js` (`ensureSchema`) e alimentada também pelo coletor
+(`cron/sync.js` busca as maestrias de cada jogador a cada rodada). Origem:
+champion-mastery-v4.
 
 **Chave primária composta:** `(puuid, champion_id)`.
 
@@ -196,10 +198,10 @@ mantida pelo `worker.js` (`ensureSchema`). Origem: champion-mastery-v4.
 | `mark_required_next_level` | INTEGER | `markRequiredForNextLevel`. |
 | `atualizado` | TIMESTAMP | `CURRENT_TIMESTAMP`. |
 
-> ⚠️ O `ensureSchema` (worker) cria `maestrias` só com as 6 primeiras colunas; as três
-> de milestone (`season_milestone`, `milestone_grades`, `mark_required_next_level`)
-> foram adicionadas por `ALTER TABLE` direto no D1 e são usadas no `UPSERT` da rota
-> `masteries`. Ao recriar o banco do zero, adicione-as manualmente.
+> ⚠️ Histórico: a tabela original nasceu **sem** as 3 colunas de milestone e o
+> `UPSERT` da rota `masteries` falhava silenciosamente — o cache ficou vazio até a
+> `migrations/006_maestrias.sql` (2026-07). Hoje o `ensureSchema` do worker cria a
+> tabela completa e ainda tenta os `ALTER TABLE` (auto-cura em bancos antigos).
 
 ---
 

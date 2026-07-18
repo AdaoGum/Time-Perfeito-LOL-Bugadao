@@ -1,5 +1,38 @@
 export const WORKER_URL = 'https://lol-riotgames-api-bridge.adaojmsantos.workers.dev/';
-export const DDRAGON_VERSION = '14.22.1';
+
+// Versão do Data Dragon usada em TODAS as URLs de assets (campeões, itens, ícones…).
+// É um `let` exportado de propósito: `resolveDDragonVersion()` (chamado no boot)
+// substitui este valor pelo patch ao vivo da Riot, e como imports ESM são "live
+// bindings", todos os consumidores (`import { DDRAGON_VERSION }`) passam a ver o
+// patch novo sem precisar reimportar. O valor abaixo é só o FALLBACK caso a Riot
+// esteja fora do ar — assim assets de patches antigos continuam resolvendo.
+export let DDRAGON_VERSION = '15.10.1';
+
+// Cacheia a promessa para garantir UMA única chamada a versions.json por sessão,
+// mesmo que main.js e App.vue peçam a resolução em paralelo.
+let _ddragonVersionPromise = null;
+
+// Descobre o patch mais recente do Data Dragon e atualiza DDRAGON_VERSION.
+// Best-effort: em falha/timeout mantém o fallback e nunca lança (não pode travar o boot).
+export function resolveDDragonVersion() {
+  if (_ddragonVersionPromise) return _ddragonVersionPromise;
+  _ddragonVersionPromise = (async () => {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 2500);
+      const res = await fetch('https://ddragon.leagueoflegends.com/api/versions.json', { signal: ctrl.signal });
+      clearTimeout(t);
+      if (res.ok) {
+        const versions = await res.json();
+        if (Array.isArray(versions) && typeof versions[0] === 'string' && versions[0]) {
+          DDRAGON_VERSION = versions[0];
+        }
+      }
+    } catch (e) { /* mantém o fallback */ }
+    return DDRAGON_VERSION;
+  })();
+  return _ddragonVersionPromise;
+}
 
 export const TAB_IDS = {
   home: 'aba-home',

@@ -5,3 +5,5 @@ dist
 .github/prompts/*
 repomix-output.xml
 local
+logs
+.wrangler

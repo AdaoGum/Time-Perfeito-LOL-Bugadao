@@ -120,8 +120,10 @@ async function respeitarRateLimit(logger) {
   }
 }
 
-async function fetchFromRiot(endpoint, tentativa = 0) {
-  const url = `https://${REGION_ROUTE}.api.riotgames.com${endpoint}`;
+// Fetch genérico à Riot com host explícito (regional "americas" OU de plataforma
+// tipo "br1"): rate limit, retry de 429 e backoff de 5xx compartilhados.
+async function fetchFromRiotHost(host, endpoint, tentativa = 0) {
+  const url = `https://${host}.api.riotgames.com${endpoint}`;
   const response = await fetch(url, { headers: { 'X-Riot-Token': RIOT_API_KEY } });
   totalRequestsFeitas++;
   registrarUsoGlobal('cron');
@@ -129,7 +131,7 @@ async function fetchFromRiot(endpoint, tentativa = 0) {
     console.warn('⚠️ [RIOT LIMIT] Chave esquentou demais! Pausando 2 min para esfriar...');
     await sleep(125000);
     totalRequestsFeitas = 0;
-    return fetchFromRiot(endpoint, tentativa);
+    return fetchFromRiotHost(host, endpoint, tentativa);
   }
   // Erros transitórios (500, 502, 503, 504): a Riot às vezes soluça. Tenta de novo
   // com backoff em vez de derrubar a rodada — até 3 tentativas.
@@ -137,10 +139,49 @@ async function fetchFromRiot(endpoint, tentativa = 0) {
     const espera = 2000 * (tentativa + 1);
     console.warn(`⚠️ [RIOT ${response.status}] Erro transitório. Tentativa ${tentativa + 1}/3 em ${espera / 1000}s...`);
     await sleep(espera);
-    return fetchFromRiot(endpoint, tentativa + 1);
+    return fetchFromRiotHost(host, endpoint, tentativa + 1);
   }
   if (!response.ok) throw new Error(`Erro na Riot API: ${response.status}`);
   return response.json();
+}
+
+const fetchFromRiot = (endpoint) => fetchFromRiotHost(REGION_ROUTE, endpoint);
+
+// ----------------------------------------------------------------------------
+// MAESTRIAS — 1 chamada por jogador (champion-mastery-v4, endpoint de PLATAFORMA,
+// ex.: br1 — vem de jogadores.platform_host). Upsert em LOTES multi-VALUES para
+// não fazer 150+ round-trips no D1. Colunas em paridade com o upsert do worker.
+// ----------------------------------------------------------------------------
+// A API REST do D1 limita ~100 variáveis por statement: 12 linhas × 8 params = 96.
+const MAESTRIA_LOTE = 12;
+
+async function sincronizarMaestrias(jogador, logger) {
+  const host = (jogador.platform_host || 'br1').toLowerCase();
+  await respeitarRateLimit(logger);
+  const rawMasteries = await fetchFromRiotHost(host, `/lol/champion-mastery/v4/champion-masteries/by-puuid/${jogador.puuid}`);
+  if (!Array.isArray(rawMasteries) || !rawMasteries.length) {
+    logger('   🏅 [MAESTRIAS] Nenhuma maestria retornada.');
+    return 0;
+  }
+
+  const COLUNAS = '(puuid, champion_id, champion_level, champion_points, last_play_time, season_milestone, milestone_grades, mark_required_next_level, atualizado)';
+  for (let i = 0; i < rawMasteries.length; i += MAESTRIA_LOTE) {
+    const lote = rawMasteries.slice(i, i + MAESTRIA_LOTE);
+    const placeholders = lote.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)').join(', ');
+    const params = lote.flatMap(m => [
+      jogador.puuid,
+      m.championId,
+      m.championLevel ?? null,
+      m.championPoints ?? null,
+      m.lastPlayTime ?? null,
+      m.championSeasonMilestone ?? null,
+      m.milestoneGrades ? JSON.stringify(m.milestoneGrades) : null,
+      m.markRequiredForNextLevel ?? null
+    ]);
+    await queryD1(`INSERT OR REPLACE INTO maestrias ${COLUNAS} VALUES ${placeholders}`, params);
+  }
+  logger(`   🏅 [MAESTRIAS] ${rawMasteries.length} campeões gravados (host ${host}).`);
+  return rawMasteries.length;
 }
 
 // Reordena os jogadores do banco: núcleo do time primeiro (na ordem fixa), resto depois.
@@ -174,6 +215,14 @@ async function processarJogador(jogador, fs) {
     console.log(texto);
     fs.appendFileSync(logPath, texto + '\n');
   };
+
+  // 0) Maestrias (1 chamada): roda ANTES das partidas para não ser pulada pelos
+  //    early-returns de "banco já atualizado". Falha aqui não derruba o jogador.
+  try {
+    await sincronizarMaestrias(jogador, logger);
+  } catch (mErr) {
+    logger(`   ⚠️ [MAESTRIAS] Falhou (${mErr.message}) — seguindo para as partidas.`);
+  }
 
   // 1) Últimas 500 partidas (a Riot limita a 100 ids por chamada, então paginamos).
   logger(`🔍 [Riot API] Buscando as últimas ${LIMITE_PARTIDAS} partidas (paginando de ${PAGINA_IDS} em ${PAGINA_IDS})...`);
@@ -269,7 +318,7 @@ async function rodarSincronizacao() {
     if (!fs.existsSync('logs')) fs.mkdirSync('logs');
 
     console.log('🗄️  [D1] Baixando a lista de jogadores monitorados...');
-    const dbResult = await queryD1('SELECT puuid, game_name, tag_line, has_premium FROM jogadores');
+    const dbResult = await queryD1('SELECT puuid, game_name, tag_line, has_premium, platform_host FROM jogadores');
     let jogadores = ordenarPorPrioridade(dbResult.results || []);
 
     // 🎯 Filtro opcional: roda só os puuids-alvo, se configurados (escape hatch manual,

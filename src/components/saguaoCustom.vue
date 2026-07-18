@@ -8,7 +8,7 @@
         <div class="flex items-start gap-3">
           <img
             class="h-11 w-11 rounded border border-cyan-600/60 bg-slate-950 object-cover shadow-[0_0_18px_rgba(8,145,178,0.35)]"
-            src="https://ddragon.leagueoflegends.com/cdn/15.10.1/img/profileicon/29.png"
+            :src="`https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/profileicon/29.png`"
             alt="Tribo"
           />
           <div>

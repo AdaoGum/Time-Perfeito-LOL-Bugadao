@@ -1,0 +1,25 @@
+# ============================================================================
+# Configuração do Cloudflare Worker (deploy via Wrangler, substitui o
+# copiar-colar no dashboard). Publique com:  npm run deploy:worker
+#
+# A URL pública continua a mesma que o front usa (src/utils.js):
+#   https://lol-riotgames-api-bridge.adaojmsantos.workers.dev/
+# porque workers_dev = true mantém o subdomínio .workers.dev.
+#
+# SECRETS (NÃO ficam aqui — são secrets do worker e persistem entre deploys):
+#   RIOT_API_KEY    -> já configurada no dashboard
+#   ADMIN_PASSWORD  -> já configurada no dashboard (fallback "ugabuga" no código)
+# Para (re)definir por CLI:  wrangler secret put RIOT_API_KEY
+# ============================================================================
+
+name = "lol-riotgames-api-bridge"
+main = "worker.js"
+account_id = "1f8052056fb9cf8b8fde30f587d8bd90"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+# Binding do banco -> aparece como env.DB no worker.
+[[d1_databases]]
+binding = "DB"
+database_name = "ugabuga-db"
+database_id = "cae3edc5-869b-4184-9fc2-8e8819213313"

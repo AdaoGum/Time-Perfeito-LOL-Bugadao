@@ -1,0 +1,48 @@
+name: Deploy do Worker (Cloudflare)
+
+# ============================================================================
+# Publica o worker.js na Cloudflare automaticamente sempre que ele (ou o
+# wrangler.toml) mudar na branch principal. Substitui o copiar-colar no
+# dashboard.
+#
+# ----------------------------------------------------------------------------
+# COMO RODAR LOCAL (testar de outra branch, sem esperar o push na main):
+#
+#   1) Autentique uma única vez (abre o navegador):
+#        npx wrangler login
+#      OU exporte um token com permissão "Workers Scripts: Edit":
+#        (PowerShell)  $env:CLOUDFLARE_API_TOKEN="seu_token"
+#        (bash)        export CLOUDFLARE_API_TOKEN=seu_token
+#
+#   2) Confira o bundle sem publicar:
+#        npm run deploy:worker:dry
+#
+#   3) Publique de fato (vai pra MESMA produção, independente da branch):
+#        npm run deploy:worker
+#
+#   ⚠️ O deploy local NÃO respeita branch — ele sempre sobe pra produção.
+#      Use o :dry acima pra validar antes.
+# ============================================================================
+
+on:
+  push:
+    branches: ['main']          # a branch principal deste repo é "main"
+    paths:
+      - 'worker.js'
+      - 'wrangler.toml'
+      - '.github/workflows/deploy-worker.yaml'
+  workflow_dispatch:            # botão de deploy manual na aba Actions
+
+jobs:
+  deploy-worker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o repositório
+        uses: actions/checkout@v4
+
+      - name: Publicar na Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          # Precisa de um token com permissão "Workers Scripts: Edit".
+          # (o account_id e o binding do D1 vêm do wrangler.toml)
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

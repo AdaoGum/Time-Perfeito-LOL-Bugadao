@@ -21,7 +21,11 @@ dados históricos, sem estourar o rate limit da API da Riot.
 ## 🚀 Funcionalidades
 
 - **Perfil / Histórico:** estatísticas ranqueadas (Solo/Duo e Flex), taxa de vitória
-  e as últimas partidas com KDA, itens, dano e duração.
+  e as últimas partidas com KDA, itens, dano e duração. O perfil se divide em duas
+  páginas — **Histórico** e **Estatísticas** — com alternador no canto; um banner
+  mostra quantos jogos ainda não foram buscados e um botão baixa os **últimos 10**.
+  Jogadores **premium** chegam "tudo montado" (sincronizados de madrugada); os demais
+  trabalham sob demanda com o que há no banco + 10 jogos por clique.
 - **Maestrias:** Top campeões em lista progressiva + grade densa interativa.
 - **Planejador de Sinergia:** simulador de composições (Solo/Duo ou Flex) que trava
   campeões pela maestria/proficiência real e avalia o time (dano, CC, frontline, ritmo).
@@ -86,9 +90,17 @@ Outros scripts (`package.json`):
 | `npm run postbuild` | Copia `dist/index.html` → `dist/404.html` (SPA no GitHub Pages). |
 | `npm run preview` | Serve o build localmente. |
 | `npm test` | Testes de `src/utils/__tests__/*.test.js` (`node --test`). |
+| `npm run meta:archive` | Arquiva o `meta-tiers.csv` atual em `src/data/meta-history/`. |
+| `npm run deploy:worker` | Publica o `worker.js` na Cloudflare via Wrangler. |
+| `npm run deploy:worker:dry` | Valida o bundle do Worker **sem** publicar (dry-run). |
 
 > O front consome o Worker de produção definido em `WORKER_URL` ([`src/utils.js`](src/utils.js)).
 > Para apontar para outro Worker, altere essa constante.
+>
+> **Assets (Data Dragon):** a versão do patch é resolvida **automaticamente** no boot
+> (`resolveDDragonVersion()` em [`src/utils.js`](src/utils.js) lê o `versions.json` da Riot).
+> Assim ícones de campeões/itens novos nunca ficam quebrados. A constante
+> `DDRAGON_VERSION` é apenas o *fallback* caso o CDN da Riot esteja fora do ar.
 
 ---
 
@@ -98,19 +110,39 @@ O front nunca fala direto com a Riot (protege a chave e evita CORS). O `worker.j
 é o proxy. Para implantar sua própria instância:
 
 1. Crie um Worker na Cloudflare e um banco **D1**, com o binding `DB` apontando para ele.
-2. Configure o secret `RIOT_API_KEY` no painel do Worker.
+2. Configure o secret `RIOT_API_KEY` (e, opcionalmente, `ADMIN_PASSWORD`) no painel do Worker.
 3. Rode as migrations do banco (ver abaixo).
-4. Publique `worker.js` e aponte `WORKER_URL` em [`src/utils.js`](src/utils.js) para a URL gerada.
+4. Ajuste `name`/`account_id`/`database_id` em [`wrangler.toml`](wrangler.toml) e aponte
+   `WORKER_URL` em [`src/utils.js`](src/utils.js) para a URL gerada.
+
+### Deploy do Worker (Wrangler)
+
+O deploy é feito por **Wrangler** (config em [`wrangler.toml`](wrangler.toml)), não mais
+por copiar-colar no dashboard:
+
+```bash
+npm run deploy:worker:dry   # valida o bundle sem publicar
+npm run deploy:worker        # publica na Cloudflare (sempre vai pra produção)
+```
+
+Além disso, o workflow [`.github/workflows/deploy-worker.yaml`](.github/workflows/deploy-worker.yaml)
+**publica automaticamente** sempre que `worker.js` ou `wrangler.toml` mudam na `main`
+(precisa do secret `CLOUDFLARE_API_TOKEN` com permissão *Workers Scripts: Edit*). Os
+secrets do Worker (`RIOT_API_KEY`, `ADMIN_PASSWORD`) persistem entre deploys.
 
 ### Rotas (contrato)
 
-`POST WORKER_URL` com JSON `{ action, gameName?, tagLine?, puuid? }`:
+`POST WORKER_URL` com JSON `{ action, gameName?, tagLine?, puuid?, q?, refresh? }`
+(também aceita `GET` com querystring):
 
 | `action` | Retorno |
 |---|---|
-| `profile_overview` | Perfil completo + últimas partidas |
+| `profile_overview` | Perfil + partidas **do D1** (busca barata: não baixa nada de jogador conhecido). Devolve `pendingCount` (jogos ranqueados ainda não buscados) e `hasPremium`. Jogador **novo** ganha auto-download das 10 últimas. |
+| `fetch_recent_matches` | Botão "buscar últimos 10": baixa as até 10 ranqueadas mais recentes fora do D1 (detalhe + timeline), atualiza o elo e devolve o estado novo (máx. ~24 chamadas). |
 | `profile_brief` | Perfil leve (sem histórico) |
 | `masteries` | Maestrias (também persistidas no D1) |
+| `player_suggest` | Autocomplete: até 5 jogadores do D1 que casam com `q` (0 chamadas à Riot) |
+| `rate_status` | Status do orçamento global de rate limit (só lê o D1) |
 | `admin_all_history` | Dashboard "Ancestralidade" (agregação do D1) |
 | `admin_players_list` / `admin_set_premium` | Aba "Jogadores": lista e marca premium |
 
@@ -140,6 +172,7 @@ Segredos ficam em `local/.env` (fora do git): `RIOT_API_KEY`, `CLOUDFLARE_ACCOUN
 
 ```bash
 # Trator noturno: baixa as últimas ~200 partidas de cada jogador e grava só as inéditas
+# (também busca as MAESTRIAS de cada jogador e grava na tabela `maestrias`)
 node --env-file=local/.env cron/sync.js
 
 # Backfill: reprocessa TODO o histórico baixado (preenche colunas novas)
@@ -174,7 +207,9 @@ explícita de `PUUIDS` (run manual) é escape hatch e ignora o filtro premium.
   · `50` = últimas 50 partidas por jogador · `geral` = todo o histórico. (`50`/`geral` não
   têm tendência, por não serem recorte de tempo.)
 - **Seletor (`PUUIDS`):** vazio = **só premium** · lista de puuids = exatamente esses ·
-  **prefixo de nick** (ex.: `UGA`) = todos cujo game_name começa com isso (ignora premium).
+  **`Nome#Tag`** (ex.: `UGA Fulano#2109`) = match **exato** por nome+tag (imune a nick
+  duplicado) · **prefixo de nick** (ex.: `UGA`) = todos cujo game_name começa com isso.
+  Tudo ignora o filtro premium; dá para misturar `Nome#Tag` e prefixos na mesma lista.
 - Cada card traz a prosa + **Top 5 WR**, **Top 5 mais jogados** e **WR por rota com o melhor
   champ de cada rota**.
   Disparo manual: GitHub → Actions → "Relatorio Tribo Discord" → Run workflow.
@@ -231,13 +266,30 @@ Se o CSV passar de 30 dias, a UI avisa "meta desatualizado" e o peso do meta cai
 ## 📁 Estrutura do projeto
 
 ```
-src/               Front-end Vue (App, Router, store, api, components, utils, data)
-worker.js          Cloudflare Worker (proxy Riot + cache-first no D1)
-cron/              Coletor Node (sync.js, backfill.js, lib/match-extract.js)
-migrations/        Migrations do D1 (SQL)
-docs/              ARCHITECTURE.md + DATABASE.md (referência para devs e IAs)
-public/ dist/      Assets estáticos e build
+src/                 Front-end Vue (App, Router, store, api, components, utils, data)
+worker.js            Cloudflare Worker (proxy Riot + cache-first no D1)
+wrangler.toml        Config do deploy do Worker (Wrangler)
+cron/                Coletor Node (sync.js, backfill.js, relatorio-discord.js, lib/)
+migrations/          Migrations do D1 (SQL)
+scripts/             Utilitários Node (archive-meta.js)
+docs/                ARCHITECTURE.md + DATABASE.md (referência para devs e IAs)
+.github/workflows/   Automação (Pages, sync, relatório, deploy do Worker)
+public/ dist/        Assets estáticos e build
 ```
+
+---
+
+## 🤖 Automação (GitHub Actions)
+
+| Workflow | Quando roda | O que faz |
+|---|---|---|
+| [`deploy.yml`](.github/workflows/deploy.yml) | push na `main` / manual | Build do Vue e publish no **GitHub Pages**. |
+| [`deploy-worker.yaml`](.github/workflows/deploy-worker.yaml) | mudança em `worker.js`/`wrangler.toml` / manual | Publica o **Worker** na Cloudflare (Wrangler). |
+| [`riot-sync.yaml`](.github/workflows/riot-sync.yaml) | 05:00 e 17:00 BRT / manual | Roda o **coletor** (`cron/sync.js`) e sobe os logs como artefato. |
+| [`relatorio-discord.yaml`](.github/workflows/relatorio-discord.yaml) | 18:30 BRT diário, seg. e dia 1 / manual | Posta o **relatório da Tribo** no Discord. |
+
+> Secrets usados: `RIOT_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`,
+> `D1_DATABASE_ID`, `DISCORD_WEBHOOK` (e `DISCORD_USER_MAP` opcional).
 
 ---
 

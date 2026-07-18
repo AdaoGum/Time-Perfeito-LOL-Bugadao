@@ -66,15 +66,26 @@ Aplicação web para um grupo de jogadores de League of Legends. Faz três coisa
 
 ## 3. Fluxo de dados
 
-### 3.1 Usuário busca um perfil (tempo real)
+### 3.1 Usuário busca um perfil (tempo real — "busca barata")
 1. `SearchBar.vue` → `api.js:loadProfileIntoStore()` → `workerRequest('profile_overview')`.
-2. Worker recebe a `action`, resolve `puuid` (account-v1) e monta o perfil.
-3. **Cache-first:** o worker tenta servir do D1; só bate na Riot para o que falta,
-   e devolve `apiCalls` (nº de chamadas reais feitas).
-4. `api.js` normaliza (`normalizeProfileData`) e joga no `store.js` (`state.searchProfile`).
-5. As maestrias carregam em **background** (`loadMasteriesInBackground`).
-6. A telemetria de rate limit soma `apiCalls` numa janela deslizante — leituras do
+2. Worker resolve a identidade: **do D1** quando o jogador é conhecido (0 chamadas);
+   1ª visita resolve `puuid` (account-v1) + plataforma (active-shards) + elo/ícone.
+3. **Nada de download em massa:** o worker verifica os IDs ranqueados recentes
+   (2 chamadas) e devolve `pendingCount` (quantos ainda não estão no banco).
+   Partidas e base analítica vêm **só do D1**. Exceção: jogador **novo** ganha o
+   auto-download das 10 últimas (histórico já nasce preenchido, ~26 chamadas).
+4. `api.js` normaliza (`normalizeProfileData`) e joga no `store.js` (`state.searchProfile`),
+   incluindo `hasPremium` e `pendingCount`.
+5. O front (`Profile.vue`) divide o perfil em **Histórico** e **Estatísticas** (rotas
+   `/profile/:g/:t/historico|estatisticas`, alternador no canto). Um banner mostra o
+   `pendingCount` e o botão **"Buscar últimos 10 jogos"** → `fetch_recent_matches`
+   (baixa, grava e devolve o estado novo). Estatísticas sem base ficam em **hiato**
+   com CTA que busca os 10 e monta na hora.
+6. As maestrias carregam em **background** (`loadMasteriesInBackground`).
+7. A telemetria de rate limit soma `apiCalls` numa janela deslizante — leituras do
    D1 custam ~0 e não gastam o orçamento da chave.
+8. **Premium primeiro:** premium (`has_premium=1`) é sincronizado toda madrugada e
+   chega "tudo montado"; os demais operam sob demanda (10 jogos por clique).
 
 ### 3.2 Coleta noturna (o "trator" — `cron/sync.js`)
 1. Lê `SELECT ... FROM jogadores` e ordena com o **núcleo do time primeiro**
@@ -91,6 +102,9 @@ Aplicação web para um grupo de jogadores de League of Legends. Faz três coisa
    — usado para preencher colunas novas no histórico.
 6. Controle de rate limit próprio: pausa ~2 min ao se aproximar de 100 req/2min e
    trata 429 e 5xx (backoff/retry).
+7. **Maestrias:** antes das partidas, 1 chamada a champion-mastery-v4 (host de
+   plataforma em `jogadores.platform_host`) grava/atualiza a tabela `maestrias`
+   em lotes multi-VALUES — paridade de colunas com o upsert do worker.
 
 ### 3.3 Backfill centrado na partida (`cron/backfill.js`)
 Conserta o histórico do bug antigo de dedup: descobre partidas faltantes por puuid,
@@ -121,10 +135,13 @@ partidas/jogador). Roda com `node --env-file=local/.env cron/backfill.js`.
 | Arquivo | Papel |
 |---|---|
 | `worker.js` | Cloudflare Worker: proxy da Riot, cache-first no D1, rotas por `action`. |
+| `wrangler.toml` | Config do deploy do Worker (nome, `account_id`, binding D1). |
 | `cron/sync.js` | Trator noturno: ingestão + extração das partidas inéditas. |
 | `cron/backfill.js` | Recuperação de histórico faltante (centrado na partida). |
+| `cron/relatorio-discord.js` | Relatório analítico da Tribo postado no Discord (webhook). |
 | `cron/lib/match-extract.js` | Lógica compartilhada de SQL/extração (paridade com o worker). |
-| `migrations/001_analytics.sql` | Migração D1: `lp_historico` + colunas analíticas + índices. |
+| `cron/lib/relatorio-engine.js` | Motor de NLG "IA sem IA" do relatório (JS puro). |
+| `migrations/*.sql` | Migrations do D1 (analíticas, `api_usage`, cache de perfil, `has_premium`). |
 | `local/.env` | Segredos locais do coletor (fora do git). |
 
 ---
@@ -136,9 +153,12 @@ Requisição: `POST WORKER_URL` com JSON `{ action, gameName?, tagLine?, puuid? 
 
 | `action` | Faz | Resposta (resumo) |
 |---|---|---|
-| `profile_overview` (aliases: `visão_geral_do_perfil`) | Perfil completo + últimas partidas | `{ puuid, gameName, tagLine, statsSolo, statsFlex, matches[], proficiencyMatches[], companions{}, apiCalls }` |
-| `profile_brief` | Perfil leve (sem histórico de partidas) | Igual, sem `matches` |
+| `profile_overview` (aliases: `visão_geral_do_perfil`) | **Busca barata**: perfil + partidas do D1; verifica IDs recentes (2 chamadas) e conta o que falta. NÃO baixa partidas de jogador conhecido; jogador **novo** ganha auto-download das 10 últimas | `{ puuid, gameName, tagLine, statsSolo, statsFlex, matches[], proficiencyMatches[], companions{}, hasPremium, pendingCount, hadNewGames, apiCalls, rate }` |
+| `fetch_recent_matches` | Botão "buscar últimos 10": baixa as até 10 ranqueadas mais recentes fora do D1 (detalhe + timeline), grava tudo e atualiza o elo. Custo máx. ~24 chamadas | `{ matches[], proficiencyMatches[], companions{}, statsSolo, statsFlex, fetched, pendingCount, hasPremium, apiCalls, rate }` |
+| `profile_brief` | Perfil leve (sem histórico de partidas) | Igual ao overview, sem `matches` |
 | `masteries` | Maestrias do jogador (persiste no D1 em background) | `{ masteries[], apiCalls }` |
+| `player_suggest` | Autocomplete: até 5 jogadores do D1 que casam com `q` (só lê o D1) | `{ suggestions[] }` |
+| `rate_status` | Status do orçamento global de rate limit (só lê o D1, polling do front) | `{ used, limit, available, resetMs, windowMs }` |
 | `admin_all_history` | Dashboard "Ancestralidade": junta `jogadores` + `estatisticas_jogador_partida` | Linhas agregadas do D1 |
 | `admin_players_list` | Aba "Jogadores": cadastro de `jogadores` (1 linha/jogador, inclui `has_premium`) | `{ success, players[] }` |
 | `admin_set_premium` | Marca/desmarca premium. Body `{ puuid, premium, password }`; senha = `env.ADMIN_PASSWORD` (fallback `ugabuga`) | `{ success, puuid, has_premium }` |
@@ -170,9 +190,13 @@ scoreDeTime     = Σ scoreIndividual + 0.30·(aderênciaArquétipo + sinergiaDeP
 ## 7. Deploy (resumo)
 
 - **Front-end:** build com `npm run build` (gera `dist/`, com `404.html` p/ SPA no
-  GitHub Pages) e publicado no **GitHub Pages** (domínio via `CNAME`).
-- **Worker:** `worker.js` é implantado **separadamente** no Cloudflare (com o binding
-  `DB` → D1 e o secret `RIOT_API_KEY`).
-- **Coletor:** `cron/sync.js` roda fora do edge (VM/PC/cron) lendo `local/.env`.
+  GitHub Pages) e publicado no **GitHub Pages** (workflow `deploy.yml`; domínio via `CNAME`).
+- **Worker:** `worker.js` é implantado **separadamente** no Cloudflare via **Wrangler**
+  (`wrangler.toml`, `npm run deploy:worker`) — automatizado pelo workflow
+  `deploy-worker.yaml` a cada mudança no worker. Binding `DB` → D1 e secret `RIOT_API_KEY`.
+- **Coletor:** `cron/sync.js` roda no **GitHub Actions** (`riot-sync.yaml`, 05:00 e 17:00
+  BRT) ou fora do edge (VM/PC/cron) lendo `local/.env`.
+- **Assets (Data Dragon):** o patch é resolvido em runtime no boot do front
+  (`resolveDDragonVersion()` em `src/utils.js`), com `DDRAGON_VERSION` só como fallback.
 
 Ver mais em [DATABASE.md](./DATABASE.md) (migrations/backfill) e no README.

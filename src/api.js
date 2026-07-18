@@ -2,9 +2,10 @@ import { state } from './store.js';
 import { WORKER_URL } from './utils.js';
 
 const TELEMETRY_META = {
-  profile_overview: { cost: 24, group: 'full-profile' },
+  profile_overview: { cost: 4, group: 'full-profile' },
   profile_brief: { cost: 4, group: 'light-profile' },
   masteries: { cost: 2, group: 'masteries' },
+  fetch_recent_matches: { cost: 24, group: 'fetch-matches' },
   default: { cost: 1, group: 'other' }
 };
 
@@ -141,7 +142,9 @@ export function normalizeProfileData(data, gameName, tagLine) {
     companions: {
       solo: Array.isArray(data?.companions?.solo) ? data.companions.solo : [],
       flex: Array.isArray(data?.companions?.flex) ? data.companions.flex : []
-    }
+    },
+    hasPremium: data?.hasPremium === true,
+    pendingCount: Number(data?.pendingCount || 0)
   };
 }
 
@@ -164,7 +167,45 @@ export function applyProfileToStore(normalizedData, rawData = {}) {
   state.searchProfile.matches = normalizedData.matches;
   state.searchProfile.proficiencyMatches = normalizedData.proficiencyMatches;
   state.searchProfile.companions = normalizedData.companions;
+  state.searchProfile.hasPremium = normalizedData.hasPremium === true;
+  state.searchProfile.pendingCount = Number(normalizedData.pendingCount || 0);
   state.searchProfile.error = null;
+}
+
+// ----------------------------------------------------------------------
+// Botão "buscar últimos 10 jogos": baixa as até 10 partidas ranqueadas mais
+// recentes que ainda não estão no D1 e mescla o estado novo no store (histórico,
+// base de estatísticas, elo e contador de pendências). Custo máx.: ~24 chamadas.
+// ----------------------------------------------------------------------
+export async function fetchRecentMatches() {
+  const sp = state.searchProfile;
+  if (!sp.puuid || sp.fetchingMatches) return null;
+
+  sp.fetchingMatches = true;
+  try {
+    const data = await workerRequest('fetch_recent_matches', { puuid: sp.puuid });
+    if (Array.isArray(data?.matches)) sp.matches = data.matches;
+    if (Array.isArray(data?.proficiencyMatches)) sp.proficiencyMatches = data.proficiencyMatches;
+    if (data?.companions) {
+      sp.companions = {
+        solo: Array.isArray(data.companions.solo) ? data.companions.solo : [],
+        flex: Array.isArray(data.companions.flex) ? data.companions.flex : []
+      };
+    }
+    if (data?.statsSolo) sp.statsSolo = data.statsSolo;
+    if (data?.statsFlex) sp.statsFlex = data.statsFlex;
+    if (data?.profileIconId) sp.profileIconId = data.profileIconId;
+    if (data?.summonerLevel) sp.summonerLevel = data.summonerLevel;
+    sp.pendingCount = Number(data?.pendingCount || 0);
+
+    // Jogo novo baixado = maestria pode ter mudado → refresca em background.
+    if (Number(data?.fetched || 0) > 0) {
+      loadMasteriesInBackground(sp.puuid, sp.gameName, sp.tagLine, true);
+    }
+    return data;
+  } finally {
+    sp.fetchingMatches = false;
+  }
 }
 
 // `refresh=true` força a rebusca na Riot (usado quando o perfil detectou partida

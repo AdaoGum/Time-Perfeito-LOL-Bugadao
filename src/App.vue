@@ -307,7 +307,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { state } from './store.js';
 import { fetchRateStatus } from './api.js';
-import { profileIconImage, DDRAGON_VERSION, flipMorph } from './utils.js';
+import { profileIconImage, DDRAGON_VERSION, resolveDDragonVersion, flipMorph } from './utils.js';
 import SearchBar from './components/SearchBar.vue';
 
 const store = state;
@@ -584,6 +584,9 @@ const telGroupSummaries = computed(() => {
 
 // Load static Data Dragon data on mount
 onMounted(async () => {
+  // Garante o patch ao vivo ANTES de baixar os dados estáticos (e antes de montar
+  // URLs de assets). Em falha/timeout resolve para o fallback e segue normalmente.
+  await resolveDDragonVersion();
   try {
     const res = await fetch(`https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/data/pt_BR/champion.json`);
     const json = await res.json();

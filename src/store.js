@@ -26,7 +26,13 @@ export const state = reactive({
     // Histórico leve vindo do D1 (até 1000 partidas) usado pelo cálculo de proficiência
     proficiencyMatches: [],
     // Companheiros por fila (quem mais jogou com ele): { solo: [], flex: [] }
-    companions: { solo: [], flex: [] }
+    companions: { solo: [], flex: [] },
+    // Premium = sincronizado toda madrugada pelo trator (chega "tudo montado")
+    hasPremium: false,
+    // Partidas ranqueadas recentes que ainda NÃO estão no banco (o worker informa)
+    pendingCount: 0,
+    // True enquanto o botão "buscar últimos 10 jogos" está trabalhando
+    fetchingMatches: false
   },
 
   // Painel de maestrias que as outras telas consultam

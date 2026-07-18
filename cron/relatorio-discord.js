@@ -66,6 +66,7 @@ function lerUserMap() {
 // Resolve o env PUUIDS (o "seletor"):
 //   vazio                    -> null  (relatório só dos premium)
 //   puuids (>=40 chars/token)-> a lista exata (escape hatch, ignora premium)
+//   "Nome#Tag" (tem '#')     -> match EXATO por nome+tag (nick sozinho pode duplicar)
 //   prefixo de nick (curto)  -> LIKE 'prefixo%' no game_name (ex.: "UGA" pega todos os UGA)
 async function resolverAlvo() {
   const raw = (process.env.PUUIDS || '').trim();
@@ -75,14 +76,42 @@ async function resolverAlvo() {
     console.log(`🎯 Alvo: ${tokens.length} puuid(s) explícito(s).`);
     return tokens;
   }
-  const like = raw.replace(/[%_\\]/g, (c) => `\\${c}`) + '%';
-  const rows = await queryD1(
-    "SELECT puuid, game_name FROM jogadores WHERE game_name LIKE ? ESCAPE '\\' COLLATE NOCASE ORDER BY game_name",
-    [like]
-  );
-  console.log(`🎯 Alvo por prefixo "${raw}": ${rows.length} jogador(es)${rows.length ? ' → ' + rows.map(r => r.game_name).join(', ') : ''}.`);
-  // Prefixo sem match: sentinela pra dar relatório vazio (NÃO cair pro filtro premium).
-  return rows.length ? rows.map(r => r.puuid) : ['__nenhum__'];
+
+  // Tokens "Nome#Tag": match exato (nome E tag), imune a nick duplicado.
+  // Pode misturar com prefixos na mesma lista: "UGA Fulano#2109, OutroPrefixo".
+  const comTag = tokens.filter(t => t.includes('#'));
+  const semTag = tokens.filter(t => !t.includes('#'));
+  const rows = [];
+
+  for (const token of comTag) {
+    const hash = token.lastIndexOf('#');
+    const nome = token.slice(0, hash).trim();
+    const tag = token.slice(hash + 1).trim();
+    if (!nome || !tag) continue;
+    const found = await queryD1(
+      'SELECT puuid, game_name, tag_line FROM jogadores WHERE game_name = ? COLLATE NOCASE AND tag_line = ? COLLATE NOCASE',
+      [nome, tag]
+    );
+    if (!found.length) console.warn(`⚠️  "${token}" não encontrado no banco.`);
+    rows.push(...found);
+  }
+
+  for (const prefixo of semTag) {
+    const like = prefixo.replace(/[%_\\]/g, (c) => `\\${c}`) + '%';
+    const found = await queryD1(
+      "SELECT puuid, game_name, tag_line FROM jogadores WHERE game_name LIKE ? ESCAPE '\\' COLLATE NOCASE ORDER BY game_name",
+      [like]
+    );
+    rows.push(...found);
+  }
+
+  // Dedup (um jogador pode casar em mais de um token)
+  const vistos = new Set();
+  const unicos = rows.filter(r => !vistos.has(r.puuid) && vistos.add(r.puuid));
+
+  console.log(`🎯 Alvo "${raw}": ${unicos.length} jogador(es)${unicos.length ? ' → ' + unicos.map(r => `${r.game_name}#${r.tag_line}`).join(', ') : ''}.`);
+  // Sem match: sentinela pra dar relatório vazio (NÃO cair pro filtro premium).
+  return unicos.length ? unicos.map(r => r.puuid) : ['__nenhum__'];
 }
 
 (async () => {
