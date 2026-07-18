@@ -53,14 +53,15 @@ Aplicação web para um grupo de jogadores de League of Legends. Faz três coisa
 │  COLETOR NOTURNO  (Node — cron/sync.js, cron/backfill.js)            │
 │  Roda FORA do edge (VM/PC/cron). Fala com a Riot e grava no D1 via   │
 │  API HTTP do Cloudflare (queryD1). Compartilha a lógica de extração  │
-│  com o worker através de cron/lib/match-extract.js.                  │
+│  com o worker através de shared/match-extract.js.                    │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-> **Regra de ouro da paridade:** a lógica de extrair/gravar partidas existe em
-> **dois lugares** — `worker.js` (embutida, pois o bundle do Cloudflare não importa
-> de `cron/`) e `cron/lib/match-extract.js` (usada por `sync.js` e `backfill.js`).
-> Os `INSERT`/colunas precisam ser mantidos **idênticos** nos dois. Ver DATABASE.md.
+> **Fonte única de extração:** a lógica de extrair/gravar partidas vive num único
+> módulo — `shared/match-extract.js` — **importado** por `worker.js`, `cron/sync.js`
+> e `cron/backfill.js`. O bundle do Cloudflare (Wrangler/esbuild) resolve esse import
+> relativo normalmente, então **não há mais cópia duplicada**: coluna nova entra num
+> lugar só. (Antes o worker mantinha uma cópia manual — essa dívida foi paga.)
 
 ---
 
@@ -139,7 +140,7 @@ partidas/jogador). Roda com `node --env-file=local/.env cron/backfill.js`.
 | `cron/sync.js` | Trator noturno: ingestão + extração das partidas inéditas. |
 | `cron/backfill.js` | Recuperação de histórico faltante (centrado na partida). |
 | `cron/relatorio-discord.js` | Relatório analítico da Tribo postado no Discord (webhook). |
-| `cron/lib/match-extract.js` | Lógica compartilhada de SQL/extração (paridade com o worker). |
+| `shared/match-extract.js` | Lógica **única** de SQL/extração de partidas — importada pelo worker E pelo coletor (sem duplicação). |
 | `cron/lib/relatorio-engine.js` | Motor de NLG "IA sem IA" do relatório (JS puro). |
 | `migrations/*.sql` | Migrations do D1 (analíticas, `api_usage`, cache de perfil, `has_premium`). |
 | `local/.env` | Segredos locais do coletor (fora do git). |
@@ -159,12 +160,18 @@ Requisição: `POST WORKER_URL` com JSON `{ action, gameName?, tagLine?, puuid? 
 | `masteries` | Maestrias do jogador (persiste no D1 em background) | `{ masteries[], apiCalls }` |
 | `player_suggest` | Autocomplete: até 5 jogadores do D1 que casam com `q` (só lê o D1) | `{ suggestions[] }` |
 | `rate_status` | Status do orçamento global de rate limit (só lê o D1, polling do front) | `{ used, limit, available, resetMs, windowMs }` |
-| `admin_all_history` | Dashboard "Ancestralidade": junta `jogadores` + `estatisticas_jogador_partida` | Linhas agregadas do D1 |
-| `admin_players_list` | Aba "Jogadores": cadastro de `jogadores` (1 linha/jogador, inclui `has_premium`) | `{ success, players[] }` |
-| `admin_set_premium` | Marca/desmarca premium. Body `{ puuid, premium, password }`; senha = `env.ADMIN_PASSWORD` (fallback `ugabuga`) | `{ success, puuid, has_premium }` |
+| `admin_all_history` | Dashboard "Ancestralidade": junta `jogadores` + `estatisticas_jogador_partida`. **Exige `password`**; limitado a 20 000 linhas (as mais recentes), com `truncated` | `{ success, history[], truncated, limit }` |
+| `admin_players_list` | Aba "Jogadores": cadastro de `jogadores` (1 linha/jogador, inclui `has_premium`). **Exige `password`** | `{ success, players[] }` |
+| `admin_set_premium` | Marca/desmarca premium. Body `{ puuid, premium, password }` | `{ success, puuid, has_premium }` |
+
+> 🔒 **Painel admin (fail closed):** as três rotas `admin_*` validam `password`
+> contra o secret `env.ADMIN_PASSWORD` **no servidor** — sem fallback embutido.
+> Se o secret não estiver configurado no Worker, elas respondem **503**. A validação
+> antiga era no cliente (comparava `=== 'ugabuga'` no front) e as rotas de leitura
+> não checavam nada; ambos foram corrigidos.
 
 Erros são normalizados pelo front (`api.js:normalizeWorkerError`): 404 (invocador não
-encontrado), 429 (muitas consultas), 401/403 (chave expirada).
+encontrado), 429 (muitas consultas), 401/403 (chave/senha), 503 (admin sem senha configurada).
 
 ---
 

@@ -55,9 +55,10 @@ Front (Vue/GitHub Pages) ──POST {action}──► Worker (Cloudflare) ──
   `lp_historico`. Detalhes em [`docs/DATABASE.md`](docs/DATABASE.md).
 - **Coletor** (`cron/`): roda fora do edge e grava no D1 via API HTTP do Cloudflare.
 
-> ⚠️ **Paridade:** a lógica de extrair/gravar partidas vive em `worker.js` **e** em
-> `cron/lib/match-extract.js`. Ao mudar colunas/INSERT, atualize os **dois**.
-> Detalhes completos em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+> ✅ **Fonte única:** a lógica de extrair/gravar partidas vive num só módulo
+> [`shared/match-extract.js`](shared/match-extract.js), **importado** pelo `worker.js`,
+> `cron/sync.js` e `cron/backfill.js` (o bundle do Worker resolve via esbuild). Coluna
+> nova entra num lugar só. Detalhes em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
 
@@ -110,7 +111,9 @@ O front nunca fala direto com a Riot (protege a chave e evita CORS). O `worker.j
 é o proxy. Para implantar sua própria instância:
 
 1. Crie um Worker na Cloudflare e um banco **D1**, com o binding `DB` apontando para ele.
-2. Configure o secret `RIOT_API_KEY` (e, opcionalmente, `ADMIN_PASSWORD`) no painel do Worker.
+2. Configure o secret `RIOT_API_KEY` no painel do Worker. Configure também
+   `ADMIN_PASSWORD` — **obrigatório** para o painel Ancestralidade: sem ele, as
+   rotas `admin_*` respondem 503 (não há mais senha embutida no código).
 3. Rode as migrations do banco (ver abaixo).
 4. Ajuste `name`/`account_id`/`database_id` em [`wrangler.toml`](wrangler.toml) e aponte
    `WORKER_URL` em [`src/utils.js`](src/utils.js) para a URL gerada.
@@ -143,8 +146,12 @@ secrets do Worker (`RIOT_API_KEY`, `ADMIN_PASSWORD`) persistem entre deploys.
 | `masteries` | Maestrias (também persistidas no D1) |
 | `player_suggest` | Autocomplete: até 5 jogadores do D1 que casam com `q` (0 chamadas à Riot) |
 | `rate_status` | Status do orçamento global de rate limit (só lê o D1) |
-| `admin_all_history` | Dashboard "Ancestralidade" (agregação do D1) |
-| `admin_players_list` / `admin_set_premium` | Aba "Jogadores": lista e marca premium |
+| `admin_all_history` | Dashboard "Ancestralidade" (agregação do D1). **Exige `password`**; limitado às 20 000 partidas mais recentes (`truncated`) |
+| `admin_players_list` / `admin_set_premium` | Aba "Jogadores": lista e marca premium. **Exigem `password`** |
+
+> 🔒 As rotas `admin_*` validam a senha **no servidor** contra o secret
+> `ADMIN_PASSWORD` do Worker — sem fallback embutido. Se o secret não estiver
+> configurado, respondem **503** (nada de painel aberto por padrão).
 
 ---
 
@@ -195,17 +202,23 @@ Job que lê o D1 e posta um relatório analítico por jogador (pontos fortes/fra
 evolução vs. período anterior, recomendações de champ/rota cruzadas com o meta) num
 canal do Discord via **webhook**. Texto gerado por regras (NLG "IA sem IA"), sem LLM.
 
+**Dois relatórios separados:** por padrão o job gera **um relatório para Ranked
+Solo/Duo e outro para Flex** — cada um com seu cabeçalho, cor e prosa própria (o mesmo
+jogador ganha texto diferente em cada fila, porque a semente da prosa inclui a fila).
+
 Cobre **só jogadores premium** (`has_premium = 1`), igual ao sync/backfill. Uma lista
 explícita de `PUUIDS` (run manual) é escape hatch e ignora o filtro premium.
 
 - Motor: [`cron/lib/relatorio-engine.js`](cron/lib/relatorio-engine.js) (JS puro).
 - Job: [`cron/relatorio-discord.js`](cron/relatorio-discord.js).
 - Agendamento: [`.github/workflows/relatorio-discord.yaml`](.github/workflows/relatorio-discord.yaml)
-  — diário (18:30 BRT), semanal (segunda) e mensal (dia 1). Só Ranked (Solo/Flex).
+  — diário (18:30 BRT), semanal (segunda) e mensal (dia 1). Só Ranked (Solo + Flex).
   O sync roda 05:00 e 17:00 BRT.
 - **Janela de análise (`PERIODO`):** `dia` = últimos 7 dias · `semana`/`mes` = últimos 30 dias
   · `50` = últimas 50 partidas por jogador · `geral` = todo o histórico. (`50`/`geral` não
   têm tendência, por não serem recorte de tempo.)
+- **Fila (`FILA`):** `ambas` (default, gera os dois relatórios) · `solo` = só Ranked
+  Solo/Duo · `flex` = só Ranked Flex.
 - **Seletor (`PUUIDS`):** vazio = **só premium** · lista de puuids = exatamente esses ·
   **`Nome#Tag`** (ex.: `UGA Fulano#2109`) = match **exato** por nome+tag (imune a nick
   duplicado) · **prefixo de nick** (ex.: `UGA`) = todos cujo game_name começa com isso.
@@ -224,6 +237,10 @@ PERIODO=semana node --env-file=local/.env cron/relatorio-discord.js
 # Alvo específico (puuids OU prefixo de nick) e outras janelas:
 PUUIDS="UGA" PERIODO=50 node --env-file=local/.env cron/relatorio-discord.js   # todos "UGA", últimas 50
 PERIODO=geral node --env-file=local/.env cron/relatorio-discord.js             # premium, todo o histórico
+
+# Só uma fila (Solo OU Flex):
+DRY_RUN=1 FILA=solo PERIODO=semana node --env-file=local/.env cron/relatorio-discord.js   # só Solo/Duo
+FILA=flex PERIODO=dia node --env-file=local/.env cron/relatorio-discord.js                # posta só Flex
 ```
 
 **Secrets (GitHub → Settings → Secrets → Actions → Repository secrets):**

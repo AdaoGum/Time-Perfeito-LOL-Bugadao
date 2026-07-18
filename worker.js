@@ -1,49 +1,55 @@
+import {
+  SQL_PARTIDAS, valoresPartida, montarTeams,
+  SQL_ESTATISTICAS, valoresEstatisticas,
+  SQL_MARCOS, extrairMarcos
+} from "./shared/match-extract.js";
+
 // ----------------------------------------------------------------------
 // MIGRAÇÃO IDEMPOTENTE DO SCHEMA (roda 1x por isolate; ignora "duplicate column")
+// As migrations "de verdade" vivem em migrations/*.sql; isto aqui é só a auto-cura
+// que mantém o worker de pé mesmo num banco que ainda não recebeu alguma migration.
+// São 3 cadeias INDEPENDENTES (maestrias / api_usage / jogadores) rodadas em
+// PARALELO — cada statement engole o próprio erro de "coluna/tabela já existe" —,
+// cortando pela metade a latência do cold start em relação ao encadeamento serial.
 // ----------------------------------------------------------------------
 let schemaReady = false;
+
+// Executa um DDL e ignora o erro esperado quando o objeto já existe.
+async function ddlSilencioso(env, sql) {
+  try { await env.DB.prepare(sql).run(); } catch (e) { /* já existe */ }
+}
+// Roda uma sequência de DDLs em ordem (o CREATE precisa vir antes dos ALTER/INDEX dele).
+async function ddlEmSequencia(env, sqls) {
+  for (const sql of sqls) await ddlSilencioso(env, sql);
+}
+
 async function ensureSchema(env) {
   if (schemaReady) return;
-  // As colunas de estatisticas_jogador_partida vêm da migração (migrations/001_analytics.sql).
-  // Aqui garantimos apenas a tabela de maestrias, que não faz parte da migração.
-  try {
-    await env.DB.prepare(
-      "CREATE TABLE IF NOT EXISTS maestrias (puuid TEXT NOT NULL, champion_id INTEGER NOT NULL, champion_level INTEGER, champion_points INTEGER, last_play_time INTEGER, season_milestone INTEGER, milestone_grades TEXT, mark_required_next_level INTEGER, atualizado TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (puuid, champion_id))"
-    ).run();
-  } catch (e) { /* tabela já existe */ }
-  // Colunas de milestone em `maestrias` (ver migrations/006_maestrias.sql): a tabela
-  // antiga nasceu sem elas e o upsert da rota `masteries` falhava silenciosamente,
-  // deixando o cache de maestrias eternamente vazio. Auto-cura aqui.
-  for (const ddl of [
-    "ALTER TABLE maestrias ADD COLUMN season_milestone INTEGER",
-    "ALTER TABLE maestrias ADD COLUMN milestone_grades TEXT",
-    "ALTER TABLE maestrias ADD COLUMN mark_required_next_level INTEGER"
-  ]) {
-    try { await env.DB.prepare(ddl).run(); } catch (e) { /* coluna já existe */ }
-  }
-  // Contador global de chamadas à Riot (ver migrations/003_api_usage.sql).
-  try {
-    await env.DB.prepare(
-      "CREATE TABLE IF NOT EXISTS api_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, count INTEGER NOT NULL, source TEXT, action TEXT)"
-    ).run();
-    await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_api_usage_ts ON api_usage (ts)").run();
-  } catch (e) { /* tabela já existe */ }
-  // Colunas de CACHE do perfil em `jogadores` (ver migrations/004_profile_cache.sql).
-  // Sem elas o worker não consegue remontar o perfil sem gastar a chave: guardamos a
-  // plataforma (p/ pular active-shards) e vitórias/derrotas por fila (o front exibe W/L).
-  // SQLite/D1 não tem "ADD COLUMN IF NOT EXISTS" -> tentamos uma a uma e ignoramos "duplicate".
-  for (const ddl of [
-    "ALTER TABLE jogadores ADD COLUMN platform_host TEXT",
-    "ALTER TABLE jogadores ADD COLUMN solo_wins INTEGER",
-    "ALTER TABLE jogadores ADD COLUMN solo_losses INTEGER",
-    "ALTER TABLE jogadores ADD COLUMN flex_wins INTEGER",
-    "ALTER TABLE jogadores ADD COLUMN flex_losses INTEGER",
-    // Flag premium (ver migrations/005_has_premium.sql): só premium roda nos jobs
-    // de madrugada/backfill. Novo jogador buscado no site nasce com 0 (não-premium).
-    "ALTER TABLE jogadores ADD COLUMN has_premium INTEGER NOT NULL DEFAULT 0"
-  ]) {
-    try { await env.DB.prepare(ddl).run(); } catch (e) { /* coluna já existe */ }
-  }
+  await Promise.all([
+    // Cadeia 1 — tabela `maestrias` (não vem de migração) + colunas de milestone
+    // (migrations/006_maestrias.sql). Sem elas o upsert de maestrias falhava calado.
+    ddlEmSequencia(env, [
+      "CREATE TABLE IF NOT EXISTS maestrias (puuid TEXT NOT NULL, champion_id INTEGER NOT NULL, champion_level INTEGER, champion_points INTEGER, last_play_time INTEGER, season_milestone INTEGER, milestone_grades TEXT, mark_required_next_level INTEGER, atualizado TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (puuid, champion_id))",
+      "ALTER TABLE maestrias ADD COLUMN season_milestone INTEGER",
+      "ALTER TABLE maestrias ADD COLUMN milestone_grades TEXT",
+      "ALTER TABLE maestrias ADD COLUMN mark_required_next_level INTEGER"
+    ]),
+    // Cadeia 2 — contador global de chamadas (migrations/003_api_usage.sql) + índice.
+    ddlEmSequencia(env, [
+      "CREATE TABLE IF NOT EXISTS api_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, count INTEGER NOT NULL, source TEXT, action TEXT)",
+      "CREATE INDEX IF NOT EXISTS idx_api_usage_ts ON api_usage (ts)"
+    ]),
+    // Cadeia 3 — colunas de CACHE de perfil em `jogadores` (migrations/004+005).
+    // SQLite/D1 não tem "ADD COLUMN IF NOT EXISTS" -> tenta uma a uma, ignora duplicata.
+    ddlEmSequencia(env, [
+      "ALTER TABLE jogadores ADD COLUMN platform_host TEXT",
+      "ALTER TABLE jogadores ADD COLUMN solo_wins INTEGER",
+      "ALTER TABLE jogadores ADD COLUMN solo_losses INTEGER",
+      "ALTER TABLE jogadores ADD COLUMN flex_wins INTEGER",
+      "ALTER TABLE jogadores ADD COLUMN flex_losses INTEGER",
+      "ALTER TABLE jogadores ADD COLUMN has_premium INTEGER NOT NULL DEFAULT 0"
+    ])
+  ]);
   schemaReady = true;
 }
 
@@ -58,6 +64,25 @@ async function loadCachedPlayer(env, gameName, tagLine) {
   } catch (e) {
     return null;
   }
+}
+
+// ----------------------------------------------------------------------
+// AUTENTICAÇÃO DO PAINEL ADMIN (Ancestralidade + premium)
+// Fecha por padrão ("fail closed"): sem o secret ADMIN_PASSWORD configurado no
+// Worker, TODAS as rotas admin ficam indisponíveis (503) — nada de senha embutida
+// no código. As rotas de leitura (admin_all_history / admin_players_list) e de
+// escrita (admin_set_premium) usam este mesmo portão, validado no SERVIDOR.
+// Retorna { ok: true } ou { ok: false, status, error }.
+// ----------------------------------------------------------------------
+function verificarAdmin(env, password) {
+  const esperada = env.ADMIN_PASSWORD;
+  if (!esperada) {
+    return { ok: false, status: 503, error: "Painel administrativo indisponível: o segredo ADMIN_PASSWORD não está configurado no Worker." };
+  }
+  if (String(password || "") !== String(esperada)) {
+    return { ok: false, status: 403, error: "Senha inválida." };
+  }
+  return { ok: true };
 }
 
 // ----------------------------------------------------------------------
@@ -95,161 +120,9 @@ function recordUsageGlobal(env, ctx, count, source, action, now = Date.now()) {
 }
 
 // ----------------------------------------------------------------------
-// EXTRAÇÃO ANALÍTICA (match-v5) — cópia espelhada de cron/lib/match-extract.js.
-// (Worker é bundle do Cloudflare e não importa de cron/; manter em paridade.)
+// EXTRAÇÃO ANALÍTICA (match-v5) — importada de shared/match-extract.js (fonte
+// única compartilhada com cron/sync.js e cron/backfill.js). Ver import no topo.
 // ----------------------------------------------------------------------
-
-// Metadados globais da partida (tabela `partidas`).
-const SQL_PARTIDAS =
-  "INSERT OR REPLACE INTO partidas (match_id, game_duration, game_creation, queue_id, game_version, game_mode, bans, team_objectives, participants) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-
-function valoresPartida(matchId, info, teams) {
-  const bans = JSON.stringify((info.teams || []).map(t => ({ teamId: t.teamId, bans: t.bans || [] })));
-  const objetivos = JSON.stringify((info.teams || []).map(t => ({ teamId: t.teamId, objectives: t.objectives || {} })));
-  return [matchId, info.gameDuration, info.gameCreation, info.queueId ?? null, info.gameVersion ?? null, info.gameMode ?? null, bans, objetivos, JSON.stringify(teams)];
-}
-
-// Estatísticas consolidadas de fim de jogo (tabela `estatisticas_jogador_partida`) — 37 colunas.
-const SQL_ESTATISTICAS = `
-  INSERT OR REPLACE INTO estatisticas_jogador_partida
-  (puuid, match_id, champion_id, champion_name, team_position, win,
-   kills, deaths, assists, solo_kills, double_kills, triple_kills, quadra_kills, penta_kills,
-   gold_earned, gold_per_min, items, cs, damage_champions,
-   physical_damage, magic_damage, true_damage, damage_taken, damage_mitigated,
-   total_heal_teammates, damage_shielded_teammates, kill_participation, total_time_spent_dead,
-   vision_score, control_wards, wards_placed, wards_killed,
-   summoner1_id, summoner2_id, perk_keystone, perk_secondary_style, challenges)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`;
-
-function valoresEstatisticas(puuid, matchId, info, participant) {
-  const ch = participant.challenges || {};
-  const cs = (participant.totalMinionsKilled || 0) + (participant.neutralMinionsKilled || 0);
-  const keystone = participant.perks?.styles?.[0]?.selections?.[0]?.perk ?? null;
-  const secondaryStyle = participant.perks?.styles?.[1]?.style ?? null;
-  return [
-    puuid, matchId, participant.championId ?? null, participant.championName, participant.teamPosition || "",
-    participant.win ? 1 : 0,
-    participant.kills ?? 0, participant.deaths ?? 0, participant.assists ?? 0,
-    ch.soloKills ?? 0, participant.doubleKills ?? 0, participant.tripleKills ?? 0, participant.quadraKills ?? 0, participant.pentaKills ?? 0,
-    participant.goldEarned ?? 0, ch.goldPerMinute ?? 0,
-    JSON.stringify([participant.item0, participant.item1, participant.item2, participant.item3, participant.item4, participant.item5]),
-    cs, participant.totalDamageDealtToChampions ?? 0,
-    participant.physicalDamageDealtToChampions ?? 0, participant.magicDamageDealtToChampions ?? 0, participant.trueDamageDealtToChampions ?? 0,
-    participant.totalDamageTaken ?? 0, participant.damageSelfMitigated ?? 0,
-    participant.totalHealsOnTeammates ?? 0, participant.totalDamageShieldedOnTeammates ?? 0,
-    ch.killParticipation ?? 0, participant.totalTimeSpentDead ?? 0,
-    participant.visionScore ?? 0, participant.visionWardsBoughtInGame ?? 0,
-    participant.wardsPlaced ?? 0, participant.wardsKilled ?? 0,
-    participant.summoner1Id ?? null, participant.summoner2Id ?? null,
-    keystone, secondaryStyle, JSON.stringify(ch)
-  ];
-}
-
-// Marcos Temporais (tabela `estatisticas_jogador_marcos`) — 52 colunas.
-// Extrai snapshots compactos da timeline e DESCARTA o JSON pesado em seguida.
-const MARCOS_MINUTOS = [0, 5, 10, 15, 25];
-
-const SQL_MARCOS = `
-  INSERT OR REPLACE INTO estatisticas_jogador_marcos
-  (puuid, match_id, minuto, level, xp, current_gold, total_gold,
-   attack_damage, ability_power, armor, magic_resist, attack_speed, ability_haste,
-   cooldown_reduction, movement_speed, health, health_max, health_regen,
-   power, power_max, power_regen, lifesteal, omnivamp, physical_vamp, spell_vamp,
-   armor_pen, armor_pen_percent, bonus_armor_pen_percent,
-   magic_pen, magic_pen_percent, bonus_magic_pen_percent, cc_reduction,
-   total_damage_done, total_damage_done_to_champions,
-   magic_damage_done, magic_damage_done_to_champions, magic_damage_taken,
-   physical_damage_done, physical_damage_done_to_champions, physical_damage_taken,
-   true_damage_done, true_damage_done_to_champions, true_damage_taken,
-   position_x, position_y, items, skills_upgraded,
-   kills_no_minuto, deaths_no_minuto, assists_no_minuto,
-   wards_colocadas, wards_destruidas)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`;
-
-function extrairMarcos(puuid, matchId, timeline) {
-  const info = timeline?.info;
-  if (!info || !Array.isArray(info.frames)) return [];
-
-  const participante = (info.participants || []).find(p => p.puuid === puuid);
-  if (!participante) return [];
-  const pid = participante.participantId;
-
-  const alvos = new Set(MARCOS_MINUTOS);
-  const mochila = [];
-  const skills = [];
-  let kills = 0, deaths = 0, assists = 0, wardsColocadas = 0, wardsDestruidas = 0;
-  const linhas = [];
-
-  for (let i = 0; i < info.frames.length; i++) {
-    const frame = info.frames[i];
-
-    for (const ev of frame.events || []) {
-      switch (ev.type) {
-        case 'ITEM_PURCHASED':
-          if (ev.participantId === pid) mochila.push(ev.itemId);
-          break;
-        case 'ITEM_SOLD':
-        case 'ITEM_DESTROYED':
-          if (ev.participantId === pid) {
-            const idx = mochila.indexOf(ev.itemId);
-            if (idx !== -1) mochila.splice(idx, 1);
-          }
-          break;
-        case 'ITEM_UNDO':
-          if (ev.participantId === pid) {
-            if (ev.beforeId) { const idx = mochila.indexOf(ev.beforeId); if (idx !== -1) mochila.splice(idx, 1); }
-            if (ev.afterId) mochila.push(ev.afterId);
-          }
-          break;
-        case 'SKILL_LEVEL_UP':
-          if (ev.participantId === pid) skills.push(ev.skillSlot);
-          break;
-        case 'CHAMPION_KILL':
-          if (ev.killerId === pid) kills++;
-          if (ev.victimId === pid) deaths++;
-          if (Array.isArray(ev.assistingParticipantIds) && ev.assistingParticipantIds.includes(pid)) assists++;
-          break;
-        case 'WARD_PLACED':
-          if (ev.creatorId === pid) wardsColocadas++;
-          break;
-        case 'WARD_KILL':
-          if (ev.killerId === pid) wardsDestruidas++;
-          break;
-      }
-    }
-
-    const minuto = Math.round((frame.timestamp ?? 0) / 60000);
-    if (!alvos.has(minuto)) continue;
-
-    const pf = (frame.participantFrames || {})[pid] || (frame.participantFrames || {})[String(pid)] || {};
-    const cs = pf.championStats || {};
-    const ds = pf.damageStats || {};
-    const pos = pf.position || {};
-
-    linhas.push([
-      puuid, matchId, minuto,
-      pf.level ?? 1, pf.xp ?? 0, pf.currentGold ?? 0, pf.totalGold ?? 0,
-      cs.attackDamage ?? 0, cs.abilityPower ?? 0, cs.armor ?? 0, cs.magicResist ?? 0,
-      cs.attackSpeed ?? 100, cs.abilityHaste ?? 0, cs.cooldownReduction ?? 0, cs.movementSpeed ?? 330,
-      cs.health ?? 0, cs.healthMax ?? 0, cs.healthRegen ?? 0,
-      cs.power ?? 0, cs.powerMax ?? 0, cs.powerRegen ?? 0,
-      cs.lifesteal ?? 0, cs.omnivamp ?? 0, cs.physicalVamp ?? 0, cs.spellVamp ?? 0,
-      cs.armorPen ?? 0, cs.armorPenPercent ?? 0, cs.bonusArmorPenPercent ?? 0,
-      cs.magicPen ?? 0, cs.magicPenPercent ?? 0, cs.bonusMagicPenPercent ?? 0, cs.ccReduction ?? 0,
-      ds.totalDamageDone ?? 0, ds.totalDamageDoneToChampions ?? 0,
-      ds.magicDamageDone ?? 0, ds.magicDamageDoneToChampions ?? 0, ds.magicDamageTaken ?? 0,
-      ds.physicalDamageDone ?? 0, ds.physicalDamageDoneToChampions ?? 0, ds.physicalDamageTaken ?? 0,
-      ds.trueDamageDone ?? 0, ds.trueDamageDoneToChampions ?? 0, ds.trueDamageTaken ?? 0,
-      pos.x ?? 0, pos.y ?? 0,
-      JSON.stringify(mochila), JSON.stringify(skills),
-      kills, deaths, assists, wardsColocadas, wardsDestruidas
-    ]);
-  }
-
-  return linhas;
-}
 
 // ----------------------------------------------------------------------
 // HELPERS DE PERFIL/PARTIDAS — compartilhados por `profile_overview` (busca
@@ -365,14 +238,7 @@ async function baixarPartida(env, ctx, apiKey, playerPuuid, matchId) {
     const participant = info.participants.find(p => p.puuid === playerPuuid);
     if (!participant) return { match: null, calls };
 
-    const teams = info.participants.map(p => ({
-      gameName: p.riotIdGameName || p.summonerName,
-      tagLine: p.riotIdTagline,
-      championName: p.championName,
-      teamId: p.teamId,
-      kills: p.kills,
-      role: p.teamPosition
-    }));
+    const teams = montarTeams(info);
 
     // 🌟 Campos analíticos (mesma extração usada no cron/sync.js)
     const ch = participant.challenges || {};
@@ -650,7 +516,7 @@ export default {
     // ----------------------------------------------------------------------
     // 2. CAPTURA DE PARÂMETROS
     // ----------------------------------------------------------------------
-    let action, gameName, tagLine, puuid, refresh, q, premium, password;
+    let action, gameName, tagLine, puuid, refresh, q, premium, password, limit;
 
     if (request.method === "POST") {
       try {
@@ -663,6 +529,7 @@ export default {
         q = body.q;
         premium = body.premium;
         password = body.password;
+        limit = body.limit;
       } catch (e) {
         return new Response(JSON.stringify({ error: "JSON inválido." }), { status: 400, headers: corsHeaders });
       }
@@ -1083,9 +950,19 @@ export default {
     }
 
     // ======================================================================
-    // ROTA: ANCESTRALIDADE (DASHBOARD TOTAL DE DADOS)
+    // ROTA: ANCESTRALIDADE (DASHBOARD TOTAL DE DADOS) — protegida por senha.
+    // Limitada: devolve no máx. HIST_MAX linhas (as mais recentes) para não
+    // estourar memória/CPU do Worker conforme o histórico cresce. `truncated`
+    // avisa o front quando há mais dados além do teto.
     // ======================================================================
-if (action === "admin_all_history") {
+    if (action === "admin_all_history") {
+      const auth = verificarAdmin(env, password);
+      if (!auth.ok) {
+        return new Response(JSON.stringify({ error: auth.error }), { status: auth.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const HIST_MAX = 20000; // teto duro; protege o isolate de payloads gigantes
+      const pedido = Number.isFinite(Number(limit)) ? Math.floor(Number(limit)) : HIST_MAX;
+      const efetivo = Math.max(1, Math.min(HIST_MAX, pedido));
       try {
         const { results } = await env.DB.prepare(`
           SELECT
@@ -1101,9 +978,14 @@ if (action === "admin_all_history") {
           JOIN jogadores j ON e.puuid = j.puuid
           JOIN partidas p ON e.match_id = p.match_id
           ORDER BY p.game_creation DESC
-        `).all();
-        
-        return new Response(JSON.stringify({ success: true, history: results || [] }), {
+          LIMIT ?
+        `).bind(efetivo + 1).all();
+
+        const linhas = results || [];
+        const truncated = linhas.length > efetivo;
+        if (truncated) linhas.length = efetivo;
+
+        return new Response(JSON.stringify({ success: true, history: linhas, truncated, limit: efetivo }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       } catch (err) {
@@ -1116,6 +998,10 @@ if (action === "admin_all_history") {
     // Só LÊ o cadastro de `jogadores` (não gasta a chave da Riot). 1 linha/jogador.
     // ======================================================================
     if (action === "admin_players_list") {
+      const auth = verificarAdmin(env, password);
+      if (!auth.ok) {
+        return new Response(JSON.stringify({ error: auth.error }), { status: auth.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
       try {
         const { results } = await env.DB.prepare(`
           SELECT
@@ -1135,13 +1021,13 @@ if (action === "admin_all_history") {
 
     // ======================================================================
     // ROTA: MARCAR/DESMARCAR PREMIUM de um jogador (escrita protegida por senha)
-    // Espera { puuid, premium: true|false, password }. A senha é comparada com
-    // env.ADMIN_PASSWORD (fallback "ugabuga", a mesma do portão da Ancestralidade).
+    // Espera { puuid, premium: true|false, password }. A senha é validada contra
+    // o secret env.ADMIN_PASSWORD do Worker — SEM fallback embutido (fail closed).
     // ======================================================================
     if (action === "admin_set_premium") {
-      const senhaOk = String(password || "") === String(env.ADMIN_PASSWORD || "ugabuga");
-      if (!senhaOk) {
-        return new Response(JSON.stringify({ error: "Senha inválida." }), { status: 403, headers: corsHeaders });
+      const auth = verificarAdmin(env, password);
+      if (!auth.ok) {
+        return new Response(JSON.stringify({ error: auth.error }), { status: auth.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       if (!puuid) {
         return new Response(JSON.stringify({ error: "puuid ausente." }), { status: 400, headers: corsHeaders });

@@ -20,6 +20,8 @@ const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 const D1_DATABASE_ID = process.env.D1_DATABASE_ID;
 const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK;
 const PERIODO = (process.env.PERIODO || 'dia').toLowerCase();
+// FILA = solo | flex | ambas (default). 'ambas' gera DOIS relatórios separados.
+const FILA = (process.env.FILA || 'ambas').toLowerCase();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -126,7 +128,7 @@ async function resolverAlvo() {
   }
 
   console.log('=========================================================');
-  console.log(`📜 [CRONISTA] Relatório "${PERIODO}" da tribo`);
+  console.log(`📜 [CRONISTA] Relatório "${PERIODO}" da tribo (fila: ${FILA})`);
   console.log('=========================================================');
 
   // Seletor: vazio = premium; puuids = esses; prefixo de nick = LIKE (ex.: "UGA").
@@ -135,6 +137,7 @@ async function resolverAlvo() {
   const { mensagens, ativos } = await gerarRelatorio({
     queryRows: queryD1,
     periodo: PERIODO,
+    fila: FILA,
     puuids,
     metaCsv: lerMetaCsv(),
     userMap: lerUserMap()

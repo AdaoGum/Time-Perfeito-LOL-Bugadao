@@ -21,7 +21,7 @@ import {
   SQL_PARTIDAS, valoresPartida, montarTeams,
   SQL_ESTATISTICAS, valoresEstatisticas,
   SQL_MARCOS, extrairMarcos, MARCOS_MINUTOS
-} from './lib/match-extract.js';
+} from '../shared/match-extract.js';
 
 const RIOT_API_KEY = process.env.RIOT_API_KEY;
 const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;

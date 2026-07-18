@@ -6,8 +6,9 @@
 >
 > **Motor:** Cloudflare D1 (SQLite).
 > **Fontes que escrevem no banco:** `worker.js` (edge, sob demanda) e
-> `cron/sync.js` (job da madrugada / backfill). Os `INSERT` são **duplicados**
-> nos dois — mantenha-os em paridade ao alterar o schema.
+> `cron/sync.js` (job da madrugada / backfill). A lógica de `INSERT`/extração é
+> **única e compartilhada** em `shared/match-extract.js` — importada pelos dois —,
+> então uma coluna nova entra num lugar só e vale para ambos.
 
 ---
 
@@ -255,9 +256,12 @@ si por `(puuid, match_id)` — o placar final e os snapshots da mesma participa�
 
 ## Notas para quem for alterar o schema
 
-- **Duplicação intencional:** os `INSERT` existem em `worker.js` **e** em
-  `cron/sync.js` (via `cron/lib/match-extract.js`). Ao adicionar/remover coluna,
-  atualize os dois lados e mantenha a ordem das colunas idêntica ao `VALUES (?, …)`.
+- **Fonte única compartilhada:** os `INSERT`/extração vivem só em
+  `shared/match-extract.js`, importado por `worker.js`, `cron/sync.js` e
+  `cron/backfill.js` (o bundle do Worker resolve o import via esbuild). Ao
+  adicionar/remover coluna, mexe **num lugar só** e mantém a ordem idêntica ao
+  `VALUES (?, …)`. O teste `src/utils/__tests__/match-extract.test.js` trava a
+  contagem de colunas × placeholders.
 - **Migrations:** SQLite/D1 não suporta `ADD COLUMN IF NOT EXISTS`. Rodar
   `wrangler d1 execute <BANCO> --remote --file=./migrations/001_analytics.sql`;
   colunas já existentes fazem o comando falhar — ignore/rode só o que falta.

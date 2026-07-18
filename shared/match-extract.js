@@ -1,7 +1,11 @@
 // ============================================================================
-// Extração analítica de match-v5 — fonte ÚNICA usada por cron/sync.js.
-// (worker.js mantém uma cópia própria por ser bundle do Cloudflare Worker;
-//  qualquer coluna nova precisa ser refletida lá também.)
+// Extração analítica de match-v5 — FONTE ÚNICA E COMPARTILHADA.
+// Importada por cron/sync.js, cron/backfill.js E worker.js. O bundle do Cloudflare
+// (Wrangler/esbuild) resolve este import relativo normalmente — por isso não há
+// mais cópia duplicada no worker. Este arquivo é JS puro (sem `fs`/`process`/Vite),
+// então roda igual no Node do coletor e no isolate do Worker.
+//
+// ⚠️ QUALQUER coluna/INSERT novo entra AQUI e vale para os três de uma vez.
 //
 // Arquitetura "Marcos Temporais": NÃO guardamos mais a timeline bruta. A timeline
 // é baixada, processada frame a frame para extrair snapshots compactos (52 colunas)

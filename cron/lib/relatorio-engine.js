@@ -14,6 +14,21 @@
 // ============================================================================
 
 export const QUEUES_RANKED = [420, 440];
+// Filas ranqueadas como relatórios SEPARADOS. O relatório roda uma vez por fila
+// (Solo/Duo e Flex têm elos, metas e entrosamentos diferentes — misturar diluía a
+// leitura). `id` = queue_id da Riot; `chave` alimenta a semente da prosa (o mesmo
+// jogador ganha texto diferente em cada relatório).
+export const FILAS = {
+  solo: { id: 420, chave: 'solo', label: 'Solo/Duo', emoji: '🪓', cor: 0x8b5cf6 },
+  flex: { id: 440, chave: 'flex', label: 'Flex',     emoji: '🛡️', cor: 0x38bdf8 }
+};
+// Resolve o seletor de fila do relatório: 'solo' | 'flex' | 'ambas' (default).
+export function resolverFilas(fila) {
+  const f = String(fila || 'ambas').toLowerCase();
+  if (f === 'solo') return ['solo'];
+  if (f === 'flex') return ['flex'];
+  return ['solo', 'flex'];
+}
 const DIA = 86400000;
 
 // Períodos. `modo`: 'janela' (recorte por tempo, com tendência vs. período anterior),
@@ -47,8 +62,8 @@ const ROLE_META  = { TOP: 'TOP', JUNGLE: 'JUNGLE', MIDDLE: 'MID', BOTTOM: 'ADC',
 // Fonte de partidas (CTE `sel`) compartilhada por todas as agregações. `modo`:
 //   'janela' -> recorte [desde, ate)     'jogos' -> ranqueia p/ pegar as N últimas
 //   'tudo'   -> sem recorte (todo o histórico do alvo)
-function cteSel({ modo, desde, ate, puuids }) {
-  const cond = [`p.queue_id IN (${QUEUES_RANKED.join(',')})`, 'p.game_creation > 0'];
+function cteSel({ modo, desde, ate, puuids, queues = QUEUES_RANKED }) {
+  const cond = [`p.queue_id IN (${queues.join(',')})`, 'p.game_creation > 0'];
   const params = [];
   if (modo === 'janela') { cond.push('p.game_creation >= ? AND p.game_creation < ?'); params.push(desde, ate); }
   if (puuids && puuids.length) { cond.push(`e.puuid IN (${puuids.map(() => '?').join(',')})`); params.push(...puuids); }
@@ -100,7 +115,7 @@ function qChamps(cte, { n = null } = {}) {
     FROM sel s${w} GROUP BY s.puuid, s.champion_name, s.team_position`, params };
 }
 
-export function sqlMarcos10(desde, ate, puuids) {
+export function sqlMarcos10(desde, ate, puuids, queues = QUEUES_RANKED) {
   const inC = puuids && puuids.length
     ? { frag: ` AND m.puuid IN (${puuids.map(() => '?').join(',')})`, params: [...puuids] }
     : { frag: '', params: [] };
@@ -110,7 +125,7 @@ export function sqlMarcos10(desde, ate, puuids) {
       FROM estatisticas_jogador_marcos m
       JOIN partidas p ON p.match_id = m.match_id
       WHERE m.minuto = 10 AND p.game_creation >= ? AND p.game_creation < ? AND p.game_creation > 0
-        AND p.queue_id IN (${QUEUES_RANKED.join(',')})${inC.frag}
+        AND p.queue_id IN (${queues.join(',')})${inC.frag}
       GROUP BY m.puuid`,
     params: [desde, ate, ...inC.params]
   };
@@ -312,15 +327,40 @@ function fraseAbertura(rng, a, periodoJanela) {
   if (a.jogos >= 20) return pick(rng, [
     `Foram **${a.jogos} partidas** ranqueadas nos ${periodoJanela} — presença de sobra.`,
     `**${a.jogos} jogos** no período: você não deu descanso pra fila.`,
-    `Com **${a.jogos} partidas**, você foi um dos pilares de atividade da tribo.`
+    `Com **${a.jogos} partidas**, você foi um dos pilares de atividade da tribo.`,
+    `**${a.jogos} partidas** no retrovisor — maratonista de ranqueada, hein?`,
+    `Grind de respeito: **${a.jogos} jogos** nos ${periodoJanela}.`,
+    `A fila viu você **${a.jogos} vezes** no período — dedicação de sobra.`
   ]);
   if (a.jogos >= 5) return pick(rng, [
     `Foram **${a.jogos} partidas** ranqueadas nos ${periodoJanela}.`,
-    `**${a.jogos} jogos** no período — um ritmo saudável.`
+    `**${a.jogos} jogos** no período — um ritmo saudável.`,
+    `Você somou **${a.jogos} partidas** nos ${periodoJanela}, presença constante.`,
+    `**${a.jogos} jogos** na conta: nem de menos, nem exagero.`
   ]);
   return pick(rng, [
     `Poucas partidas dessa vez (**${a.jogos}**), então leve os números com um grão de sal.`,
-    `Só **${a.jogos} jogo(s)** — amostra pequena, mas dá pra sentir a direção.`
+    `Só **${a.jogos} jogo(s)** — amostra pequena, mas dá pra sentir a direção.`,
+    `Aparição relâmpago: **${a.jogos} jogo(s)** no período.`,
+    `Com apenas **${a.jogos} partida(s)**, é mais um retrato do que um filme.`
+  ]);
+}
+
+// Tempero por fila: Solo/Duo e Flex têm naturezas diferentes — reforça a
+// personalização (o mesmo jogador ouve algo distinto em cada relatório).
+function fraseFilaFlavor(rng, a, filaInfo) {
+  if (!filaInfo) return '';
+  if (filaInfo.chave === 'flex') return ' ' + pick(rng, [
+    'No Flex o que decide é o entrosamento — jogar afinado com a tribo pesa mais que o elo individual.',
+    'Flex é território de premade: composição e comunicação ditam o ritmo do jogo.',
+    'No Flex dá pra ousar em comps coordenadas que a Solo jamais perdoaria.',
+    'Aqui é jogo de equipe de verdade — o Flex premia quem soma com o time.'
+  ]);
+  return ' ' + pick(rng, [
+    'Na Solo/Duo é você contra o mundo — cada erro é seu, cada carry também.',
+    'Solo/Duo não perdoa: aqui o elo mede o quanto você segura o time sozinho.',
+    'Na fila solo o mérito é individual — subir aqui é o teste mais puro de skill.',
+    'Solo/Duo é a prova de fogo: sem premade pra cobrir, o que sobra é você.'
   ]);
 }
 
@@ -328,19 +368,23 @@ function frasesFortes(rng, a) {
   const out = [];
   if (a.classe.kp === 'forte') out.push(pick(rng, [
     `sua **participação em abates (${Math.round(a.met.kp * 100)}%)** é de quem aparece nas brigas`,
-    `você vive as jogadas do time — **${Math.round(a.met.kp * 100)}% de KP**`
+    `você vive as jogadas do time — **${Math.round(a.met.kp * 100)}% de KP**`,
+    `**${Math.round(a.met.kp * 100)}% de KP**: onde a luta acontece, você está lá`
   ]));
   if (a.classe.csMin === 'forte') out.push(pick(rng, [
     `o **farm está afiado (${a.met.csMin} CS/min)**, acima do padrão da rota`,
-    `você não perde onda: **${a.met.csMin} CS/min**`
+    `você não perde onda: **${a.met.csMin} CS/min**`,
+    `**${a.met.csMin} CS/min** — a última hitbox é sempre sua`
   ]));
   if (a.classe.visMin === 'forte') out.push(pick(rng, [
     `a **visão de mapa (${a.met.visMin}/min)** está exemplar`,
-    `você ilumina o mapa como poucos (**${a.met.visMin} de visão/min**)`
+    `você ilumina o mapa como poucos (**${a.met.visMin} de visão/min**)`,
+    `**${a.met.visMin} de visão/min**: o mapa não tem segredo pro seu time`
   ]));
   if (a.classe.kda === 'forte') out.push(pick(rng, [
     `o **KDA ${a.met.kda}** mostra que você troca bem e morre pouco`,
-    `**KDA ${a.met.kda}** — consistência de quem sobrevive pra carregar`
+    `**KDA ${a.met.kda}** — consistência de quem sobrevive pra carregar`,
+    `**KDA ${a.met.kda}**: você escolhe as brigas e sai vivo delas`
   ]));
   return out;
 }
@@ -349,19 +393,23 @@ function frasesFracas(rng, a) {
   const out = [];
   if (a.classe.csMin === 'fraco') out.push(pick(rng, [
     `o **farm (${a.met.csMin} CS/min)** está abaixo do que a rota pede — é ouro que vira item, e item que vira vitória`,
-    `dá pra apertar o **CS/min (hoje ${a.met.csMin})**: cada onda perdida é um item a menos no meio do jogo`
+    `dá pra apertar o **CS/min (hoje ${a.met.csMin})**: cada onda perdida é um item a menos no meio do jogo`,
+    `**${a.met.csMin} CS/min** deixa ouro na mesa — 10 minions a mais por jogo já é outra história`
   ]));
   if (a.classe.kda === 'fraco') out.push(pick(rng, [
     `o **KDA ${a.met.kda}** conta que você está morrendo demais — segurar essas mortes já empurraria a WR pra cima`,
-    `**KDA ${a.met.kda}**: menos mortes arriscadas e o resultado muda sozinho`
+    `**KDA ${a.met.kda}**: menos mortes arriscadas e o resultado muda sozinho`,
+    `**KDA ${a.met.kda}** — cada morte evitada é um objetivo a mais pro time; respeite o mapa`
   ]));
   if (a.classe.visMin === 'fraco') out.push(pick(rng, [
     `a **visão (${a.met.visMin}/min)** está baixa — mais sentinelas = menos emboscadas e mais objetivos`,
-    `invista em **visão (hoje ${a.met.visMin}/min)**: enxergar o mapa evita mortes bobas`
+    `invista em **visão (hoje ${a.met.visMin}/min)**: enxergar o mapa evita mortes bobas`,
+    `**${a.met.visMin} de visão/min** é pouco — a wardzinha barata salva mais jogo que parece`
   ]));
   if (a.classe.kp === 'fraco') out.push(pick(rng, [
     `sua **participação (${Math.round(a.met.kp * 100)}%)** está tímida — aparecer mais nas jogadas do time rende`,
-    `**KP ${Math.round(a.met.kp * 100)}%**: rotacionar junto do time aumenta seu impacto`
+    `**KP ${Math.round(a.met.kp * 100)}%**: rotacionar junto do time aumenta seu impacto`,
+    `**KP ${Math.round(a.met.kp * 100)}%** — o time briga e você está longe; chegar junto muda o placar`
   ]));
   return out;
 }
@@ -371,11 +419,13 @@ function fraseEvolucao(rng, a) {
   const partes = [];
   if (t.wr && Math.abs(t.wr.delta) >= 3) {
     partes.push(t.wr.delta > 0
-      ? pick(rng, [`sua **WR subiu de ${t.wr.antes}% para ${t.wr.agora}%**`, `a vitória **cresceu (${t.wr.antes}% → ${t.wr.agora}%)**`])
-      : pick(rng, [`a **WR caiu de ${t.wr.antes}% para ${t.wr.agora}%**`, `a vitória **recuou (${t.wr.antes}% → ${t.wr.agora}%)**`]));
+      ? pick(rng, [`sua **WR subiu de ${t.wr.antes}% para ${t.wr.agora}%**`, `a vitória **cresceu (${t.wr.antes}% → ${t.wr.agora}%)**`, `você **destravou a WR (${t.wr.antes}% → ${t.wr.agora}%)**`])
+      : pick(rng, [`a **WR caiu de ${t.wr.antes}% para ${t.wr.agora}%**`, `a vitória **recuou (${t.wr.antes}% → ${t.wr.agora}%)**`, `a **WR esfriou (${t.wr.antes}% → ${t.wr.agora}%)**`]));
   }
   if (t.kda && Math.abs(t.kda.delta) >= 0.3) {
-    partes.push(t.kda.delta > 0 ? `o **KDA melhorou (${t.kda.antes} → ${t.kda.agora})**` : `o **KDA piorou (${t.kda.antes} → ${t.kda.agora})**`);
+    partes.push(t.kda.delta > 0
+      ? pick(rng, [`o **KDA melhorou (${t.kda.antes} → ${t.kda.agora})**`, `você está morrendo menos — **KDA ${t.kda.antes} → ${t.kda.agora}**`])
+      : pick(rng, [`o **KDA piorou (${t.kda.antes} → ${t.kda.agora})**`, `o **KDA recuou (${t.kda.antes} → ${t.kda.agora})**`]));
   }
   if (t.ouro10 && Math.abs(t.ouro10.delta) >= 150) {
     partes.push(t.ouro10.delta > 0
@@ -383,7 +433,7 @@ function fraseEvolucao(rng, a) {
       : `e o **ouro aos 10min** caiu (${t.ouro10.delta}), o começo de jogo travou`);
   }
   if (!partes.length) return null;
-  const abre = pick(rng, ['Comparando com o período anterior, ', 'Na evolução, ', 'Olhando a tendência, ']);
+  const abre = pick(rng, ['Comparando com o período anterior, ', 'Na evolução, ', 'Olhando a tendência, ', 'De lá pra cá, ', 'Na comparação com antes, ']);
   return abre + partes.join('; ') + '.';
 }
 
@@ -393,46 +443,78 @@ function fraseRecomendacao(rng, a) {
   if (bom && bom.n >= 3) {
     partes.push(pick(rng, [
       `no **${bom.nome} você segura ${bom.wr}%** em ${bom.n} jogos — é sua zona de conforto`,
-      `seu melhor pick é **${bom.nome} (${bom.wr}% em ${bom.n})**`
+      `seu melhor pick é **${bom.nome} (${bom.wr}% em ${bom.n})**`,
+      `quando bate o desespero, **${bom.nome}** (${bom.wr}% em ${bom.n}) é o pick que raramente falha`
     ]));
   }
   if (a.offRole) {
     partes.push(pick(rng, [
       `de **${ROLE_LABEL[a.offRole.rota] || a.offRole.rota} a coisa cai pra ${a.offRole.wr}%** (${a.offRole.n} jogos) — se a meta é subir, concentre as filas na sua rota principal`,
-      `evite forçar **${ROLE_LABEL[a.offRole.rota] || a.offRole.rota}** (só ${a.offRole.wr}% em ${a.offRole.n}); seu rendimento é melhor no ${a.rotaLabel}`
+      `evite forçar **${ROLE_LABEL[a.offRole.rota] || a.offRole.rota}** (só ${a.offRole.wr}% em ${a.offRole.n}); seu rendimento é melhor no ${a.rotaLabel}`,
+      `o **${ROLE_LABEL[a.offRole.rota] || a.offRole.rota}** te puxa pra baixo (${a.offRole.wr}% em ${a.offRole.n}) — deixa essa rota pro modo normal`
     ]));
   }
   if (a.sugestaoMeta) {
     partes.push(pick(rng, [
       `no patch atual, **${a.sugestaoMeta.nome} (tier ${a.sugestaoMeta.tier})** está forte no ${a.rotaLabel} e combina com seu perfil — vale testar`,
-      `de olho no meta: **${a.sugestaoMeta.nome}** (${a.sugestaoMeta.tier}) é uma boa aposta no ${a.rotaLabel} agora`
+      `de olho no meta: **${a.sugestaoMeta.nome}** (${a.sugestaoMeta.tier}) é uma boa aposta no ${a.rotaLabel} agora`,
+      `se quiser um pick novo, **${a.sugestaoMeta.nome}** (${a.sugestaoMeta.tier}) está brilhando no ${a.rotaLabel} neste patch`
     ]));
   }
   if (!partes.length) return null;
   return partes.join('. ').replace(/\.\./g, '.') + '.';
 }
 
-export function gerarProsa(a, periodoJanela) {
-  const rng = seedRng(a.puuid + '|' + new Date().toISOString().slice(0, 10) + '|' + periodoJanela);
+// Assinatura motivacional de fechamento (varia por semente; dá personalidade).
+function fraseFechamento(rng, a) {
+  if (a.wr >= 55) return pick(rng, [
+    'Segue nesse embalo que o próximo elo é questão de tempo. 🔥',
+    'Tá voando — mantém a cabeça fria e continua subindo. 🚀',
+    'Fase quente dessas é pra aproveitar: bora de PDL. 📈'
+  ]);
+  if (a.wr >= 48) return pick(rng, [
+    'Equilíbrio é base — um ajuste fino e a balança vira pro seu lado. ⚖️',
+    'Você está no fio: pequenos detalhes decidem a próxima subida. 🎯',
+    'Constância aqui, e o próximo degrau vem naturalmente. 🧗'
+  ]);
+  return pick(rng, [
+    'Período difícil acontece — foco no que dá pra controlar e a maré volta. 💪',
+    'Cabeça erguida: todo mundo tem sequência ruim, o importante é ajustar. 🛠️',
+    'Respira, revisa um ponto de cada vez e volta com tudo na próxima. 🌊'
+  ]);
+}
+
+export function gerarProsa(a, periodoJanela, filaInfo = null) {
+  const filaChave = filaInfo?.chave || 'geral';
+  const rng = seedRng(a.puuid + '|' + new Date().toISOString().slice(0, 10) + '|' + periodoJanela + '|' + filaChave);
   const paras = [];
 
-  // 1) Abertura.
-  paras.push(fraseAbertura(rng, a, periodoJanela) + ` WR de **${a.wr}%** no **${a.rotaLabel}**, com **${a.mainChamp || '—'}** como principal.`);
+  // 1) Abertura: atividade + WR/rota/main + tempero da fila.
+  const linhaWr = pick(rng, [
+    `WR de **${a.wr}%** no **${a.rotaLabel}**, com **${a.mainChamp || '—'}** como principal.`,
+    `Fechou **${a.wr}% de vitórias** puxando o **${a.rotaLabel}** (**${a.mainChamp || '—'}** na linha de frente).`,
+    `**${a.wr}%** de aproveitamento, a maior parte no **${a.rotaLabel}** com **${a.mainChamp || '—'}**.`
+  ]);
+  paras.push(fraseAbertura(rng, a, periodoJanela) + ' ' + linhaWr + fraseFilaFlavor(rng, a, filaInfo));
 
   // 2) Fortes.
   const fortes = frasesFortes(rng, a);
   if (fortes.length) {
-    const abre = pick(rng, ['Do lado bom: ', 'Seus trunfos: ', 'O que está funcionando: ']);
+    const abre = pick(rng, ['Do lado bom: ', 'Seus trunfos: ', 'O que está funcionando: ', 'No que você brilha: ']);
     paras.push('✅ ' + abre + fortes.slice(0, 2).join(', e ') + '.');
   }
 
   // 3) A melhorar.
   const fracas = frasesFracas(rng, a);
   if (fracas.length) {
-    const abre = pick(rng, ['Onde dá pra crescer: ', 'Pontos de atenção: ', 'Pra evoluir: ']);
+    const abre = pick(rng, ['Onde dá pra crescer: ', 'Pontos de atenção: ', 'Pra evoluir: ', 'A lição de casa: ']);
     paras.push('⚠️ ' + abre + fracas.slice(0, 2).join(', e ') + '.');
   } else {
-    paras.push('✅ Sem pontos fracos gritantes nas métricas da rota — bom equilíbrio.');
+    paras.push('✅ ' + pick(rng, [
+      'Sem pontos fracos gritantes nas métricas da rota — bom equilíbrio.',
+      'Nenhuma métrica destoando pra baixo: base sólida e consistente.',
+      'Fundamentos redondos — nada gritando por conserto por aqui.'
+    ]));
   }
 
   // 4) Evolução.
@@ -442,6 +524,9 @@ export function gerarProsa(a, periodoJanela) {
   // 5) Recomendação.
   const rec = fraseRecomendacao(rng, a);
   if (rec) paras.push('🎯 ' + rec);
+
+  // 6) Fechamento motivacional.
+  paras.push('— ' + fraseFechamento(rng, a));
 
   return paras.join('\n\n');
 }
@@ -467,13 +552,15 @@ const fmtLanes = (arr) => arr.length
   ? arr.map(l => `${l.label}: **${l.wr}%** (${l.n})${l.melhorChamp ? ` · melhor: ${l.melhorChamp.nome} ${l.melhorChamp.wr}%` : ''}`).join('\n')
   : '—';
 
-export function montarMensagens(analises, periodoKey, userMap) {
+export function montarMensagens(analises, periodoKey, userMap, filaInfo = null) {
   const P = PERIODOS[periodoKey] || PERIODOS.dia;
+  const fLabel = filaInfo ? filaInfo.label : 'Solo/Flex';
+  const fEmoji = filaInfo ? filaInfo.emoji : '📊';
   const embeds = analises.map(a => {
     const m = mencao(a, userMap);
     return {
       title: `${a.nome}`,
-      description: (m ? m + '\n\n' : '') + gerarProsa(a, P.janela),
+      description: (m ? m + '\n\n' : '') + gerarProsa(a, P.janela, filaInfo),
       color: corPorWr(a.wr),
       fields: [
         { name: 'Jogos', value: `${a.jogos}`, inline: true },
@@ -489,11 +576,13 @@ export function montarMensagens(analises, periodoKey, userMap) {
     };
   });
 
-  // Cabeçalho como 1º embed da 1ª mensagem.
+  // Cabeçalho como 1º embed da 1ª mensagem (um por fila). Tira o emoji do título
+  // do período (ex.: "📊 Relatório Diário") pra não duplicar com o emoji da fila.
+  const tituloLimpo = String(P.titulo).replace(/^[^\p{L}]+/u, '').trim();
   const header = {
-    title: `${P.titulo} da Tribo`,
-    description: `Período: **${P.janela}** • Ranked Solo/Flex • ${analises.length} jogador(es) ativo(s)`,
-    color: 0x8b5cf6,
+    title: `${fEmoji} ${tituloLimpo} — Ranked ${fLabel}`,
+    description: `Período: **${P.janela}** • ${analises.length} jogador(es) ativo(s) no ${fLabel}`,
+    color: filaInfo ? filaInfo.cor : 0x8b5cf6,
     footer: { text: `Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}` },
     timestamp: new Date().toISOString()
   };
@@ -557,24 +646,14 @@ export async function postarDiscord(webhookUrl, mensagens) {
 }
 
 // ---------------------------------------------------------------------------
-// ORQUESTRADOR — busca os dados (via queryRows injetada), analisa e monta as msgs.
-//   opts: { queryRows, periodo, puuids?, metaCsv?, agora? }
-//   retorna { mensagens, ativos, periodo, patchMeta }
+// Coleta + análise para UMA fila (queue_id). Devolve as análises já ordenadas.
 // ---------------------------------------------------------------------------
-export async function gerarRelatorio({ queryRows, periodo = 'dia', puuids = null, somentePremium = null, metaCsv = null, userMap = null, agora = Date.now() }) {
-  const P = PERIODOS[periodo] || PERIODOS.dia;
-
-  // Regra: sem seleção explícita de puuids ("para todos") o relatório cobre SÓ premium
-  // (has_premium = 1) — igual ao sync/backfill. Alvo explícito ignora o filtro.
-  const soPrem = somentePremium == null ? !puuids : somentePremium;
-
-  const meta = metaCsv ? parseMetaTiers(metaCsv).table : null;
-
+async function coletarAnalises({ queryRows, P, puuids, soPrem, meta, agora, queues }) {
   const ate = agora;
   const desde = P.modo === 'janela' ? agora - P.ms : null;
   const nLimite = P.modo === 'jogos' ? P.n : null;
 
-  const cte = cteSel({ modo: P.modo, desde, ate, puuids });
+  const cte = cteSel({ modo: P.modo, desde, ate, puuids, queues });
   const qA = qAgg(cte, { n: nLimite, somentePremium: soPrem });
   const qR = qRotas(cte, { n: nLimite });
   const qC = qChamps(cte, { n: nLimite });
@@ -589,10 +668,10 @@ export async function gerarRelatorio({ queryRows, periodo = 'dia', puuids = null
   const temJanela = P.modo === 'janela';
   if (temJanela) {
     const antesDesde = desde - P.ms;
-    const ctePrev = cteSel({ modo: 'janela', desde: antesDesde, ate: desde, puuids });
+    const ctePrev = cteSel({ modo: 'janela', desde: antesDesde, ate: desde, puuids, queues });
     const qAP = qAgg(ctePrev, { somentePremium: soPrem });
-    const qM = sqlMarcos10(desde, ate, puuids);
-    const qMP = sqlMarcos10(antesDesde, desde, puuids);
+    const qM = sqlMarcos10(desde, ate, puuids, queues);
+    const qMP = sqlMarcos10(antesDesde, desde, puuids, queues);
     promessas.push(
       queryRows(qAP.sql, qAP.params).catch(() => []),
       queryRows(qM.sql, qM.params).catch(() => []),
@@ -609,20 +688,47 @@ export async function gerarRelatorio({ queryRows, periodo = 'dia', puuids = null
   const prevBy = Object.fromEntries(aggsPrev.map(m => [m.puuid, m]));
   const prevMarcosBy = Object.fromEntries(marcosPrev.map(m => [m.puuid, m]));
 
-  const analises = aggs
+  return aggs
     .filter(a => Number(a.jogos) > 0)
     .map(a => analisarJogador(a, rotasBy[a.puuid] || [], champsBy[a.puuid] || [], marcosBy[a.puuid], prevBy[a.puuid], prevMarcosBy[a.puuid], meta))
     .sort((x, y) => y.jogos - x.jogos);
+}
 
-  if (!analises.length) {
-    return {
-      ativos: 0, periodo,
-      mensagens: [{
+// ---------------------------------------------------------------------------
+// ORQUESTRADOR — gera DOIS relatórios (Solo/Duo e Flex) por padrão, cada um
+// com seu próprio cabeçalho, cor e prosa. `fila`: 'solo' | 'flex' | 'ambas'.
+//   opts: { queryRows, periodo, fila?, puuids?, metaCsv?, agora? }
+//   retorna { mensagens, ativos, periodo, fila }
+// ---------------------------------------------------------------------------
+export async function gerarRelatorio({ queryRows, periodo = 'dia', fila = 'ambas', puuids = null, somentePremium = null, metaCsv = null, userMap = null, agora = Date.now() }) {
+  const P = PERIODOS[periodo] || PERIODOS.dia;
+
+  // Regra: sem seleção explícita de puuids ("para todos") o relatório cobre SÓ premium
+  // (has_premium = 1) — igual ao sync/backfill. Alvo explícito ignora o filtro.
+  const soPrem = somentePremium == null ? !puuids : somentePremium;
+
+  const meta = metaCsv ? parseMetaTiers(metaCsv).table : null;
+  const chaves = resolverFilas(fila);
+
+  const mensagens = [];
+  const ativosSet = new Set();   // puuids ativos em qualquer fila (contagem distinta)
+
+  for (const chave of chaves) {
+    const filaInfo = FILAS[chave];
+    const analises = await coletarAnalises({ queryRows, P, puuids, soPrem, meta, agora, queues: [filaInfo.id] });
+    analises.forEach(a => ativosSet.add(a.puuid));
+
+    if (!analises.length) {
+      // Cada fila sempre aparece no relatório, nem que seja pra dizer que ninguém jogou.
+      const tituloLimpo = String(P.titulo).replace(/^[^\p{L}]+/u, '').trim();
+      mensagens.push({
         username: 'Cronista da Tribo',
-        content: `${P.titulo}: ninguém da tribo jogou ranqueada nas ${P.janela}. 😴`
-      }]
-    };
+        content: `${filaInfo.emoji} **${tituloLimpo} — Ranked ${filaInfo.label}**: ninguém da tribo jogou ${filaInfo.label} nas ${P.janela}. 😴`
+      });
+      continue;
+    }
+    mensagens.push(...montarMensagens(analises, periodo, userMap, filaInfo));
   }
 
-  return { ativos: analises.length, periodo, mensagens: montarMensagens(analises, periodo, userMap) };
+  return { ativos: ativosSet.size, periodo, fila, mensagens };
 }

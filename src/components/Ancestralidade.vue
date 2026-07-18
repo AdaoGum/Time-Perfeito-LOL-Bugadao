@@ -13,8 +13,9 @@
           class="w-full rounded-lg border border-slate-700 bg-slate-950 text-center text-sm text-white focus:border-amber-500 focus:outline-none"
           placeholder="Digite a senha secreta..."
         />
-        <button type="submit" class="w-full rounded-lg bg-amber-700 py-2 text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition">
-          Desbloquear Banco
+        <button type="submit" :disabled="loginLoading" class="w-full rounded-lg bg-amber-700 py-2 text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition disabled:opacity-50 disabled:cursor-not-allowed">
+          <span v-if="loginLoading"><i class="fa-solid fa-spinner fa-spin mr-1"></i> Consultando os espíritos…</span>
+          <span v-else>Desbloquear Banco</span>
         </button>
         <p v-if="loginError" class="text-xs font-bold text-red-400 mt-1 animate-pulse">{{ loginError }}</p>
       </form>
@@ -47,7 +48,12 @@
       <section class="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl relative z-40">
         <h2 class="text-xl font-black text-cyan-300 uppercase">Ancestralidade de Dados (D1 Studio)</h2>
         <p class="text-xs text-slate-400">Varredura profunda cruzando registros globais de invocadores e estatísticas táticas.</p>
-        
+
+        <p v-if="dataTruncated" class="mt-2 rounded-lg border border-amber-800/50 bg-amber-950/40 px-3 py-2 text-[11px] font-semibold text-amber-300">
+          <i class="fa-solid fa-triangle-exclamation mr-1"></i>
+          Exibindo apenas as partidas mais recentes (o histórico total excedeu o teto de segurança do servidor).
+        </p>
+
         <!-- PAINEL DE FILTROS AVANÇADOS COM DROP DOWNS SUSPENSOS -->
         <div class="mt-4 grid gap-4 rounded-xl border border-slate-800 bg-slate-950/50 p-4 sm:grid-cols-3">
           
@@ -461,9 +467,11 @@ function runeName(id) {
 const isAuthenticated = ref(false);
 const passwordInput = ref('');
 const loginError = ref(null);
+const loginLoading = ref(false);
 const loadingData = ref(false);
 const dataError = ref(null);
 const databaseRows = ref([]);
+const dataTruncated = ref(false);   // true quando o worker cortou o histórico no teto
 
 // --- Abas (Histórico de partidas | Jogadores) ---
 const activeTab = ref('historico');
@@ -528,7 +536,7 @@ async function fetchPlayers() {
   loadingPlayers.value = true;
   playersError.value = null;
   try {
-    const res = await workerRequest('admin_players_list', {});
+    const res = await workerRequest('admin_players_list', { password: sessionPassword.value });
     if (Array.isArray(res?.players)) {
       players.value = res.players;
       playersLoaded.value = true;
@@ -592,25 +600,38 @@ const queueModesOptions = [
   { value: 'Outros', label: 'Outros Modos' }
 ];
 
-function checkSecretPassword() {
-  if (passwordInput.value === 'ugabuga') {
+// A senha agora é validada NO SERVIDOR (o worker exige o secret ADMIN_PASSWORD e
+// não tem mais fallback embutido). O login = uma tentativa real de ler o histórico:
+// sucesso libera o dashboard e guarda a senha p/ as demais rotas admin; 403/503
+// mostram o erro que o worker devolveu.
+async function checkSecretPassword() {
+  const pwd = passwordInput.value.trim();
+  if (!pwd) { loginError.value = 'Digite a senha da tribo.'; return; }
+  loginLoading.value = true;
+  loginError.value = null;
+  try {
+    const response = await workerRequest('admin_all_history', { password: pwd });
+    if (response?.history) databaseRows.value = response.history;
+    dataTruncated.value = response?.truncated === true;
+    sessionPassword.value = pwd;          // reusada p/ listar jogadores e escrever premium
     isAuthenticated.value = true;
-    loginError.value = null;
-    sessionPassword.value = passwordInput.value;   // reusada p/ autorizar escrita de premium
-    fetchFullHistoryFromD1();
-  } else {
-    loginError.value = 'Chave incorreta. Os espíritos do D1 negaram seu acesso.';
+  } catch (err) {
+    isAuthenticated.value = false;
+    loginError.value = err.message || 'Chave incorreta. Os espíritos do D1 negaram seu acesso.';
+  } finally {
+    loginLoading.value = false;
   }
 }
 
+// Recarrega o histórico já autenticado (reusa a senha da sessão).
 async function fetchFullHistoryFromD1() {
+  if (!sessionPassword.value) return;
   loadingData.value = true;
   dataError.value = null;
   try {
-    const response = await workerRequest('admin_all_history', {});
-    if (response?.history) {
-      databaseRows.value = response.history;
-    }
+    const response = await workerRequest('admin_all_history', { password: sessionPassword.value });
+    if (response?.history) databaseRows.value = response.history;
+    dataTruncated.value = response?.truncated === true;
   } catch (err) {
     console.error('Falha ao raspar D1:', err.message);
     dataError.value = err.message || 'Falha ao consultar o banco.';

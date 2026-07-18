@@ -7,9 +7,10 @@
 # porque workers_dev = true mantém o subdomínio .workers.dev.
 #
 # SECRETS (NÃO ficam aqui — são secrets do worker e persistem entre deploys):
-#   RIOT_API_KEY    -> já configurada no dashboard
-#   ADMIN_PASSWORD  -> já configurada no dashboard (fallback "ugabuga" no código)
-# Para (re)definir por CLI:  wrangler secret put RIOT_API_KEY
+#   RIOT_API_KEY    -> obrigatório (proxy da Riot)
+#   ADMIN_PASSWORD  -> obrigatório p/ o painel Ancestralidade. SEM fallback no código:
+#                      se não estiver setado, as rotas admin_* respondem 503 (fail closed).
+# Para (re)definir por CLI:  wrangler secret put RIOT_API_KEY   (ou ADMIN_PASSWORD)
 # ============================================================================
 
 name = "lol-riotgames-api-bridge"
