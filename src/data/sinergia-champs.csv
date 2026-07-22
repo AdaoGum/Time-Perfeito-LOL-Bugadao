@@ -51,6 +51,7 @@ Irelia,AD,3,1,3,4,1,1,1,3,TOP;MID,2,3,followup_engage
 Ivern,AP,3,2,2,1,3,5,4,2,JUNGLE,2,3,enchanter
 Janna,AP,1,2,0,1,5,4,5,1,SUP,3,3,enchanter;peel_forte
 Jarvan IV,AD,4,2,4,3,1,2,2,3,JUNGLE,4,3,fornece_knockup;setup_area
+Jax,AD,3,1,3,3,2,1,2,2,TOP;JUNGLE,2,4,splitpush
 Jayce,AD,2,5,1,4,2,1,1,3,MID;TOP,1,3,
 Jhin,AD,3,4,0,4,2,3,2,3,ADC,2,3,
 Jinx,AD,2,3,0,4,1,1,1,4,ADC,1,5,hypercarry;dano_area
@@ -73,6 +74,7 @@ Lee Sin,AD,3,2,3,4,2,2,2,2,JUNGLE,3,1,fornece_knockup;pick_cc
 Leona,AP,5,0,5,1,3,2,3,1,SUP,5,3,pick_cc;engage_global
 Lillia,AP,3,3,2,4,2,1,1,4,JUNGLE;TOP,3,3,
 Lissandra,AP,4,2,2,4,3,2,3,3,MID,4,3,
+Locke,AP,2,2,0,5,2,1,0,2,MID,1,3,burst_assassino
 Lucian,AD,1,3,0,4,2,1,0,3,ADC;MID,1,2,
 Lulu,AP,1,2,0,1,5,5,5,1,SUP,1,3,enchanter;peel_forte;buffa_ataque
 Lux,AP,3,4,0,4,2,2,2,4,MID;SUP,3,3,
@@ -163,6 +165,7 @@ Yone,AD,4,2,2,4,2,1,1,3,MID;TOP,2,3,aproveita_knockup
 Yorick,AD,1,2,4,3,1,1,1,3,TOP,1,3,splitpush
 Yunara,AD,1,2,0,3,2,1,1,3,ADC,1,4,hypercarry;aproveita_buff_ataque
 Yuumi,AP,1,3,0,1,2,5,3,1,SUP,1,3,enchanter
+Zaahen,AD,4,1,4,3,2,1,2,2,TOP;JUNGLE,3,3,fornece_knockup;followup_engage
 Zac,AP,4,1,5,2,2,2,3,3,JUNGLE;TOP;SUP,4,3,fornece_knockup;engage_global
 Zed,AD,1,3,0,5,2,0,0,3,MID,1,2,burst_assassino
 Zeri,AD,1,3,0,4,3,1,0,3,ADC,1,4,hypercarry;aproveita_buff_ataque

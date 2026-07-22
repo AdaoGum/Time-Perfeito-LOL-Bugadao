@@ -23,97 +23,36 @@ import {
   SQL_MARCOS, extrairMarcos, MARCOS_MINUTOS
 } from '../shared/match-extract.js';
 
-const RIOT_API_KEY = process.env.RIOT_API_KEY;
-const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
-const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
-const D1_DATABASE_ID = process.env.D1_DATABASE_ID;
+import { queryD1 } from './lib/d1.js';
+import { fetchFromRiotHost, respeitarRateLimit } from './lib/riot.js';
 
 const REGION_ROUTE = 'americas';
 const LIMITE_PARTIDAS = 1000; // backfill mira o histórico fundo: até as 1000 últimas por jogador
 const PAGINA_IDS = 100;
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // 🎯 VETOR DE ALVOS — quem o backfill vai preencher.
-//   • Vetor VAZIO  -> processa TODOS os jogadores da tabela `jogadores`.
-//   • Com puuids   -> processa SÓ esses.
-// A env PUUIDS (separada por vírgula) tem prioridade sobre o vetor abaixo.
+//   • Vetor VAZIO (default) -> processa SÓ jogadores premium (paridade com cron/sync.js).
+//   • Com puuids            -> processa SÓ esses (escape hatch manual, ignora premium).
+// A env PUUIDS (separada por vírgula) tem prioridade sobre o vetor abaixo. Para um
+// backfill pontual, preencha o vetor OU passe PUUIDS="puuid1,puuid2" na linha de comando.
 const PUUIDS_ALVO = (
   process.env.PUUIDS
     ? process.env.PUUIDS.split(',').map((s) => s.trim()).filter(Boolean)
     : [
-        '9t-kjlDiabw7Br6dj5pq4H7ulYloLp5DBVJAAydDdIjBxBp3oNXXG2Y-igp9j7XEGjGBTFuQPcxTfQ',
-        'DitIIHgFfSgTu92vQZDadmBDDl6qr84NHnAuMiyk6EHv6GtGvRGH-K1_xg3PUNlAwdSJcCVudTQSrg',
-        'p-yebFHaXORPI_xcZ2NJW6C2_oPP7wWH3BxIPl2OHfFPfnKHTk23acLjmWZ65ShHGNWBM0knAFbx6g',
-        'kaEzM3m6zjWx3pijWPvRv7dJnKY0aDiSE_1O81kdc71IaZhHATt0E-Ws_66Q9NbV7j0y06QZWslznQ',
-        'K_PROi5ZKvNuZd_F5meGTE-ZZ-IObaSLwHQrkRoogcmgpJEAHyCPtz1NzTPDwlUgMEXWULrmfJdDmw',
-        'uTts_m9BnLW01TJYtrAXGZkMJ9oLK_g6VpDRRHvJqF26_R12mJeLjxulZZ29erBGawlEkXHQr3RfpA',
-        'ppYb7FWcqkSxkrZljEngkhBBGh43uR--W0P2wmJmMXWSXv7jqPwAhJiEoAE8eRlOBCRORV-Q6I53lw',
-        'ki7xmHfVKsYazm0hxbeNWM_WCl5R6KFgtoDn5vlT4_P1CK7Nr_OGocK3Z_jClSS5CTU5BwQr_oZCAQ',
-        '3AJZQYxwnPwPv0fVWdaMX5RyOBs9edx_w1H9rRXoJySl4Z41eGAqRDfxguJSh0tAl2eMftuRm3FS-g',
-        'FdJla6Emd2kxg6f_SMItj3APgBw0Ym3dIO_aTrwWE6Kb3NSVKmd7-nSEY_QpbfCuRU3vs4cSgweaYQ',
-        'QG4BNY82vllniOvGQW6-Mk9SI6Zg-SyGUa062NUjRkaeZVsn-_fmXSE9WDI-R7AtS219UsR0jnBARA',
-        'krvaMYD-6dN5nliuh1qnz77lMePOb_vYK-ZYSKBiUNmMYuYviHL89HPSDLH-Xie5xccno1LM_Pnv9Q',
-        'l1SYhhZA0_LY70pLEakcAzYK8Itj98H_dsEjIplp9NF-y-rRV_xvflxsD5A8KepPVTGh0M6wxVYiDw',
-        'ztMmU5x_lp4dTw2oY5HO3FwlxrPN1WQvshQbzSV1NSIlEgOJvK-0MK8LDAlbs-X_NJFr9kUQqvLpvw',
-        'IkN1Su--BHnJN28-2PnD-bPWGby3BFDVHLzNpskPlJqdXgPrj0cmhD58pN897DdLf05x54wz7NtCIw',
+        // cole aqui puuids para um backfill filtrado, ex.:
+        // '9t-kjlDiabw7Br6dj5pq4H7ulYloLp5DBVJAAydDdIjBxBp3oNXXG2Y-igp9j7XEGjGBTFuQPcxTfQ',
       ]
 );
 
 // ----------------------------------------------------------------------------
-// Infra: D1 (REST) + Riot (com resfriamento de chave e retry em 5xx)
+// Infra: D1 e Riot vêm da lib compartilhada (cron/lib). O fetch do backfill
+// resfria a chave antes de cada request e devolve null em 404 (partida/timeline
+// que sumiu do lado da Riot) em vez de derrubar a rodada.
 // ----------------------------------------------------------------------------
-async function queryD1(sql, params = []) {
-  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/query`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${CF_API_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sql, params })
-  });
-  const data = await response.json();
-  if (!response.ok || !data.success) throw new Error(`Erro no D1: ${JSON.stringify(data.errors)}`);
-  return data.result[0];
-}
-
-let totalRequestsFeitas = 0;
-
-// Contador GLOBAL compartilhado (mesma tabela api_usage lida pelo worker/front).
-// Best-effort e SEM await: nunca deve atrasar nem derrubar o backfill.
-function registrarUsoGlobal(source) {
-  queryD1('INSERT INTO api_usage (ts, count, source, action) VALUES (?, ?, ?, ?)', [Date.now(), 1, source, 'riot_fetch'])
-    .catch(() => {});
-}
-
-async function respeitarRateLimit() {
-  if (totalRequestsFeitas >= 90) {
-    console.log('⏳ [ESFRIANDO CHAVE] Quase no limite de 100 reqs. Pausando 2 min...');
-    await sleep(125000);
-    totalRequestsFeitas = 0;
-  }
-}
-
-async function fetchFromRiot(endpoint, tentativa = 0) {
+const fetchFromRiot = async (endpoint) => {
   await respeitarRateLimit();
-  const response = await fetch(`https://${REGION_ROUTE}.api.riotgames.com${endpoint}`, {
-    headers: { 'X-Riot-Token': RIOT_API_KEY }
-  });
-  totalRequestsFeitas++;
-  registrarUsoGlobal('backfill');
-  if (response.status === 429) {
-    console.warn('⚠️ [RIOT LIMIT] Chave esquentou. Pausando 2 min...');
-    await sleep(125000);
-    totalRequestsFeitas = 0;
-    return fetchFromRiot(endpoint, tentativa);
-  }
-  if (response.status >= 500 && tentativa < 3) {
-    const espera = 2000 * (tentativa + 1);
-    console.warn(`⚠️ [RIOT ${response.status}] transitório. Tentativa ${tentativa + 1}/3 em ${espera / 1000}s...`);
-    await sleep(espera);
-    return fetchFromRiot(endpoint, tentativa + 1);
-  }
-  if (response.status === 404) return null; // partida/timeline sumiu do lado da Riot
-  if (!response.ok) throw new Error(`Riot ${response.status} em ${endpoint}`);
-  return response.json();
-}
+  return fetchFromRiotHost(REGION_ROUTE, endpoint, { source: 'backfill', retornarNullEm404: true });
+};
 
 // Lista todos os match_ids buscáveis de um puuid (todas as filas), paginando.
 async function listarIdsRiot(puuid) {
@@ -215,7 +154,7 @@ async function preencherPartida(matchId, puuidsNecessarios, contadores) {
 // Orquestração
 // ----------------------------------------------------------------------------
 (async () => {
-  if (!RIOT_API_KEY || !CF_ACCOUNT_ID || !CF_API_TOKEN || !D1_DATABASE_ID) {
+  if (!process.env.RIOT_API_KEY || !process.env.CLOUDFLARE_ACCOUNT_ID || !process.env.CLOUDFLARE_API_TOKEN || !process.env.D1_DATABASE_ID) {
     console.error('❌ Faltam variáveis de ambiente (RIOT_API_KEY / CLOUDFLARE_* / D1_DATABASE_ID).');
     process.exit(1);
   }

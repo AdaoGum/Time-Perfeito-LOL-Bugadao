@@ -4,7 +4,8 @@
 // Lê as partidas já salvas no D1 (o cron/sync.js popula antes), monta o relatório
 // pelo motor compartilhado (cron/lib/relatorio-engine.js) e posta num webhook.
 //
-// PERIODO = dia | semana | mes  (default: dia)
+// PERIODO = dia | semana | mes | 50 | geral  (default: dia)
+// FILA    = solo | flex | ambas  (default: ambas)
 //
 // Local:  PERIODO=semana node --env-file=local/.env cron/relatorio-discord.js
 // Actions: envs vêm dos secrets (ver .github/workflows/relatorio-discord.yaml)
@@ -14,39 +15,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gerarRelatorio, postarDiscord } from './lib/relatorio-engine.js';
+import { queryD1Rows } from './lib/d1.js';
 
-const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
-const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
-const D1_DATABASE_ID = process.env.D1_DATABASE_ID;
 const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK;
 const PERIODO = (process.env.PERIODO || 'dia').toLowerCase();
 // FILA = solo | flex | ambas (default). 'ambas' gera DOIS relatórios separados.
 const FILA = (process.env.FILA || 'ambas').toLowerCase();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// D1 via REST (mesmo padrão do cron/sync.js), com retry em erro transitório.
-async function queryD1(sql, params = [], tentativa = 0) {
-  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/query`;
-  let response, data;
-  try {
-    response = await fetch(url, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${CF_API_TOKEN}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sql, params })
-    });
-    data = await response.json();
-  } catch (netErr) {
-    if (tentativa < 3) { await sleep(1500 * (tentativa + 1)); return queryD1(sql, params, tentativa + 1); }
-    throw netErr;
-  }
-  if (!response.ok || !data.success) {
-    if (response.status >= 500 && tentativa < 3) { await sleep(1500 * (tentativa + 1)); return queryD1(sql, params, tentativa + 1); }
-    throw new Error(`Erro no D1: ${JSON.stringify(data.errors)}`);
-  }
-  return data.result[0].results || [];
-}
+// D1 (REST) via lib compartilhada. queryD1Rows já devolve o array de linhas —
+// que é o formato esperado pelo motor do relatório e por resolverAlvo abaixo.
+const queryD1 = queryD1Rows;
 
 // Lê o meta-tiers.csv do projeto (pra recomendação cruzada com o patch).
 function lerMetaCsv() {
@@ -117,7 +97,7 @@ async function resolverAlvo() {
 }
 
 (async () => {
-  if (!CF_ACCOUNT_ID || !CF_API_TOKEN || !D1_DATABASE_ID) {
+  if (!process.env.CLOUDFLARE_ACCOUNT_ID || !process.env.CLOUDFLARE_API_TOKEN || !process.env.D1_DATABASE_ID) {
     console.error('❌ Faltam CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN / D1_DATABASE_ID.');
     process.exit(1);
   }

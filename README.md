@@ -146,7 +146,7 @@ secrets do Worker (`RIOT_API_KEY`, `ADMIN_PASSWORD`) persistem entre deploys.
 | `masteries` | Maestrias (também persistidas no D1) |
 | `player_suggest` | Autocomplete: até 5 jogadores do D1 que casam com `q` (0 chamadas à Riot) |
 | `rate_status` | Status do orçamento global de rate limit (só lê o D1) |
-| `admin_all_history` | Dashboard "Ancestralidade" (agregação do D1). **Exige `password`**; limitado às 20 000 partidas mais recentes (`truncated`) |
+| `admin_all_history` | Dashboard "Ancestralidade" (agregação do D1). **Exige `password`**; página de até 20 000 partidas (as mais recentes). Cursor opcional `before` (`game_creation`) traz as **mais antigas** (`nextCursor`) → botão "carregar mais" no front |
 | `admin_players_list` / `admin_set_premium` | Aba "Jogadores": lista e marca premium. **Exigem `password`** |
 
 > 🔒 As rotas `admin_*` validam a senha **no servidor** contra o secret
@@ -190,9 +190,11 @@ node --env-file=local/.env cron/backfill.js
 ```
 
 - Núcleo do time (`PUUIDS_PRIORITARIOS` em `cron/sync.js`) roda primeiro.
+- Sem `PUUIDS` explícito, tanto o `sync.js` quanto o `backfill.js` processam **só premium**.
 - Para rodar filtrado por jogadores específicos: `PUUIDS="puuid1,puuid2" node ... cron/sync.js`.
 - O coletor tem controle de rate limit próprio (pausa ~2 min perto de 100 req/2min;
-  trata 429 e 5xx com backoff).
+  trata 429 e 5xx com backoff). A infra de D1/Riot dos jobs é **compartilhada** em
+  `cron/lib/d1.js` e `cron/lib/riot.js` (importada por `sync.js`, `backfill.js` e `relatorio-discord.js`).
 
 ---
 
@@ -213,7 +215,7 @@ explícita de `PUUIDS` (run manual) é escape hatch e ignora o filtro premium.
 - Job: [`cron/relatorio-discord.js`](cron/relatorio-discord.js).
 - Agendamento: [`.github/workflows/relatorio-discord.yaml`](.github/workflows/relatorio-discord.yaml)
   — diário (18:30 BRT), semanal (segunda) e mensal (dia 1). Só Ranked (Solo + Flex).
-  O sync roda 05:00 e 17:00 BRT.
+  O sync roda 04:00 e 17:30 BRT.
 - **Janela de análise (`PERIODO`):** `dia` = últimos 7 dias · `semana`/`mes` = últimos 30 dias
   · `50` = últimas 50 partidas por jogador · `geral` = todo o histórico. (`50`/`geral` não
   têm tendência, por não serem recorte de tempo.)
@@ -302,7 +304,7 @@ public/ dist/        Assets estáticos e build
 |---|---|---|
 | [`deploy.yml`](.github/workflows/deploy.yml) | push na `main` / manual | Build do Vue e publish no **GitHub Pages**. |
 | [`deploy-worker.yaml`](.github/workflows/deploy-worker.yaml) | mudança em `worker.js`/`wrangler.toml` / manual | Publica o **Worker** na Cloudflare (Wrangler). |
-| [`riot-sync.yaml`](.github/workflows/riot-sync.yaml) | 05:00 e 17:00 BRT / manual | Roda o **coletor** (`cron/sync.js`) e sobe os logs como artefato. |
+| [`riot-sync.yaml`](.github/workflows/riot-sync.yaml) | 04:00 e 17:30 BRT / manual | Roda o **coletor** (`cron/sync.js`) e sobe os logs como artefato. |
 | [`relatorio-discord.yaml`](.github/workflows/relatorio-discord.yaml) | 18:30 BRT diário, seg. e dia 1 / manual | Posta o **relatório da Tribo** no Discord. |
 
 > Secrets usados: `RIOT_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`,

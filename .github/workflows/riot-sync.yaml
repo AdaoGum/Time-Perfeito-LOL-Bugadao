@@ -2,8 +2,8 @@ name: Riot API Daily Sync Trator
 
 on:
   schedule:
-    - cron: '0 8 * * *'   # 08:00 UTC = 05:00 BRT (coleta da manhã)
-    - cron: '0 20 * * *'  # 20:00 UTC = 17:00 BRT (antes do relatório das 18:30)
+    - cron: '0 7 * * *'    # 07:00 UTC = 04:00 BRT (coleta da madrugada)
+    - cron: '30 20 * * *'  # 20:30 UTC = 17:30 BRT (antes do relatório das 18:30)
   workflow_dispatch:
 
 jobs:

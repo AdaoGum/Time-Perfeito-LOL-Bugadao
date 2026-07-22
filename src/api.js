@@ -148,7 +148,7 @@ export function normalizeProfileData(data, gameName, tagLine) {
   };
 }
 
-export function applyProfileToStore(normalizedData, rawData = {}) {
+export function applyProfileToStore(normalizedData) {
   state.searchProfile.puuid = normalizedData.puuid || null;
   state.searchProfile.gameName = normalizedData.gameName;
   state.searchProfile.tagLine = normalizedData.tagLine;
@@ -156,14 +156,6 @@ export function applyProfileToStore(normalizedData, rawData = {}) {
   state.searchProfile.summonerLevel = normalizedData.summonerLevel;
   state.searchProfile.statsSolo = normalizedData.statsSolo;
   state.searchProfile.statsFlex = normalizedData.statsFlex;
-  state.searchProfile.stats = {
-    wins: Number(rawData?.stats?.wins || 0),
-    losses: Number(rawData?.stats?.losses || 0),
-    winRate: Number(rawData?.stats?.winRate || 0),
-    tier: rawData?.stats?.tier || 'UNRANKED',
-    rank: rawData?.stats?.rank || '',
-    lp: Number(rawData?.stats?.lp || 0)
-  };
   state.searchProfile.matches = normalizedData.matches;
   state.searchProfile.proficiencyMatches = normalizedData.proficiencyMatches;
   state.searchProfile.companions = normalizedData.companions;
@@ -238,7 +230,7 @@ export async function loadProfileIntoStore(gameName, tagLine, { loadMasteries = 
   try {
     const data = await workerRequest('profile_overview', { gameName, tagLine });
     const normalized = normalizeProfileData(data, gameName, tagLine);
-    applyProfileToStore(normalized, data);
+    applyProfileToStore(normalized);
     if (loadMasteries && normalized.puuid) {
       loadMasteriesInBackground(normalized.puuid, gameName, tagLine, data?.hadNewGames === true);
     }

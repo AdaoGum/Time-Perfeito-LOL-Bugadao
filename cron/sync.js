@@ -22,15 +22,12 @@ import {
   SQL_MARCOS, extrairMarcos, MARCOS_MINUTOS
 } from '../shared/match-extract.js';
 
-const RIOT_API_KEY = process.env.RIOT_API_KEY;
-const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
-const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
-const D1_DATABASE_ID = process.env.D1_DATABASE_ID;
+import { queryD1 } from './lib/d1.js';
+import { fetchFromRiotHost, respeitarRateLimit } from './lib/riot.js';
 
 const REGION_ROUTE = 'americas';
 const LIMITE_PARTIDAS = 200; // 🔒 Rodada noturna: olha as 200 últimas e baixa só as inéditas
 const PAGINA_IDS = 100;      // A Riot devolve no máx. 100 ids por chamada -> paginamos
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // 🌟 NÚCLEO DO TIME — sempre processados PRIMEIRO, nesta ordem.
 const PUUIDS_PRIORITARIOS = [
@@ -55,97 +52,9 @@ const PUUIDS_ALVO = (
       ]
 );
 
-// Códigos internos transitórios do D1 (o Cloudflare "soluça" e pede retry):
-//   7500 = internal error | 7502 = network/overloaded. Retentamos com backoff em vez
-//   de perder a gravação da partida (paridade com o retry de 5xx do fetchFromRiot).
-const D1_CODIGOS_TRANSITORIOS = new Set([7500, 7502]);
-
-function erroD1EhTransitorio(status, data) {
-  if (status >= 500) return true;
-  const erros = (data && data.errors) || [];
-  return erros.some(e => D1_CODIGOS_TRANSITORIOS.has(e && e.code));
-}
-
-async function queryD1(sql, params = [], tentativa = 0) {
-  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/query`;
-  let response, data;
-  try {
-    response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${CF_API_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ sql, params })
-    });
-    data = await response.json();
-  } catch (netErr) {
-    // Falha de rede (conexão caiu, DNS, etc.) — também é transitória.
-    if (tentativa < 4) {
-      const espera = 1500 * (tentativa + 1);
-      console.warn(`⚠️ [D1 REDE] ${netErr.message}. Tentativa ${tentativa + 1}/4 em ${espera / 1000}s...`);
-      await sleep(espera);
-      return queryD1(sql, params, tentativa + 1);
-    }
-    throw netErr;
-  }
-
-  if (!response.ok || !data.success) {
-    if (erroD1EhTransitorio(response.status, data) && tentativa < 4) {
-      const espera = 1500 * (tentativa + 1);
-      console.warn(`⚠️ [D1 ${response.status}] Erro transitório ${JSON.stringify(data.errors)}. Tentativa ${tentativa + 1}/4 em ${espera / 1000}s...`);
-      await sleep(espera);
-      return queryD1(sql, params, tentativa + 1);
-    }
-    throw new Error(`Erro no D1: ${JSON.stringify(data.errors)}`);
-  }
-  return data.result[0];
-}
-
-let totalRequestsFeitas = 0;
-
-// Contador GLOBAL compartilhado (mesma tabela api_usage lida pelo worker/front).
-// Best-effort e SEM await: nunca deve atrasar nem derrubar a coleta.
-function registrarUsoGlobal(source) {
-  queryD1('INSERT INTO api_usage (ts, count, source, action) VALUES (?, ?, ?, ?)', [Date.now(), 1, source, 'riot_fetch'])
-    .catch(() => {});
-}
-
-// Resfriamento de chave: pausa preventiva antes de estourar o limite de 100/2min.
-async function respeitarRateLimit(logger) {
-  if (totalRequestsFeitas >= 90) {
-    logger('⏳ [ESFRIANDO CHAVE] Quase no limite de 100 reqs. Pausando 2 min...');
-    await sleep(125000);
-    totalRequestsFeitas = 0;
-  }
-}
-
-// Fetch genérico à Riot com host explícito (regional "americas" OU de plataforma
-// tipo "br1"): rate limit, retry de 429 e backoff de 5xx compartilhados.
-async function fetchFromRiotHost(host, endpoint, tentativa = 0) {
-  const url = `https://${host}.api.riotgames.com${endpoint}`;
-  const response = await fetch(url, { headers: { 'X-Riot-Token': RIOT_API_KEY } });
-  totalRequestsFeitas++;
-  registrarUsoGlobal('cron');
-  if (response.status === 429) {
-    console.warn('⚠️ [RIOT LIMIT] Chave esquentou demais! Pausando 2 min para esfriar...');
-    await sleep(125000);
-    totalRequestsFeitas = 0;
-    return fetchFromRiotHost(host, endpoint, tentativa);
-  }
-  // Erros transitórios (500, 502, 503, 504): a Riot às vezes soluça. Tenta de novo
-  // com backoff em vez de derrubar a rodada — até 3 tentativas.
-  if (response.status >= 500 && tentativa < 3) {
-    const espera = 2000 * (tentativa + 1);
-    console.warn(`⚠️ [RIOT ${response.status}] Erro transitório. Tentativa ${tentativa + 1}/3 em ${espera / 1000}s...`);
-    await sleep(espera);
-    return fetchFromRiotHost(host, endpoint, tentativa + 1);
-  }
-  if (!response.ok) throw new Error(`Erro na Riot API: ${response.status}`);
-  return response.json();
-}
-
-const fetchFromRiot = (endpoint) => fetchFromRiotHost(REGION_ROUTE, endpoint);
+// Fetch regional "americas". O resfriamento de chave (respeitarRateLimit) é chamado
+// explicitamente antes de cada request, como nas versões anteriores.
+const fetchFromRiot = (endpoint) => fetchFromRiotHost(REGION_ROUTE, endpoint, { source: 'cron' });
 
 // ----------------------------------------------------------------------------
 // MAESTRIAS — 1 chamada por jogador (champion-mastery-v4, endpoint de PLATAFORMA,
@@ -158,7 +67,7 @@ const MAESTRIA_LOTE = 12;
 async function sincronizarMaestrias(jogador, logger) {
   const host = (jogador.platform_host || 'br1').toLowerCase();
   await respeitarRateLimit(logger);
-  const rawMasteries = await fetchFromRiotHost(host, `/lol/champion-mastery/v4/champion-masteries/by-puuid/${jogador.puuid}`);
+  const rawMasteries = await fetchFromRiotHost(host, `/lol/champion-mastery/v4/champion-masteries/by-puuid/${jogador.puuid}`, { source: 'cron' });
   if (!Array.isArray(rawMasteries) || !rawMasteries.length) {
     logger('   🏅 [MAESTRIAS] Nenhuma maestria retornada.');
     return 0;
@@ -224,7 +133,7 @@ async function processarJogador(jogador, fs) {
     logger(`   ⚠️ [MAESTRIAS] Falhou (${mErr.message}) — seguindo para as partidas.`);
   }
 
-  // 1) Últimas 500 partidas (a Riot limita a 100 ids por chamada, então paginamos).
+  // 1) Últimas LIMITE_PARTIDAS partidas (a Riot limita a 100 ids por chamada, então paginamos).
   logger(`🔍 [Riot API] Buscando as últimas ${LIMITE_PARTIDAS} partidas (paginando de ${PAGINA_IDS} em ${PAGINA_IDS})...`);
   const allMatchIds = [];
   for (let start = 0; start < LIMITE_PARTIDAS; start += PAGINA_IDS) {

@@ -19,7 +19,6 @@ export const state = reactive({
     tagLine: '',
     profileIconId: 29,
     summonerLevel: 0,
-    stats: { wins: 0, losses: 0, winRate: 0, tier: 'UNRANKED', rank: '', lp: 0 },
     statsSolo: { wins: 0, losses: 0, winRate: 0, tier: 'UNRANKED', rank: '', lp: 0 },
     statsFlex: { wins: 0, losses: 0, winRate: 0, tier: 'UNRANKED', rank: '', lp: 0 },
     matches: [],

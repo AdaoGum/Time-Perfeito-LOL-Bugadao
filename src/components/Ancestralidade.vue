@@ -51,7 +51,7 @@
 
         <p v-if="dataTruncated" class="mt-2 rounded-lg border border-amber-800/50 bg-amber-950/40 px-3 py-2 text-[11px] font-semibold text-amber-300">
           <i class="fa-solid fa-triangle-exclamation mr-1"></i>
-          Exibindo apenas as partidas mais recentes (o histórico total excedeu o teto de segurança do servidor).
+          Há partidas mais antigas no banco além das carregadas. Use <strong>"Carregar partidas mais antigas"</strong> no rodapé para trazer o próximo lote.
         </p>
 
         <!-- PAINEL DE FILTROS AVANÇADOS COM DROP DOWNS SUSPENSOS -->
@@ -343,6 +343,19 @@
             Próxima »
           </button>
         </div>
+
+        <!-- CARREGAR MAIS ANTIGAS: puxa o próximo lote do servidor (cursor), além do teto de uma página -->
+        <div v-if="dataTruncated" class="col-span-full flex justify-center pb-6">
+          <button
+            type="button"
+            :disabled="loadingMore"
+            @click="loadOlderHistory"
+            class="rounded-lg border border-amber-700/60 bg-amber-950/40 px-5 py-2.5 text-xs font-black uppercase tracking-wider text-amber-300 transition hover:bg-amber-900/40 disabled:opacity-50 disabled:cursor-wait cursor-pointer"
+          >
+            <span v-if="loadingMore"><i class="fa-solid fa-spinner fa-spin mr-1"></i> Carregando mais antigas…</span>
+            <span v-else><i class="fa-solid fa-clock-rotate-left mr-1"></i> Carregar partidas mais antigas</span>
+          </button>
+        </div>
       </div>
       </AsyncState>
       </template>
@@ -471,7 +484,9 @@ const loginLoading = ref(false);
 const loadingData = ref(false);
 const dataError = ref(null);
 const databaseRows = ref([]);
-const dataTruncated = ref(false);   // true quando o worker cortou o histórico no teto
+const dataTruncated = ref(false);   // true quando ainda há partidas mais antigas no D1 além das carregadas
+const nextCursor = ref(null);       // game_creation da partida mais antiga já carregada (cursor p/ "carregar mais")
+const loadingMore = ref(false);     // true enquanto o botão "carregar mais antigas" trabalha
 
 // --- Abas (Histórico de partidas | Jogadores) ---
 const activeTab = ref('historico');
@@ -613,6 +628,7 @@ async function checkSecretPassword() {
     const response = await workerRequest('admin_all_history', { password: pwd });
     if (response?.history) databaseRows.value = response.history;
     dataTruncated.value = response?.truncated === true;
+    nextCursor.value = response?.nextCursor ?? null;
     sessionPassword.value = pwd;          // reusada p/ listar jogadores e escrever premium
     isAuthenticated.value = true;
   } catch (err) {
@@ -623,7 +639,8 @@ async function checkSecretPassword() {
   }
 }
 
-// Recarrega o histórico já autenticado (reusa a senha da sessão).
+// Recarrega o histórico já autenticado (reusa a senha da sessão). Volta à 1ª página
+// (as mais recentes) e reseta o cursor.
 async function fetchFullHistoryFromD1() {
   if (!sessionPassword.value) return;
   loadingData.value = true;
@@ -632,11 +649,42 @@ async function fetchFullHistoryFromD1() {
     const response = await workerRequest('admin_all_history', { password: sessionPassword.value });
     if (response?.history) databaseRows.value = response.history;
     dataTruncated.value = response?.truncated === true;
+    nextCursor.value = response?.nextCursor ?? null;
   } catch (err) {
     console.error('Falha ao raspar D1:', err.message);
     dataError.value = err.message || 'Falha ao consultar o banco.';
   } finally {
     loadingData.value = false;
+  }
+}
+
+// Anexa a próxima página de partidas MAIS ANTIGAS (cursor `before`), sem recarregar
+// o que já está na tela. Os filtros e a paginação client-side seguem valendo sobre o
+// conjunto acumulado. Dedup por (match_id + jogador) evita duplicar linhas na fronteira
+// do cursor. O servidor devolve cada página já em ordem decrescente por game_creation,
+// e cada lote é estritamente mais antigo que o anterior — então a ordem global se mantém.
+async function loadOlderHistory() {
+  if (!sessionPassword.value || nextCursor.value == null || loadingMore.value) return;
+  loadingMore.value = true;
+  dataError.value = null;
+  try {
+    const response = await workerRequest('admin_all_history', {
+      password: sessionPassword.value,
+      before: nextCursor.value,
+      limit: 5000
+    });
+    const novas = Array.isArray(response?.history) ? response.history : [];
+    const chave = (r) => `${r.match_id}__${r.game_name}#${r.tag_line}`;
+    const vistos = new Set(databaseRows.value.map(chave));
+    const unicas = novas.filter(r => !vistos.has(chave(r)));
+    databaseRows.value = [...databaseRows.value, ...unicas];
+    dataTruncated.value = response?.truncated === true;
+    nextCursor.value = response?.nextCursor ?? null;
+  } catch (err) {
+    console.error('Falha ao carregar partidas antigas:', err.message);
+    dataError.value = err.message || 'Falha ao consultar o banco.';
+  } finally {
+    loadingMore.value = false;
   }
 }
 

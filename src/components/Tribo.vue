@@ -4,19 +4,9 @@
       <div class="flex items-center justify-between gap-3">
         <div>
           <h2 class="text-xl font-black tracking-wide text-cyan-300">Tribo PERFEITO</h2>
-          <p class="text-xs text-slate-400">Escolha o modo da fila e monte seu time sem perder o estilo raiz.</p>
+          <p class="text-xs text-slate-400">Monte de 1 a 5 jogadores ou campeões e ache a melhor sinergia — sem perder o estilo raiz.</p>
         </div>
         <div class="flex items-center gap-2">
-          <button
-            v-if="viewMode === 'ranked'"
-            type="button"
-            @click="toggleQueueType"
-            class="flex items-center gap-1.5 rounded-lg border border-cyan-700/60 bg-slate-950 px-3 py-1.5 text-xs font-bold text-cyan-300 transition hover:border-cyan-500 hover:text-white"
-            :title="`Trocar para ${isSoloDuo ? 'Flex' : 'Solo/Duo'}`"
-          >
-            <i class="fa-solid fa-right-left"></i>
-            <span>{{ isSoloDuo ? 'Solo/Duo' : 'Flex' }}</span>
-          </button>
           <button
             v-if="viewMode !== 'selection'"
             type="button"
@@ -48,7 +38,7 @@
         <div class="flex flex-col gap-1 border-b border-slate-800/60 pb-2">
           <div class="flex items-center gap-2 text-[11px] font-bold tracking-wider text-slate-400">
             <div class="w-3 h-3 bg-cyan-500 rotate-45 border border-slate-950"></div>
-            <span>SR • RANQUEADA {{ rankedQueueLabel }} • LOBBY</span>
+            <span>SR • TRIBO PERFEITO • LOBBY</span>
           </div>
           <p class="text-[10px] text-slate-500">
             Meta: patch <span class="font-bold text-slate-300">{{ META_DATA.patch }}</span> • atualizado em {{ META_DATA.updatedAt }}
@@ -56,17 +46,30 @@
           <p v-if="metaStale" class="text-[10px] font-bold text-amber-400">
             <i class="fa-solid fa-triangle-exclamation"></i> Meta possivelmente desatualizado — gere um CSV novo (ver README)
           </p>
-          <p v-if="isSoloDuo" class="text-[10px] font-bold" :class="soloDuoLocked ? 'text-amber-300' : 'text-slate-500'">
-            <i v-if="soloDuoLocked" class="fa-solid fa-lock"></i>
-            {{ soloDuoLocked ? 'Lobby Solo/Duo travado em 2 jogadores' : 'Solo/Duo: preencha 2 cards para travar o lobby' }}
-          </p>
         </div>
 
-        <button
-          type="button"
-          @click="findPerfectTribe"
-          class="rounded-md bg-gradient-to-b from-cyan-600 to-cyan-800 border border-cyan-400/50 px-5 py-2 text-xs font-black uppercase tracking-widest text-white shadow-[0_0_20px_rgba(6,182,212,0.2)] hover:brightness-110"
-        >Encontrar Tribo Perfeito</button>
+        <div class="flex flex-wrap items-center gap-3">
+          <!-- Seletor de quantidade: quantos slots (jogadores/campeões) o motor avalia -->
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Jogadores:</span>
+            <div class="flex gap-1 rounded-lg border border-slate-800 bg-slate-950 p-1">
+              <button
+                v-for="n in playerCountOptions"
+                :key="`pc-${n}`"
+                type="button"
+                @click="setPlayerCount(n)"
+                class="w-7 rounded px-2 py-1 text-[11px] font-black transition"
+                :class="playerCount === n ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
+              >{{ n }}</button>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            @click="findPerfectTribe"
+            class="rounded-md bg-gradient-to-b from-cyan-600 to-cyan-800 border border-cyan-400/50 px-5 py-2 text-xs font-black uppercase tracking-widest text-white shadow-[0_0_20px_rgba(6,182,212,0.2)] hover:brightness-110"
+          >Encontrar Tribo Perfeito</button>
+        </div>
       </div>
 
       <div v-if="synergyResult" class="rounded-xl border border-emerald-700/50 bg-emerald-950/20 p-3 text-xs">
@@ -124,40 +127,28 @@
         </div>
       </div>
 
-      <!-- Lanes fixas (Top → Jungle → Mid → ADC → Supp). Arraste um card para outro para trocar de rota. -->
+      <!-- Slots (1 a N): rota editável por card; cada um pode ser um jogador (busca) OU um campeão direto. -->
       <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <article
-          v-for="(slot, slotIndex) in rankedSlots"
+          v-for="(slot, slotIndex) in activeRankedSlots"
           :key="slot.id"
           class="relative flex min-h-[360px] flex-col rounded-2xl bg-slate-900/70 backdrop-blur-md border border-slate-800 p-3 transition"
-          :class="[
-            isSlotFrozen(slot) ? 'opacity-50 grayscale' : '',
-            draggedRankedId && slot.gameName ? 'ring-1 ring-cyan-500/40' : ''
-          ]"
-          :draggable="Boolean(slot.gameName) && !isSlotFrozen(slot)"
-          @dragstart="onRankedDragStart(slot.id)"
-          @dragend="onRankedDragEnd"
-          @dragover.prevent
-          @drop.prevent="onRankedDrop(slot.id)"
         >
-          <!-- Freeze visual do lobby Solo/Duo: bloqueia interação nos cards travados -->
-          <div
-            v-if="isSlotFrozen(slot)"
-            class="absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-slate-950/50"
-          >
-            <span class="rounded border border-slate-700 bg-slate-900/80 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
-              <i class="fa-solid fa-lock"></i> Lobby travado
-            </span>
-          </div>
-
-          <!-- Cabeçalho da lane: ícone + rótulo fixos da posição -->
+          <!-- Cabeçalho da lane: rota EDITÁVEL (seletor) + ações -->
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="flex h-7 w-7 items-center justify-center rounded-full border border-cyan-700/60 bg-slate-950 shadow-[0_0_12px_rgba(8,145,178,0.25)]">
-                <img class="h-4 w-4 object-contain" :src="roles[slotIndex].icon" :alt="roles[slotIndex].label" />
+                <img class="h-4 w-4 object-contain" :src="slotRoleIcon(slot.role)" :alt="slotRoleLabel(slot.role)" />
               </span>
               <div class="leading-tight">
-                <p class="text-[10px] font-black uppercase tracking-widest text-cyan-200">{{ roles[slotIndex].label }}</p>
+                <select
+                  v-model="slot.role"
+                  @change="onSlotRoleChange(slot)"
+                  class="rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-[10px] font-black uppercase tracking-widest text-cyan-200 focus:border-cyan-500 focus:outline-none"
+                  title="Trocar a rota deste slot"
+                >
+                  <option v-for="r in roles" :key="`role-${slot.id}-${r.value}`" :value="r.value">{{ r.label }}</option>
+                </select>
                 <p class="text-[9px] font-bold uppercase tracking-wider text-slate-500">Slot {{ slotIndex + 1 }}</p>
               </div>
             </div>
@@ -170,7 +161,7 @@
                 title="Buscar amigos frequentes"
               >Amigos</button>
               <button
-                v-if="slot.gameName"
+                v-if="slot.gameName || slot.championLocked"
                 type="button"
                 @click="resetRankedSlot(slot.id)"
                 class="rounded border border-slate-700 px-1.5 py-0.5 text-[10px] font-bold text-slate-400 hover:text-white"
@@ -179,12 +170,46 @@
           </div>
 
           <div class="mt-3 flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-center">
-            <template v-if="!slot.gameName">
+            <!-- ESTADO 1: slot preenchido SÓ com campeão (pick rápido, sem jogador) -->
+            <template v-if="slot.type === 'champion' && slot.championLocked">
+              <img
+                class="h-16 w-16 rounded-full border-2 border-amber-600/70 object-cover"
+                :src="championImage(slot.championLocked)"
+                @error="onChampionImageError"
+                :alt="slot.championLocked"
+              />
+              <p class="text-sm font-black text-amber-200">{{ slot.championLocked }}</p>
+              <p class="rounded border border-amber-800/50 bg-amber-950/30 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                pick de campeão • {{ slotRoleLabel(slot.role) }}
+                <span v-if="metaTierOf(slot.championLocked, slot.role)" class="ml-1 text-cyan-300">{{ metaTierOf(slot.championLocked, slot.role) }}</span>
+              </p>
+              <p class="text-[10px] text-slate-500">Sem jogador — entra no time pelo meta + perfil tático do campeão.</p>
               <button
                 type="button"
-                @click="slot.showSearch = !slot.showSearch"
-                class="flex h-16 w-16 items-center justify-center rounded-full border border-amber-700 bg-slate-900 text-3xl font-black text-amber-400 hover:bg-slate-800"
-              >+</button>
+                @click="openChampionModal(slot.id)"
+                class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-bold text-slate-200 hover:border-amber-500"
+              >Trocar campeão</button>
+            </template>
+
+            <!-- ESTADO 2: vazio → escolher entre BUSCAR JOGADOR ou PICK DE CAMPEÃO -->
+            <template v-else-if="!slot.gameName">
+              <div class="flex items-center gap-3">
+                <button
+                  type="button"
+                  @click="slot.showSearch = !slot.showSearch"
+                  class="flex h-14 w-14 items-center justify-center rounded-full border border-amber-700 bg-slate-900 text-xl text-amber-400 hover:bg-slate-800"
+                  title="Buscar jogador"
+                ><i class="fa-solid fa-user-plus"></i></button>
+                <button
+                  type="button"
+                  @click="openChampionModal(slot.id)"
+                  class="flex h-14 w-14 items-center justify-center rounded-full border border-cyan-700 bg-slate-900 text-xl text-cyan-300 hover:bg-slate-800"
+                  title="Escolher campeão direto"
+                ><i class="fa-solid fa-khanda"></i></button>
+              </div>
+              <div class="flex gap-4 text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                <span>Jogador</span><span>Campeão</span>
+              </div>
 
               <div v-if="slot.showSearch" class="w-full">
                 <SearchBar
@@ -275,9 +300,9 @@
                 </div>
               </div>
 
-              <!-- Sugestões de Sinergia: estritamente filtradas para a lane fixa deste card ({{ roles[slotIndex].label }}) -->
+              <!-- Sugestões de Sinergia: filtradas para a rota (editável) deste card ({{ slotRoleLabel(slot.role) }}) -->
               <div class="w-full rounded-lg border border-slate-800 bg-slate-900/50 p-2">
-                <p class="text-[10px] font-black uppercase tracking-wider text-emerald-300">Top 5 por Sinergia • {{ roles[slotIndex].label }}</p>
+                <p class="text-[10px] font-black uppercase tracking-wider text-emerald-300">Top 5 por Sinergia • {{ slotRoleLabel(slot.role) }}</p>
                 <p class="mt-1 text-[10px] text-slate-500">Clique para travar campeão rapidamente.</p>
                 <div class="mt-2 space-y-1" v-if="slot.synergyTop5.length">
                   <button
@@ -540,21 +565,23 @@ import { calcularProficiencia, rotasPrincipais } from '../utils/proficiencia.js'
 const store = state;
 const router = useRouter();
 const viewMode = ref('selection');
-const queueType = ref('solo_duo');
+// Tribo Perfeito unificada (Solo/Duo + Flex juntos): o usuário escolhe quantos
+// slots quer avaliar (1 a 5); cada slot pode ser um jogador (busca) OU um campeão
+// direto, com a rota editável por slot.
+const playerCount = ref(5);
 const rerollSeed = ref(0);
 const draggedSlotId = ref(null);
-const draggedRankedId = ref(null);
 const synergyResult = ref(null);
 
 const lobbyModeOptions = [
-  { id: 'solo_duo', titulo: 'Ranked Solo/Duo', subtitulo: 'Abra o lobby ranqueado para até 2 jogadores.' },
-  { id: 'flex', titulo: 'Ranked Flex', subtitulo: 'Abra o lobby ranqueado para composição completa.' },
+  { id: 'ranked', titulo: 'Tribo Perfeito (Ranqueada)', subtitulo: 'Monte de 1 a 5 jogadores/campeões e ache a melhor sinergia.' },
   { id: 'custom_5x5', titulo: 'Customizada 5x5', subtitulo: 'Monte dois times, reservas e faça sorteio balanceado.' }
 ];
 
-const rankedQueueLabel = computed(() => (queueType.value === 'solo_duo' ? 'SOLO/DUO' : 'FLEX'));
-const isSoloDuo = computed(() => queueType.value === 'solo_duo');
 const metaStale = computed(() => metaIsStale());
+
+// Opções do seletor de quantidade (1 a 5 jogadores/campeões).
+const playerCountOptions = [1, 2, 3, 4, 5];
 
 const roles = [
   { value: 'TOP', label: 'Top', icon: roleIcon('top') },
@@ -581,14 +608,10 @@ const championModal = reactive({
 
 // Slots ranqueados preenchidos com jogador real/anônimo.
 const filledRankedSlots = computed(() => rankedSlots.filter((slot) => slot.gameName));
-// Solo/Duo trava quando EXATAMENTE 2 cards estão preenchidos: os demais congelam.
-const soloDuoLocked = computed(() => isSoloDuo.value && filledRankedSlots.value.length >= 2);
 
-// Slots considerados pelo motor: Flex usa os 5; Solo/Duo usa apenas os preenchidos.
-const activeRankedSlots = computed(() => {
-  if (!isSoloDuo.value) return rankedSlots.slice(0, 5);
-  return filledRankedSlots.value.length ? filledRankedSlots.value : rankedSlots.slice(0, 2);
-});
+// Slots considerados pelo motor: os primeiros N (N = playerCount escolhido), na
+// ordem visível. Cada slot carrega a rota (editável) e o conteúdo (jogador ou campeão).
+const activeRankedSlots = computed(() => rankedSlots.slice(0, playerCount.value));
 
 const blueSlots = computed(() => customSlots.slice(0, 5));
 const redSlots = computed(() => customSlots.slice(5, 10));
@@ -710,9 +733,10 @@ function companionRoleIcon(role) {
   return roleIcon(map[String(role || '').toUpperCase()] || 'fill');
 }
 
-// Card congelado: lobby Solo/Duo travado e este slot está vazio.
-function isSlotFrozen(slot) {
-  return soloDuoLocked.value && !slot.gameName;
+// Muda quantos slots (1 a 5) o motor considera. Zera o resultado anterior.
+function setPlayerCount(n) {
+  playerCount.value = Math.min(5, Math.max(1, Number(n) || 1));
+  synergyResult.value = null;
 }
 
 function onSelectLobbyMode(mode) {
@@ -723,7 +747,6 @@ function onSelectLobbyMode(mode) {
     return;
   }
 
-  queueType.value = mode === 'flex' ? 'flex' : 'solo_duo';
   viewMode.value = 'ranked';
 }
 
@@ -732,9 +755,24 @@ function goBackToSelection() {
   viewMode.value = 'selection';
 }
 
-// Alterna o lobby ranqueado entre Solo/Duo e Flex sem voltar para a seleção.
-function toggleQueueType() {
-  queueType.value = isSoloDuo.value ? 'flex' : 'solo_duo';
+// Ícone da rota (editável) de um slot: mapeia o valor (TOP/JUNGLE/…) para o asset.
+function slotRoleIcon(roleValue) {
+  return companionRoleIcon(roleValue);
+}
+
+// Rótulo curto da rota para exibição.
+function slotRoleLabel(roleValue) {
+  return roles.find((r) => r.value === roleValue)?.label || roleValue;
+}
+
+// Troca de rota de um slot: as sugestões e o pick travado eram específicos da rota
+// anterior, então zeram. Um slot que era "só campeão" volta a ficar vazio.
+function onSlotRoleChange(slot) {
+  slot.championLocked = '';
+  slot.synergyTop5 = [];
+  slot.conforto = [];
+  slot.expandir = [];
+  if (slot.type === 'champion') slot.type = 'empty';
   synergyResult.value = null;
 }
 
@@ -837,36 +875,6 @@ function withTimeout(promise, timeoutMs) {
   ]);
 }
 
-// ---- Drag and drop dos cards ranqueados: troca jogadores mantendo a rota da POSIÇÃO ----
-function onRankedDragStart(slotId) {
-  const slot = rankedSlots.find((item) => item.id === slotId);
-  if (!slot?.gameName || isSlotFrozen(slot)) return;
-  draggedRankedId.value = slotId;
-}
-
-function onRankedDragEnd() {
-  draggedRankedId.value = null;
-}
-
-function onRankedDrop(targetSlotId) {
-  const from = draggedRankedId.value;
-  draggedRankedId.value = null;
-  if (!from || from === targetSlotId) return;
-
-  const fromIdx = rankedSlots.findIndex((slot) => slot.id === from);
-  const toIdx = rankedSlots.findIndex((slot) => slot.id === targetSlotId);
-  if (fromIdx === -1 || toIdx === -1) return;
-  if (isSlotFrozen(rankedSlots[toIdx])) return;
-
-  // Troca o conteúdo do jogador, preservando id, role e sugestões zeradas (rota mudou).
-  const fromRole = rankedSlots[fromIdx].role;
-  const toRole = rankedSlots[toIdx].role;
-  const tmp = { ...rankedSlots[fromIdx] };
-
-  rankedSlots[fromIdx] = { ...rankedSlots[toIdx], id: rankedSlots[fromIdx].id, role: fromRole, synergyTop5: [], conforto: [], expandir: [] };
-  rankedSlots[toIdx] = { ...tmp, id: rankedSlots[toIdx].id, role: toRole, synergyTop5: [], conforto: [], expandir: [] };
-}
-
 function openChampionModal(slotId) {
   championModal.open = true;
   championModal.slotId = slotId;
@@ -883,6 +891,8 @@ function lockChampionFromModal(championName) {
   const slot = rankedSlots.find((item) => item.id === championModal.slotId);
   if (!slot) return;
   slot.championLocked = championName;
+  // Pick direto de campeão num slot sem jogador: vira um slot "só campeão".
+  if (!slot.gameName) slot.type = 'champion';
   closeChampionModal();
 }
 

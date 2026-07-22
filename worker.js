@@ -135,6 +135,16 @@ const QUEUE_MAP = { 420: "Ranked Solo", 440: "Ranked Flex", 400: "Normal Draft",
 // "buscar últimos 10"): 10×2 chamadas + ~6 fixas cabem folgadas no orçamento.
 const MAX_PARTIDAS_POR_BUSCA = 10;
 
+// Ordena match_ids por recência REAL (sufixo numérico do id, desc). Cada endpoint
+// da Riot já devolve a SUA fila em ordem de recência, mas concatenar Solo+Flex
+// embaralha as duas — sem isto o `slice(0,10)` de "últimos 10 jogos" viria
+// enviesado para Solo (baixaria Solo velho em vez do Flex recente). O id tem
+// forma `BR1_1234567890`, com sufixo monotônico por plataforma.
+function ordenarPorRecencia(ids) {
+  const seq = (id) => Number(String(id).split("_")[1]) || 0;
+  return [...ids].sort((a, b) => seq(b) - seq(a));
+}
+
 // IDs ranqueados recentes (50 Solo/Duo + 25 Flex). Custo fixo: 2 chamadas.
 async function buscarIdsRecentes(apiKey, puuid) {
   const [soloRes, flexRes] = await Promise.all([
@@ -143,7 +153,7 @@ async function buscarIdsRecentes(apiKey, puuid) {
   ]);
   const soloIds = soloRes.ok ? await soloRes.json() : [];
   const flexIds = flexRes.ok ? await flexRes.json() : [];
-  return { recentIds: [...new Set([...soloIds, ...flexIds])], apiCalls: 2 };
+  return { recentIds: ordenarPorRecencia([...new Set([...soloIds, ...flexIds])]), apiCalls: 2 };
 }
 
 // Quais desses IDs ainda NÃO têm estatísticas DESTE puuid no D1. A checagem é
@@ -516,7 +526,7 @@ export default {
     // ----------------------------------------------------------------------
     // 2. CAPTURA DE PARÂMETROS
     // ----------------------------------------------------------------------
-    let action, gameName, tagLine, puuid, refresh, q, premium, password, limit;
+    let action, gameName, tagLine, puuid, refresh, q, premium, password, limit, before;
 
     if (request.method === "POST") {
       try {
@@ -530,6 +540,7 @@ export default {
         premium = body.premium;
         password = body.password;
         limit = body.limit;
+        before = body.before;
       } catch (e) {
         return new Response(JSON.stringify({ error: "JSON inválido." }), { status: 400, headers: corsHeaders });
       }
@@ -963,7 +974,13 @@ export default {
       const HIST_MAX = 20000; // teto duro; protege o isolate de payloads gigantes
       const pedido = Number.isFinite(Number(limit)) ? Math.floor(Number(limit)) : HIST_MAX;
       const efetivo = Math.max(1, Math.min(HIST_MAX, pedido));
+      // Cursor de paginação: com `before` (um game_creation) preenchido, devolve as
+      // partidas MAIS ANTIGAS que esse instante — deixando o front "carregar mais"
+      // além de uma página. Sem cursor = 1ª página (as mais recentes), 100% retrocompatível.
+      const cursor = Number.isFinite(Number(before)) ? Math.floor(Number(before)) : null;
       try {
+        const filtroCursor = cursor != null ? "WHERE p.game_creation < ?" : "";
+        const params = cursor != null ? [cursor, efetivo + 1] : [efetivo + 1];
         const { results } = await env.DB.prepare(`
           SELECT
             j.game_name, j.tag_line, j.tier, j.rank, j.lp, j.win_rate,
@@ -977,15 +994,18 @@ export default {
           FROM estatisticas_jogador_partida e
           JOIN jogadores j ON e.puuid = j.puuid
           JOIN partidas p ON e.match_id = p.match_id
+          ${filtroCursor}
           ORDER BY p.game_creation DESC
           LIMIT ?
-        `).bind(efetivo + 1).all();
+        `).bind(...params).all();
 
         const linhas = results || [];
-        const truncated = linhas.length > efetivo;
+        const truncated = linhas.length > efetivo;   // ainda há partidas mais antigas além desta página
         if (truncated) linhas.length = efetivo;
+        // Cursor da próxima página = game_creation da partida mais antiga desta página.
+        const nextCursor = linhas.length ? linhas[linhas.length - 1].game_creation : null;
 
-        return new Response(JSON.stringify({ success: true, history: linhas, truncated, limit: efetivo }), {
+        return new Response(JSON.stringify({ success: true, history: linhas, truncated, limit: efetivo, nextCursor }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       } catch (err) {

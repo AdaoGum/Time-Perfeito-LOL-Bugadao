@@ -111,7 +111,13 @@ Aplicação web para um grupo de jogadores de League of Legends. Faz três coisa
 Conserta o histórico do bug antigo de dedup: descobre partidas faltantes por puuid,
 tira a **união** (baixa cada `match_id` só 1 vez) e grava estatísticas + marcos para
 **todos** os membros registrados que jogaram aquela partida. Mira fundo (até 1000
-partidas/jogador). Roda com `node --env-file=local/.env cron/backfill.js`.
+partidas/jogador). Roda com `node --env-file=local/.env cron/backfill.js`. **Sem alvo
+explícito (vetor vazio / sem `PUUIDS`) processa SÓ premium** — paridade com `cron/sync.js`.
+
+> **Fonte única também na infra dos jobs:** `queryD1` (com retry) e o cliente da Riot
+> (`fetchFromRiotHost`/`respeitarRateLimit`) vivem em `cron/lib/d1.js` e `cron/lib/riot.js`,
+> importados por `sync.js`, `backfill.js` e `relatorio-discord.js` — antes cada um tinha a
+> sua cópia (a do backfill era a única **sem** retry no D1). Mudança de infra num lugar só.
 
 ---
 
@@ -141,6 +147,8 @@ partidas/jogador). Roda com `node --env-file=local/.env cron/backfill.js`.
 | `cron/backfill.js` | Recuperação de histórico faltante (centrado na partida). |
 | `cron/relatorio-discord.js` | Relatório analítico da Tribo postado no Discord (webhook). |
 | `shared/match-extract.js` | Lógica **única** de SQL/extração de partidas — importada pelo worker E pelo coletor (sem duplicação). |
+| `cron/lib/d1.js` | Cliente **único** do D1 (REST) p/ os jobs Node: `queryD1` (com retry/backoff), `queryD1Rows`, `registrarUsoGlobal`. |
+| `cron/lib/riot.js` | Cliente **único** da Riot p/ os jobs Node: `fetchFromRiotHost` (429/5xx/backoff) + `respeitarRateLimit` (contador da janela). |
 | `cron/lib/relatorio-engine.js` | Motor de NLG "IA sem IA" do relatório (JS puro). |
 | `migrations/*.sql` | Migrations do D1 (analíticas, `api_usage`, cache de perfil, `has_premium`). |
 | `local/.env` | Segredos locais do coletor (fora do git). |
@@ -160,7 +168,7 @@ Requisição: `POST WORKER_URL` com JSON `{ action, gameName?, tagLine?, puuid? 
 | `masteries` | Maestrias do jogador (persiste no D1 em background) | `{ masteries[], apiCalls }` |
 | `player_suggest` | Autocomplete: até 5 jogadores do D1 que casam com `q` (só lê o D1) | `{ suggestions[] }` |
 | `rate_status` | Status do orçamento global de rate limit (só lê o D1, polling do front) | `{ used, limit, available, resetMs, windowMs }` |
-| `admin_all_history` | Dashboard "Ancestralidade": junta `jogadores` + `estatisticas_jogador_partida`. **Exige `password`**; limitado a 20 000 linhas (as mais recentes), com `truncated` | `{ success, history[], truncated, limit }` |
+| `admin_all_history` | Dashboard "Ancestralidade": junta `jogadores` + `estatisticas_jogador_partida`. **Exige `password`**; página de até 20 000 linhas (as mais recentes). Cursor opcional `before` (um `game_creation`) pagina as **mais antigas** → o front "carrega mais" além do teto | `{ success, history[], truncated, limit, nextCursor }` |
 | `admin_players_list` | Aba "Jogadores": cadastro de `jogadores` (1 linha/jogador, inclui `has_premium`). **Exige `password`** | `{ success, players[] }` |
 | `admin_set_premium` | Marca/desmarca premium. Body `{ puuid, premium, password }` | `{ success, puuid, has_premium }` |
 
@@ -201,7 +209,7 @@ scoreDeTime     = Σ scoreIndividual + 0.30·(aderênciaArquétipo + sinergiaDeP
 - **Worker:** `worker.js` é implantado **separadamente** no Cloudflare via **Wrangler**
   (`wrangler.toml`, `npm run deploy:worker`) — automatizado pelo workflow
   `deploy-worker.yaml` a cada mudança no worker. Binding `DB` → D1 e secret `RIOT_API_KEY`.
-- **Coletor:** `cron/sync.js` roda no **GitHub Actions** (`riot-sync.yaml`, 05:00 e 17:00
+- **Coletor:** `cron/sync.js` roda no **GitHub Actions** (`riot-sync.yaml`, 04:00 e 17:30
   BRT) ou fora do edge (VM/PC/cron) lendo `local/.env`.
 - **Assets (Data Dragon):** o patch é resolvido em runtime no boot do front
   (`resolveDDragonVersion()` em `src/utils.js`), com `DDRAGON_VERSION` só como fallback.
