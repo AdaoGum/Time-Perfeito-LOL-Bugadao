@@ -14,10 +14,9 @@
 // ============================================================================
 
 export const QUEUES_RANKED = [420, 440];
-// Filas ranqueadas como relatórios SEPARADOS. O relatório roda uma vez por fila
-// (Solo/Duo e Flex têm elos, metas e entrosamentos diferentes — misturar diluía a
-// leitura). `id` = queue_id da Riot; `chave` alimenta a semente da prosa (o mesmo
-// jogador ganha texto diferente em cada relatório).
+// Filas ranqueadas. Cada uma é coletada em separado (elos/metas diferentes), mas
+// no relatório final ambas convivem no MESMO card do jogador — a prosa usa a fila
+// principal (a mais jogada). `id` = queue_id da Riot; `chave` também tempera a semente.
 export const FILAS = {
   solo: { id: 420, chave: 'solo', label: 'Solo/Duo', emoji: '🪓', cor: 0x8b5cf6 },
   flex: { id: 440, chave: 'flex', label: 'Flex',     emoji: '🛡️', cor: 0x38bdf8 }
@@ -33,14 +32,20 @@ const DIA = 86400000;
 
 // Períodos. `modo`: 'janela' (recorte por tempo, com tendência vs. período anterior),
 // 'jogos' (últimas N partidas por jogador) ou 'tudo' (todo o histórico do alvo).
-// Diário analisa os últimos 7 dias; semanal os últimos 30 — mais amostra, menos ruído.
+// `emoji`/`titulo` alimentam o cabeçalho; `janela` é a descrição humana da amostra.
 export const PERIODOS = {
-  dia:    { modo: 'janela', ms: 7 * DIA,  titulo: '📊 Relatório Diário',    janela: 'últimos 7 dias' },
-  semana: { modo: 'janela', ms: 30 * DIA, titulo: '📅 Relatório Semanal',   janela: 'últimos 30 dias' },
-  mes:    { modo: 'janela', ms: 30 * DIA, titulo: '🗓️ Relatório Mensal',    janela: '~30 dias' },
-  '50':   { modo: 'jogos',  n: 50,        titulo: '🎯 Relatório — 50 jogos', janela: 'últimos 50 jogos' },
-  geral:  { modo: 'tudo',                 titulo: '📚 Relatório Geral',      janela: 'todo o histórico' }
+  semanal: { modo: 'janela', ms: 7 * DIA,  emoji: '📅', titulo: 'Relatório Semanal',          janela: 'últimos 7 dias' },
+  mensal:  { modo: 'janela', ms: 30 * DIA, emoji: '🗓️', titulo: 'Relatório Mensal',           janela: 'últimos 30 dias' },
+  '50':    { modo: 'jogos',  n: 50,        emoji: '🎯', titulo: 'Relatório — 50 jogos',       janela: 'últimos 50 jogos' },
+  todos:   { modo: 'tudo',                 emoji: '📚', titulo: 'Relatório — Todos os Jogos',  janela: 'todo o histórico' }
 };
+
+// Nomes antigos ainda aceitos (workflow/env/atalhos antigos) → mapeiam pros novos.
+const ALIAS_PERIODO = { dia: 'semanal', semana: 'mensal', mes: 'mensal', geral: 'todos' };
+export function normalizarPeriodo(p) {
+  const k = String(p || '').toLowerCase().trim();
+  return PERIODOS[k] ? k : (ALIAS_PERIODO[k] || 'semanal');
+}
 
 // Benchmarks por rota (mira). Abaixo do 1º = "a melhorar"; acima do 2º = "forte".
 // csMin null = métrica irrelevante para a rota (ex.: suporte).
@@ -71,7 +76,7 @@ function cteSel({ modo, desde, ate, puuids, queues = QUEUES_RANKED }) {
   const sql = `WITH sel AS (
     SELECT e.puuid, e.win, e.kills, e.deaths, e.assists, e.cs, e.vision_score,
            e.kill_participation, e.gold_per_min, e.damage_champions,
-           e.team_position, e.champion_name, p.game_duration AS gd${rn}
+           e.team_position, e.champion_name, p.game_duration AS gd, p.game_creation AS gc${rn}
     FROM estatisticas_jogador_partida e
     JOIN partidas p ON p.match_id = e.match_id
     WHERE ${cond.join(' AND ')}
@@ -113,6 +118,23 @@ function qChamps(cte, { n = null } = {}) {
   return { sql: `${cte.sql}
     SELECT s.puuid, s.champion_name, s.team_position, COUNT(*) n, SUM(s.win) v
     FROM sel s${w} GROUP BY s.puuid, s.champion_name, s.team_position`, params };
+}
+
+// Resumo da amostra de UMA fila: quantas partidas foram avaliadas e a data da
+// primeira/última (min/max game_creation). Respeita o mesmo filtro (premium + n)
+// das análises, pro cabeçalho bater exatamente com o que os cards mostram.
+function qResumo(cte, { n = null, somentePremium = false } = {}) {
+  const extra = [];
+  const params = [...cte.params];
+  if (n) { extra.push('s.rn <= ?'); params.push(n); }
+  if (somentePremium) extra.push('j.has_premium = 1');
+  return {
+    sql: `${cte.sql}
+      SELECT COUNT(*) partidas, MIN(s.gc) primeira, MAX(s.gc) ultima
+      FROM sel s JOIN jogadores j ON j.puuid = s.puuid
+      ${extra.length ? 'WHERE ' + extra.join(' AND ') : ''}`,
+    params
+  };
 }
 
 export function sqlMarcos10(desde, ate, puuids, queues = QUEUES_RANKED) {
@@ -532,7 +554,8 @@ export function gerarProsa(a, periodoJanela, filaInfo = null) {
 }
 
 // ---------------------------------------------------------------------------
-// Embeds do Discord (1 por jogador; pagina em mensagens de até 10)
+// Embeds do Discord — UM card por jogador (com as duas filas), paginado em
+// mensagens de até 10 embeds; cabeçalho repetido no topo de CADA mensagem.
 // ---------------------------------------------------------------------------
 function corPorWr(wr) {
   if (wr >= 55) return 0x22c55e;   // verde
@@ -546,63 +569,87 @@ function mencao(a, userMap) {
   return id ? `<@${id}>` : '';
 }
 
-const fmtTopWr = (arr) => arr.length ? arr.map(c => `${c.nome} — **${c.wr}%** (${c.n})`).join('\n') : '—';
-const fmtTopPlayed = (arr) => arr.length ? arr.map(c => `${c.nome} — ${c.n} jogos (${c.wr}%)`).join('\n') : '—';
-const fmtLanes = (arr) => arr.length
-  ? arr.map(l => `${l.label}: **${l.wr}%** (${l.n})${l.melhorChamp ? ` · melhor: ${l.melhorChamp.nome} ${l.melhorChamp.wr}%` : ''}`).join('\n')
-  : '—';
+// game_creation (epoch ms) -> data curta pt-BR (fuso de Brasília).
+function fmtData(ms) {
+  if (ms == null) return '—';
+  return new Date(Number(ms)).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+}
 
-export function montarMensagens(analises, periodoKey, userMap, filaInfo = null) {
-  const P = PERIODOS[periodoKey] || PERIODOS.dia;
-  const fLabel = filaInfo ? filaInfo.label : 'Solo/Flex';
-  const fEmoji = filaInfo ? filaInfo.emoji : '📊';
-  const embeds = analises.map(a => {
-    const m = mencao(a, userMap);
-    return {
-      title: `${a.nome}`,
-      description: (m ? m + '\n\n' : '') + gerarProsa(a, P.janela, filaInfo),
-      color: corPorWr(a.wr),
-      fields: [
-        { name: 'Jogos', value: `${a.jogos}`, inline: true },
-        { name: 'WR', value: `${a.wr}%`, inline: true },
-        { name: 'KDA', value: `${a.met.kda}`, inline: true },
-        { name: 'CS/min', value: `${a.met.csMin}`, inline: true },
-        { name: 'Visão/min', value: `${a.met.visMin}`, inline: true },
-        { name: 'KP', value: `${Math.round(a.met.kp * 100)}%`, inline: true },
-        { name: '🏆 Top 5 WR', value: fmtTopWr(a.topWr), inline: false },
-        { name: '🔁 Top 5 mais jogados', value: fmtTopPlayed(a.topPlayed), inline: false },
-        { name: '🧭 WR por rota (melhor champ)', value: fmtLanes(a.lanes), inline: false }
-      ]
-    };
-  });
+// Bloco compacto de UMA fila dentro do card do jogador (Solo/Duo e Flex convivem
+// no mesmo card): um "field" por fila jogada, com o essencial em poucas linhas.
+function campoFila(filaInfo, a) {
+  const linhas = [
+    `**${a.jogos} jogos · ${a.wr}% WR** · KDA ${a.met.kda}`,
+    `🌾 ${a.met.csMin} CS/min · 👁️ ${a.met.visMin} visão/min · 🤝 ${Math.round(a.met.kp * 100)}% KP`
+  ];
+  const topWr = a.topWr.slice(0, 3);
+  if (topWr.length) linhas.push('🏆 ' + topWr.map(c => `${c.nome} ${c.wr}% (${c.n})`).join(' · '));
+  const topPlayed = a.topPlayed.slice(0, 3);
+  if (topPlayed.length) linhas.push('🔁 ' + topPlayed.map(c => `${c.nome} ${c.n}j`).join(' · '));
+  const lanes = a.lanes.slice(0, 3);
+  if (lanes.length) linhas.push('🧭 ' + lanes.map(l => `${l.label} ${l.wr}% (${l.n})`).join(' · '));
+  return { name: `${filaInfo.emoji} Ranked ${filaInfo.label}`, value: linhas.join('\n'), inline: false };
+}
 
-  // Cabeçalho como 1º embed da 1ª mensagem (um por fila). Tira o emoji do título
-  // do período (ex.: "📊 Relatório Diário") pra não duplicar com o emoji da fila.
-  const tituloLimpo = String(P.titulo).replace(/^[^\p{L}]+/u, '').trim();
-  const header = {
-    title: `${fEmoji} ${tituloLimpo} — Ranked ${fLabel}`,
-    description: `Período: **${P.janela}** • ${analises.length} jogador(es) ativo(s) no ${fLabel}`,
-    color: filaInfo ? filaInfo.cor : 0x8b5cf6,
+// Card do jogador: prosa da fila principal (a mais jogada) + um bloco por fila.
+function montarCardJogador(jog, P, userMap) {
+  const prim = jog[jog.primaria];
+  const m = mencao(jog, userMap);
+  const fields = [];
+  if (jog.solo) fields.push(campoFila(FILAS.solo, jog.solo));
+  if (jog.flex) fields.push(campoFila(FILAS.flex, jog.flex));
+  return {
+    title: jog.nome,
+    description: (m ? m + '\n\n' : '') + gerarProsa(prim, P.janela, FILAS[jog.primaria]),
+    color: corPorWr(prim.wr),
+    fields
+  };
+}
+
+// Cabeçalho (topo de CADA mensagem): período, filas cobertas, quantas partidas
+// foram avaliadas (por fila) e a data da primeira/última partida da amostra.
+function montarHeader(P, resumo, ativos, chaves) {
+  const filaLabel = chaves.map(k => FILAS[k].label).join(' + ');
+  const partidas = chaves
+    .map(k => `${FILAS[k].emoji} ${FILAS[k].label}: **${resumo.porFila[k]?.partidas || 0}**`)
+    .join(' · ');
+  const desc = [
+    `**Ranked ${filaLabel}** · ${P.janela}`,
+    `🎮 Partidas avaliadas — ${partidas}`,
+    `📆 Primeira: **${fmtData(resumo.primeira)}** · Última: **${fmtData(resumo.ultima)}**`,
+    `👥 ${ativos} jogador(es) avaliado(s)`
+  ].join('\n');
+  return {
+    title: `${P.emoji} ${P.titulo}`,
+    description: desc,
+    color: 0x8b5cf6,
     footer: { text: `Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}` },
     timestamp: new Date().toISOString()
   };
+}
+
+export function montarMensagens(jogadores, periodoKey, userMap, { resumo, ativos, chaves }) {
+  const P = PERIODOS[periodoKey] || PERIODOS.semanal;
+  const header = montarHeader(P, resumo, ativos, chaves);
+  const cards = jogadores.map(j => montarCardJogador(j, P, userMap));
 
   // Paginação: o Discord limita a SOMA de caracteres de TODOS os embeds de uma
-  // mensagem a 6000 (não é por embed). Quebramos por tamanho acumulado (e ≤10 embeds).
-  const todos = [header, ...embeds];
+  // mensagem a 6000 e no máx. 10 embeds. O cabeçalho vai no topo de CADA mensagem
+  // (por isso já entra no orçamento de tamanho e conta como 1 embed em cada página).
+  const headerSz = embedSize(header);
   const LIMITE_CHARS = 5500;   // folga sob os 6000
-  const empacotar = (lista) => ({ username: 'Cronista da Tribo', embeds: lista, allowed_mentions: { parse: ['users'] } });
+  const empacotar = (lista) => ({ username: 'Cronista da Tribo', embeds: [header, ...lista], allowed_mentions: { parse: ['users'] } });
 
   const mensagens = [];
   let atual = [];
-  let soma = 0;
-  for (const e of todos) {
-    const sz = embedSize(e);
-    if (atual.length && (soma + sz > LIMITE_CHARS || atual.length >= 10)) {
+  let soma = headerSz;
+  for (const c of cards) {
+    const sz = embedSize(c);
+    if (atual.length && (soma + sz > LIMITE_CHARS || atual.length + 1 >= 10)) {
       mensagens.push(empacotar(atual));
-      atual = []; soma = 0;
+      atual = []; soma = headerSz;
     }
-    atual.push(e);
+    atual.push(c);
     soma += sz;
   }
   if (atual.length) mensagens.push(empacotar(atual));
@@ -646,7 +693,8 @@ export async function postarDiscord(webhookUrl, mensagens) {
 }
 
 // ---------------------------------------------------------------------------
-// Coleta + análise para UMA fila (queue_id). Devolve as análises já ordenadas.
+// Coleta + análise para UMA fila (queue_id). Devolve as análises já ordenadas e
+// o resumo da amostra (nº de partidas + data da primeira/última).
 // ---------------------------------------------------------------------------
 async function coletarAnalises({ queryRows, P, puuids, soPrem, meta, agora, queues }) {
   const ate = agora;
@@ -657,11 +705,13 @@ async function coletarAnalises({ queryRows, P, puuids, soPrem, meta, agora, queu
   const qA = qAgg(cte, { n: nLimite, somentePremium: soPrem });
   const qR = qRotas(cte, { n: nLimite });
   const qC = qChamps(cte, { n: nLimite });
+  const qRes = qResumo(cte, { n: nLimite, somentePremium: soPrem });
 
   const promessas = [
     queryRows(qA.sql, qA.params),
     queryRows(qR.sql, qR.params),
-    queryRows(qC.sql, qC.params)
+    queryRows(qC.sql, qC.params),
+    queryRows(qRes.sql, qRes.params).catch(() => [])
   ];
 
   // Tendência (período anterior) + marcos @10 só fazem sentido no modo 'janela'.
@@ -679,7 +729,7 @@ async function coletarAnalises({ queryRows, P, puuids, soPrem, meta, agora, queu
     );
   }
 
-  const [aggs, rotas, champs, aggsPrev = [], marcos = [], marcosPrev = []] = await Promise.all(promessas);
+  const [aggs, rotas, champs, resumoRows, aggsPrev = [], marcos = [], marcosPrev = []] = await Promise.all(promessas);
 
   const byPuuid = (arr) => arr.reduce((m, r) => ((m[r.puuid] ||= []).push(r), m), {});
   const rotasBy = byPuuid(rotas);
@@ -688,20 +738,31 @@ async function coletarAnalises({ queryRows, P, puuids, soPrem, meta, agora, queu
   const prevBy = Object.fromEntries(aggsPrev.map(m => [m.puuid, m]));
   const prevMarcosBy = Object.fromEntries(marcosPrev.map(m => [m.puuid, m]));
 
-  return aggs
+  const r0 = resumoRows[0] || {};
+  const resumo = {
+    partidas: Number(r0.partidas) || 0,
+    primeira: r0.primeira != null ? Number(r0.primeira) : null,
+    ultima: r0.ultima != null ? Number(r0.ultima) : null
+  };
+
+  const analises = aggs
     .filter(a => Number(a.jogos) > 0)
     .map(a => analisarJogador(a, rotasBy[a.puuid] || [], champsBy[a.puuid] || [], marcosBy[a.puuid], prevBy[a.puuid], prevMarcosBy[a.puuid], meta))
     .sort((x, y) => y.jogos - x.jogos);
+
+  return { analises, resumo };
 }
 
 // ---------------------------------------------------------------------------
-// ORQUESTRADOR — gera DOIS relatórios (Solo/Duo e Flex) por padrão, cada um
-// com seu próprio cabeçalho, cor e prosa. `fila`: 'solo' | 'flex' | 'ambas'.
-//   opts: { queryRows, periodo, fila?, puuids?, metaCsv?, agora? }
+// ORQUESTRADOR — gera UM relatório onde cada jogador é um card com AS DUAS filas
+// (Solo/Duo e Flex). A fila fica no cabeçalho de cada mensagem, não em mensagens
+// separadas. `fila`: 'solo' | 'flex' | 'ambas' (default) restringe as filas cobertas.
+//   opts: { queryRows, periodo, fila?, puuids?, metaCsv?, userMap?, agora? }
 //   retorna { mensagens, ativos, periodo, fila }
 // ---------------------------------------------------------------------------
-export async function gerarRelatorio({ queryRows, periodo = 'dia', fila = 'ambas', puuids = null, somentePremium = null, metaCsv = null, userMap = null, agora = Date.now() }) {
-  const P = PERIODOS[periodo] || PERIODOS.dia;
+export async function gerarRelatorio({ queryRows, periodo = 'semanal', fila = 'ambas', puuids = null, somentePremium = null, metaCsv = null, userMap = null, agora = Date.now() }) {
+  const periodoKey = normalizarPeriodo(periodo);
+  const P = PERIODOS[periodoKey];
 
   // Regra: sem seleção explícita de puuids ("para todos") o relatório cobre SÓ premium
   // (has_premium = 1) — igual ao sync/backfill. Alvo explícito ignora o filtro.
@@ -710,25 +771,49 @@ export async function gerarRelatorio({ queryRows, periodo = 'dia', fila = 'ambas
   const meta = metaCsv ? parseMetaTiers(metaCsv).table : null;
   const chaves = resolverFilas(fila);
 
-  const mensagens = [];
-  const ativosSet = new Set();   // puuids ativos em qualquer fila (contagem distinta)
-
+  // Coleta por fila (Solo 420 / Flex 440 têm dados separados) e depois FUNDE por
+  // jogador: cada um vira UM card com as duas filas.
+  const porFila = {};
   for (const chave of chaves) {
-    const filaInfo = FILAS[chave];
-    const analises = await coletarAnalises({ queryRows, P, puuids, soPrem, meta, agora, queues: [filaInfo.id] });
-    analises.forEach(a => ativosSet.add(a.puuid));
-
-    if (!analises.length) {
-      // Cada fila sempre aparece no relatório, nem que seja pra dizer que ninguém jogou.
-      const tituloLimpo = String(P.titulo).replace(/^[^\p{L}]+/u, '').trim();
-      mensagens.push({
-        username: 'Cronista da Tribo',
-        content: `${filaInfo.emoji} **${tituloLimpo} — Ranked ${filaInfo.label}**: ninguém da tribo jogou ${filaInfo.label} nas ${P.janela}. 😴`
-      });
-      continue;
-    }
-    mensagens.push(...montarMensagens(analises, periodo, userMap, filaInfo));
+    porFila[chave] = await coletarAnalises({ queryRows, P, puuids, soPrem, meta, agora, queues: [FILAS[chave].id] });
   }
 
-  return { ativos: ativosSet.size, periodo, fila, mensagens };
+  const map = new Map();
+  for (const chave of chaves) {
+    for (const a of porFila[chave].analises) {
+      if (!map.has(a.puuid)) map.set(a.puuid, { puuid: a.puuid, nome: a.nome, gameName: a.gameName, solo: null, flex: null });
+      map.get(a.puuid)[chave] = a;
+    }
+  }
+  const jogadores = [...map.values()]
+    .map(j => {
+      const soloJ = j.solo?.jogos || 0;
+      const flexJ = j.flex?.jogos || 0;
+      // Fila principal = a mais jogada (empate/só-solo → solo). É a que dita a prosa.
+      return { ...j, totalJogos: soloJ + flexJ, primaria: flexJ > soloJ ? 'flex' : 'solo' };
+    })
+    .sort((x, y) => y.totalJogos - x.totalJogos);
+
+  // Resumo agregado (contagem por fila + janela global de datas) pro cabeçalho.
+  const resumo = { porFila: {}, primeira: null, ultima: null };
+  for (const chave of chaves) {
+    const r = porFila[chave].resumo;
+    resumo.porFila[chave] = r;
+    if (r.primeira != null) resumo.primeira = resumo.primeira == null ? r.primeira : Math.min(resumo.primeira, r.primeira);
+    if (r.ultima != null) resumo.ultima = resumo.ultima == null ? r.ultima : Math.max(resumo.ultima, r.ultima);
+  }
+
+  const ativos = jogadores.length;
+  let mensagens;
+  if (!jogadores.length) {
+    const filaLabel = chaves.map(k => FILAS[k].label).join(' + ');
+    mensagens = [{
+      username: 'Cronista da Tribo',
+      content: `${P.emoji} **${P.titulo} — Ranked ${filaLabel}**: ninguém da tribo jogou ranqueada nos ${P.janela}. 😴`
+    }];
+  } else {
+    mensagens = montarMensagens(jogadores, periodoKey, userMap, { resumo, ativos, chaves });
+  }
+
+  return { ativos, periodo: periodoKey, fila, mensagens };
 }

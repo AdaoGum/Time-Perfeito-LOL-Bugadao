@@ -2,20 +2,19 @@ name: Relatorio Tribo Discord
 
 on:
   schedule:
-    - cron: '30 21 * * *'   # diário  → 18:30 Brasília (UTC-3)
-    - cron: '30 21 * * 1'   # semanal → segunda-feira 18:30 BRT
-    - cron: '30 21 1 * *'   # mensal  → dia 1 às 18:30 BRT
+    - cron: '0 22 * * *'    # semanal → todo dia 19:00 Brasília (UTC-3), últimos 7 dias
+    - cron: '0 22 * * 5'    # mensal  → toda sexta 19:00 BRT, últimos 30 dias
   workflow_dispatch:
     inputs:
       periodo:
         description: 'Janela de análise'
         type: choice
         options:
-          - dia      # últimos 7 dias
-          - semana   # últimos 30 dias
+          - semanal  # últimos 7 dias
+          - mensal   # últimos 30 dias
           - '50'     # últimas 50 partidas por jogador
-          - geral    # todo o histórico
-        default: dia
+          - todos    # todo o histórico
+        default: semanal
       puuids:
         description: 'Alvo: vazio = premium | puuids (vírgula) | Nome#Tag exato (ex: UGA Fulano#2109) | prefixo de nick (ex: UGA)'
         default: ''
@@ -33,6 +32,8 @@ jobs:
           node-version: 20
 
       # Descobre o período a partir de QUAL cron disparou (ou do input manual).
+      # Na sexta os dois crons batem 22:00 UTC → o Actions dispara o workflow duas
+      # vezes (uma por schedule), então saem semanal E mensal.
       - name: Definir periodo
         id: periodo
         run: |
@@ -40,9 +41,8 @@ jobs:
             echo "valor=${{ github.event.inputs.periodo }}" >> "$GITHUB_OUTPUT"
           else
             case "${{ github.event.schedule }}" in
-              "30 21 1 * *") echo "valor=mes"    >> "$GITHUB_OUTPUT" ;;
-              "30 21 * * 1") echo "valor=semana" >> "$GITHUB_OUTPUT" ;;
-              *)             echo "valor=dia"    >> "$GITHUB_OUTPUT" ;;
+              "0 22 * * 5") echo "valor=mensal"  >> "$GITHUB_OUTPUT" ;;
+              *)            echo "valor=semanal" >> "$GITHUB_OUTPUT" ;;
             esac
           fi
 

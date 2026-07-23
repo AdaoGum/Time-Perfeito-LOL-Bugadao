@@ -214,35 +214,38 @@ explícita de `PUUIDS` (run manual) é escape hatch e ignora o filtro premium.
 - Motor: [`cron/lib/relatorio-engine.js`](cron/lib/relatorio-engine.js) (JS puro).
 - Job: [`cron/relatorio-discord.js`](cron/relatorio-discord.js).
 - Agendamento: [`.github/workflows/relatorio-discord.yaml`](.github/workflows/relatorio-discord.yaml)
-  — diário (18:30 BRT), semanal (segunda) e mensal (dia 1). Só Ranked (Solo + Flex).
-  O sync roda 04:00 e 17:30 BRT.
-- **Janela de análise (`PERIODO`):** `dia` = últimos 7 dias · `semana`/`mes` = últimos 30 dias
-  · `50` = últimas 50 partidas por jogador · `geral` = todo o histórico. (`50`/`geral` não
-  têm tendência, por não serem recorte de tempo.)
-- **Fila (`FILA`):** `ambas` (default, gera os dois relatórios) · `solo` = só Ranked
-  Solo/Duo · `flex` = só Ranked Flex.
+  — **semanal todo dia às 19:00 BRT** (últimos 7 dias) e **mensal toda sexta às 19:00 BRT**
+  (últimos 30 dias). Só Ranked (Solo + Flex). O sync roda 04:00 e 17:30 BRT.
+- **Janela de análise (`PERIODO`):** `semanal` = últimos 7 dias · `mensal` = últimos 30 dias
+  · `50` = últimas 50 partidas por jogador · `todos` = todo o histórico. (`50`/`todos` não
+  têm tendência, por não serem recorte de tempo.) Os nomes antigos (`dia`/`semana`/`mes`/`geral`)
+  ainda funcionam como aliases.
+- **Fila (`FILA`):** `ambas` (default) reporta Solo/Duo **e** Flex no **mesmo card** de cada
+  jogador · `solo` = só Ranked Solo/Duo · `flex` = só Ranked Flex.
 - **Seletor (`PUUIDS`):** vazio = **só premium** · lista de puuids = exatamente esses ·
   **`Nome#Tag`** (ex.: `UGA Fulano#2109`) = match **exato** por nome+tag (imune a nick
   duplicado) · **prefixo de nick** (ex.: `UGA`) = todos cujo game_name começa com isso.
   Tudo ignora o filtro premium; dá para misturar `Nome#Tag` e prefixos na mesma lista.
-- Cada card traz a prosa + **Top 5 WR**, **Top 5 mais jogados** e **WR por rota com o melhor
-  champ de cada rota**.
+- **Cabeçalho** (repetido no topo de cada mensagem): período, filas cobertas, **nº de partidas
+  avaliadas por fila** e a **data da primeira/última partida** da amostra.
+- Cada card traz a prosa (da fila mais jogada) + um bloco por fila com **Top 3 WR**, **mais
+  jogados** e **WR por rota**.
   Disparo manual: GitHub → Actions → "Relatorio Tribo Discord" → Run workflow.
 
 ```bash
 # Testar local sem postar (imprime o relatório):
-DRY_RUN=1 PERIODO=semana node --env-file=local/.env cron/relatorio-discord.js
+DRY_RUN=1 PERIODO=mensal node --env-file=local/.env cron/relatorio-discord.js
 
 # Postar de verdade (precisa DISCORD_WEBHOOK no local/.env):
-PERIODO=semana node --env-file=local/.env cron/relatorio-discord.js
+PERIODO=semanal node --env-file=local/.env cron/relatorio-discord.js
 
 # Alvo específico (puuids OU prefixo de nick) e outras janelas:
 PUUIDS="UGA" PERIODO=50 node --env-file=local/.env cron/relatorio-discord.js   # todos "UGA", últimas 50
-PERIODO=geral node --env-file=local/.env cron/relatorio-discord.js             # premium, todo o histórico
+PERIODO=todos node --env-file=local/.env cron/relatorio-discord.js             # premium, todo o histórico
 
 # Só uma fila (Solo OU Flex):
-DRY_RUN=1 FILA=solo PERIODO=semana node --env-file=local/.env cron/relatorio-discord.js   # só Solo/Duo
-FILA=flex PERIODO=dia node --env-file=local/.env cron/relatorio-discord.js                # posta só Flex
+DRY_RUN=1 FILA=solo PERIODO=mensal node --env-file=local/.env cron/relatorio-discord.js   # só Solo/Duo
+FILA=flex PERIODO=semanal node --env-file=local/.env cron/relatorio-discord.js            # posta só Flex
 ```
 
 **Secrets (GitHub → Settings → Secrets → Actions → Repository secrets):**
@@ -305,7 +308,7 @@ public/ dist/        Assets estáticos e build
 | [`deploy.yml`](.github/workflows/deploy.yml) | push na `main` / manual | Build do Vue e publish no **GitHub Pages**. |
 | [`deploy-worker.yaml`](.github/workflows/deploy-worker.yaml) | mudança em `worker.js`/`wrangler.toml` / manual | Publica o **Worker** na Cloudflare (Wrangler). |
 | [`riot-sync.yaml`](.github/workflows/riot-sync.yaml) | 04:00 e 17:30 BRT / manual | Roda o **coletor** (`cron/sync.js`) e sobe os logs como artefato. |
-| [`relatorio-discord.yaml`](.github/workflows/relatorio-discord.yaml) | 18:30 BRT diário, seg. e dia 1 / manual | Posta o **relatório da Tribo** no Discord. |
+| [`relatorio-discord.yaml`](.github/workflows/relatorio-discord.yaml) | 19:00 BRT diário (semanal) + sexta (mensal) / manual | Posta o **relatório da Tribo** no Discord. |
 
 > Secrets usados: `RIOT_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`,
 > `D1_DATABASE_ID`, `DISCORD_WEBHOOK` (e `DISCORD_USER_MAP` opcional).

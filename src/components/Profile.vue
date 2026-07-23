@@ -397,7 +397,7 @@
                   <span v-if="matchLp(match)"
                     class="rounded-md border px-1.5 py-0.5 text-[11px] font-black tabular-nums"
                     :class="matchLp(match).gain ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/60' : 'text-rose-300 border-rose-700/50 bg-rose-950/60'"
-                    title="Estimativa de LP — a Riot não informa o LP ganho/perdido por partida.">
+                    title="A Riot não informa o LP ganho/perdido por partida — mostramos só o sinal (vitória/derrota).">
                     {{ matchLp(match).text }} LP
                   </span>
                 </p>
@@ -1035,18 +1035,17 @@ function matchBadges(match) {
   return badges;
 }
 
-// LP ganho/perdido na partida. IMPORTANTE: a Riot NÃO expõe o LP por jogo no
-// match-v5 — então, para filas ranqueadas (Solo 420 / Flex 440), mostramos uma
-// ESTIMATIVA (valor típico ~20 LP) em verde (ganho, +) ou vermelho (perda, −).
+// Sinal de LP da partida. IMPORTANTE: a Riot NÃO expõe o LP por jogo no match-v5,
+// então NÃO mostramos número (seria só chute) — apenas o sinal + LP e a cor:
+// verde para ganho (+, vitória) e vermelho para perda (−, derrota).
 // Retorna null nas demais filas (Normal, ARAM, Arena…), onde não há LP.
-const LP_ESTIMADO = 20;
 function matchLp(match) {
   const q = match.queueType || '';
   const isRanked = /ranked/i.test(q) || match.queueId === 420 || match.queueId === 440;
   if (!isRanked) return null;
   return match.win
-    ? { text: `+${LP_ESTIMADO}`, gain: true }
-    : { text: `−${LP_ESTIMADO}`, gain: false };
+    ? { text: '+', gain: true }
+    : { text: '−', gain: false };
 }
 
 </script>

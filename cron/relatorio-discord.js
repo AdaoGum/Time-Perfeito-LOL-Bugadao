@@ -4,10 +4,10 @@
 // Lê as partidas já salvas no D1 (o cron/sync.js popula antes), monta o relatório
 // pelo motor compartilhado (cron/lib/relatorio-engine.js) e posta num webhook.
 //
-// PERIODO = dia | semana | mes | 50 | geral  (default: dia)
-// FILA    = solo | flex | ambas  (default: ambas)
+// PERIODO = semanal | mensal | 50 | todos  (default: semanal; aceita nomes antigos)
+// FILA    = solo | flex | ambas  (default: ambas → um card por jogador com as duas)
 //
-// Local:  PERIODO=semana node --env-file=local/.env cron/relatorio-discord.js
+// Local:  PERIODO=mensal node --env-file=local/.env cron/relatorio-discord.js
 // Actions: envs vêm dos secrets (ver .github/workflows/relatorio-discord.yaml)
 // ============================================================================
 
@@ -18,7 +18,7 @@ import { gerarRelatorio, postarDiscord } from './lib/relatorio-engine.js';
 import { queryD1Rows } from './lib/d1.js';
 
 const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK;
-const PERIODO = (process.env.PERIODO || 'dia').toLowerCase();
+const PERIODO = (process.env.PERIODO || 'semanal').toLowerCase();
 // FILA = solo | flex | ambas (default). 'ambas' gera DOIS relatórios separados.
 const FILA = (process.env.FILA || 'ambas').toLowerCase();
 

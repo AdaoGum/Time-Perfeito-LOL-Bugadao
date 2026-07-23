@@ -3,6 +3,16 @@
     class="relative mx-auto w-full overflow-hidden rounded-3xl min-h-[80vh] p-4 sm:p-8 border transition-colors duration-500"
     :class="activeBg !== 0 ? 'border-slate-800' : 'border-transparent'"
   >
+    <!-- Imagem PADRÃO: duas imagens lado a lado (forest à esquerda, udyr à direita),
+         aparecem quando nenhum caminho está em hover (activeBg === 0) e somem assim
+         que o usuário se aproxima/seleciona um dos botões. -->
+    <div
+      class="absolute inset-0 flex transition-[opacity] duration-500"
+      :style="{ opacity: activeBg === 0 ? '0.6' : '0' }"
+    >
+      <div class="h-full w-1/2 bg-cover bg-top bg-no-repeat" :style="{ backgroundImage: `url('${HOME_UDYR_FOREST}')` }"></div>
+      <div class="h-full w-1/2 bg-cover bg-top bg-no-repeat" :style="{ backgroundImage: `url('${HOME_UDYR}')` }"></div>
+    </div>
     <div
       class="absolute inset-0 bg-cover bg-top bg-no-repeat transition-[opacity] duration-500"
       :style="{ opacity: activeBg === 1 ? '0.6' : '0', backgroundImage: `url('${UDYR_BASE}Udyr_0.jpg')` }"
@@ -94,6 +104,9 @@ defineEmits(['show-overlay', 'hide-overlay', 'show-udyr', 'search-start']);
 
 
 const UDYR_BASE = 'https://ddragon.leagueoflegends.com/cdn/img/champion/splash/';
+// Imagens locais mostradas por padrão (lado a lado), antes de hover nos botões.
+const HOME_UDYR_FOREST = '/home_udyr_forest.png';
+const HOME_UDYR = '/home_udyr.png';
 
 const activeBg = ref(0);
 
