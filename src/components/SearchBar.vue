@@ -117,6 +117,16 @@ const props = defineProps({
 
 const emit = defineEmits(['search-success', 'search-start', 'search-error', 'show-overlay', 'hide-overlay', 'show-udyr']);
 
+// Base da rota do perfil conforme a seção onde a busca acontece. Assim uma busca
+// feita dentro de "Caçadas" (Histórico) leva ao histórico, e dentro de "Visão"
+// (Análise) leva às estatísticas; nos demais lugares abre o seletor de /profile.
+function sectionBase() {
+  const p = router.currentRoute.value.path;
+  if (p.startsWith('/historico')) return '/historico';
+  if (p.startsWith('/analise')) return '/analise';
+  return '/profile';
+}
+
 const inputEl = ref(null);
 const inputQuery = ref(props.initialValue);
 const loading = ref(false);
@@ -247,9 +257,11 @@ async function executeSearch() {
       loadMasteriesInBackground(normalizedData.puuid, gameName, tagLine, data?.hadNewGames === true);
     }
 
-    // Coloca o jogador buscado na URL para sobreviver ao refresh.
+    // Coloca o jogador buscado na URL para sobreviver ao refresh. A busca preserva
+    // a SEÇÃO atual: em /historico cai na Caçada, em /analise cai na Visão; nas demais
+    // (topbar/home) vai pro /profile (seletor Histórico ↔ Estatísticas).
     if (props.routeToProfile && normalizedData.puuid) {
-      router.push(`/profile/${encodeURIComponent(normalizedData.gameName)}/${encodeURIComponent(normalizedData.tagLine)}`);
+      router.push(`${sectionBase()}/${encodeURIComponent(normalizedData.gameName)}/${encodeURIComponent(normalizedData.tagLine)}`);
     }
   } catch (error) {
     localError.value = error.message;

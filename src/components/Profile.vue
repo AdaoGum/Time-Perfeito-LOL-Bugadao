@@ -2,7 +2,7 @@
   <div class="relative min-h-[74vh] space-y-6">
     <!-- Busca sobreposta enquanto nenhum perfil foi pesquisado -->
     <SearchGate
-      title="UGA! Caçadas Passadas"
+      :title="gateTitle"
       @show-overlay="c => $emit('show-overlay', c)"
       @hide-overlay="$emit('hide-overlay')"
       @show-udyr="$emit('show-udyr')"
@@ -537,15 +537,33 @@ const store = state;
 const route = useRoute();
 const router = useRouter();
 
-// Visão da página vinda da URL: 'seletor' (sem sufixo) | 'historico' | 'estatisticas'.
-// Manter na URL deixa cada visão compartilhável e à prova de refresh.
-const view = computed(() => route.params.view || 'seletor');
+// `entry` vem das rotas dedicadas /historico (Caçadas) e /analise (Visão): elas
+// abrem a visão direto, sem passar pelo seletor. O /profile genérico não manda
+// entry → cai no seletor.
+const props = defineProps({
+  entry: { type: String, default: '' }   // '' | 'historico' | 'estatisticas'
+});
 
+// Visão da página: :view da URL (rota /profile) tem prioridade; senão o `entry`
+// da rota dedicada; senão o seletor. Manter na URL deixa cada visão compartilhável.
+const view = computed(() => route.params.view || props.entry || 'seletor');
+
+// Título do gate de busca conforme a porta pela qual o usuário entrou.
+const gateTitle = computed(() => {
+  if (view.value === 'estatisticas') return 'BUGA! Olhar da Espiritual';
+  if (view.value === 'historico') return 'UGA! Caçadas Passadas';
+  return 'UGA! Perfil do Jogador';
+});
+
+// Cada visão tem sua rota dedicada (Caçada/Visão); o seletor mora no /profile.
 function goView(v) {
   const gn = store.searchProfile.gameName || route.params.gameName || '';
   const tl = store.searchProfile.tagLine || route.params.tagLine || '';
   if (!gn || !tl) return;
-  router.push(`/profile/${encodeURIComponent(gn)}/${encodeURIComponent(tl)}${v ? `/${v}` : ''}`);
+  const enc = (s) => encodeURIComponent(s);
+  if (v === 'historico') router.push(`/historico/${enc(gn)}/${enc(tl)}`);
+  else if (v === 'estatisticas') router.push(`/analise/${enc(gn)}/${enc(tl)}`);
+  else router.push(`/profile/${enc(gn)}/${enc(tl)}`); // seletor
 }
 
 // ---- Botão "buscar últimos 10 jogos" (banner de pendências + hiato) ----
@@ -605,7 +623,8 @@ const companionsList = computed(() => {
 
 function searchCompanion(comp) {
   if (!comp?.tagLine) return; // sem tag não conseguimos buscar com segurança
-  router.push(`/profile/${encodeURIComponent(comp.gameName)}/${encodeURIComponent(comp.tagLine)}`);
+  // Abre o companheiro direto nas Caçadas (Histórico), mantendo a seção.
+  router.push(`/historico/${encodeURIComponent(comp.gameName)}/${encodeURIComponent(comp.tagLine)}`);
 }
 
 defineEmits(['show-overlay', 'hide-overlay', 'show-udyr']);

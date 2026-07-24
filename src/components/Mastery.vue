@@ -3,7 +3,7 @@
 
     <!-- Busca sobreposta enquanto nenhum perfil foi pesquisado -->
     <SearchGate
-      title="Buga! Caverna dos Monos"
+      title="BUGA! Caverna dos Monos"
       @show-overlay="c => $emit('show-overlay', c)"
       @hide-overlay="$emit('hide-overlay')"
       @show-udyr="$emit('show-udyr')"

@@ -3,17 +3,22 @@
   <div class="fixed inset-0 z-0 pointer-events-none select-none">
     <div
       class="absolute inset-0 bg-cover bg-top bg-no-repeat transition-opacity duration-1000"
-      :class="route.path === '/profile' ? 'opacity-60' : 'opacity-0'"
+      :class="bgFor('historico') ? 'opacity-60' : 'opacity-0'"
       style="background-image: url('https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Udyr_0.jpg');"
     ></div>
     <div
       class="absolute inset-0 bg-cover bg-top bg-no-repeat transition-opacity duration-1000"
-      :class="route.path === '/mastery' ? 'opacity-60' : 'opacity-0'"
+      :class="bgFor('analise') ? 'opacity-60' : 'opacity-0'"
+      style="background-image: url('https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Udyr_2.jpg');"
+    ></div>
+    <div
+      class="absolute inset-0 bg-cover bg-top bg-no-repeat transition-opacity duration-1000"
+      :class="bgFor('mastery') ? 'opacity-60' : 'opacity-0'"
       style="background-image: url('https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Udyr_3.jpg');"
     ></div>
     <div
       class="absolute inset-0 bg-cover bg-top bg-no-repeat transition-opacity duration-1000"
-      :class="route.path === '/synergy' ? 'opacity-60' : 'opacity-0'"
+      :class="bgFor('synergy') ? 'opacity-60' : 'opacity-0'"
       style="background-image: url('https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Udyr_6.jpg');"
     ></div>
     <div class="absolute inset-0 bg-slate-950/72"></div>  
@@ -115,7 +120,7 @@
           type="button"
           @click="router.push(tab.path)"
           class="px-3 py-1.5 font-cave text-xs sm:text-sm transition-all border-b-4 cursor-pointer"
-          :class="route.path === tab.path
+          :class="isTabActive(tab.path)
             ? `${tab.border} scale-105 font-bold`
             : 'border-transparent opacity-60 hover:opacity-100'"
         >
@@ -190,7 +195,7 @@
         class="flex w-full items-center rounded-lg border py-2 text-xs font-bold transition"
         :class="[
           effectiveCollapsed ? 'justify-center px-0' : 'justify-start px-2 text-left',
-          route.path === tab.path
+          isTabActive(tab.path)
             ? tab.active
             : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-600 hover:text-white'
         ]"
@@ -364,7 +369,8 @@ const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 14
 
 const topTabs = [
   { id: 'home', path: '/', label: 'TEMPLO', icon: 'fa-fire', gradient: true, border: 'border-orange-500', active: 'border-orange-500 bg-orange-500/10 text-orange-300' },
-  { id: 'perfil', path: '/profile', label: 'CAÇADA', icon: 'fa-paw', text: 'text-cyan-400', border: 'border-cyan-500', active: 'border-cyan-500 bg-cyan-500/10 text-cyan-400' },
+  { id: 'historico', path: '/historico', label: 'CAÇADA', icon: 'fa-paw', text: 'text-cyan-400', border: 'border-cyan-500', active: 'border-cyan-500 bg-cyan-500/10 text-cyan-400' },
+  { id: 'analise', path: '/analise', label: 'VISÃO', icon: 'fa-chart-simple', text: 'text-violet-400', border: 'border-violet-500', active: 'border-violet-500 bg-violet-500/10 text-violet-400' },
   { id: 'maestria', path: '/mastery', label: 'CAVERNA', icon: 'fa-trophy', text: 'text-amber-400', border: 'border-amber-500', active: 'border-amber-500 bg-amber-500/10 text-amber-400' },
   { id: 'sinergia', path: '/synergy', label: 'TRIBO', icon: 'fa-people-group', text: 'text-lime-400', border: 'border-lime-500', active: 'border-lime-500 bg-lime-500/10 text-lime-400' },
 ];
@@ -408,16 +414,30 @@ function updateViewport() {
 
 const isDesktop = computed(() => viewportWidth.value >= 1024);
 
+// Aba ativa considerando sub-rotas (ex.: /historico/Kami/BR1 acende "CAÇADA").
+// '/' (Templo) só acende na home exata para não casar com tudo.
+function isTabActive(path) {
+  if (path === '/') return route.path === '/';
+  return route.path === path || route.path.startsWith(path + '/');
+}
+
+// Qual fundo fixo mostrar. Caçada e o /profile genérico compartilham o mesmo splash.
+function bgFor(section) {
+  const p = route.path;
+  if (section === 'historico') return p.startsWith('/historico') || p.startsWith('/profile');
+  return p.startsWith('/' + section);
+}
+
 // Borda do conteúdo na cor do caminho ativo (mesma cor do botão clicado)
 const pageThemeBorder = computed(() => {
-  switch (route.path) {
-    case '/profile': return 'border-cyan-500/60';
-    case '/mastery': return 'border-amber-500/60';
-    case '/synergy': return 'border-lime-500/60';
-    case '/saguaoCustom': return 'border-orange-500/60';
-    case '/ancestralidade': return 'border-fuchsia-500/60';
-    default: return 'border-transparent';
-  }
+  const p = route.path;
+  if (p.startsWith('/historico') || p.startsWith('/profile')) return 'border-cyan-500/60';
+  if (p.startsWith('/analise')) return 'border-violet-500/60';
+  if (p.startsWith('/mastery')) return 'border-amber-500/60';
+  if (p.startsWith('/synergy')) return 'border-lime-500/60';
+  if (p.startsWith('/saguaoCustom')) return 'border-orange-500/60';
+  if (p.startsWith('/ancestralidade')) return 'border-fuchsia-500/60';
+  return 'border-transparent';
 });
 
 const mainStyle = computed(() => {

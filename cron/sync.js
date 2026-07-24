@@ -93,6 +93,54 @@ async function sincronizarMaestrias(jogador, logger) {
   return rawMasteries.length;
 }
 
+// ----------------------------------------------------------------------------
+// PERFIL — elo/LP/ícone/nível/V-D (summoner-v4 + league-v4, endpoints de PLATAFORMA,
+// ex.: br1 — vem de jogadores.platform_host). Espelha o worker.js (atualizarPerfilRiot):
+// 2 chamadas, e persiste no `jogadores` pra o app e o relatório servirem elo fresco
+// SEM depender de alguém abrir o perfil no app. Os valores atuais do banco entram como
+// fallback: se a Riot não retornar uma fila, não rebaixamos o que já estava salvo.
+// ----------------------------------------------------------------------------
+async function sincronizarPerfil(jogador, logger) {
+  const host = (jogador.platform_host || 'br1').toLowerCase();
+  const wr = (w, l) => ((w + l) > 0 ? (w / (w + l)) * 100 : 0);
+
+  let profileIconId = jogador.profile_icon_id ?? null;
+  let summonerLevel = jogador.summoner_level ?? null;
+  let solo = { tier: jogador.tier || 'UNRANKED', rank: jogador.rank || '', lp: jogador.lp ?? 0, wins: jogador.solo_wins ?? 0, losses: jogador.solo_losses ?? 0, wr: jogador.win_rate ?? 0 };
+  let flex = { tier: jogador.flex_tier || 'UNRANKED', rank: jogador.flex_rank || '', lp: jogador.flex_lp ?? 0, wins: jogador.flex_wins ?? 0, losses: jogador.flex_losses ?? 0, wr: jogador.flex_win_rate ?? 0 };
+
+  await respeitarRateLimit(logger);
+  const s = await fetchFromRiotHost(host, `/lol/summoner/v4/summoners/by-puuid/${jogador.puuid}`, { source: 'cron', logger });
+  if (s) { profileIconId = s.profileIconId ?? profileIconId; summonerLevel = s.summonerLevel ?? summonerLevel; }
+
+  await respeitarRateLimit(logger);
+  const entries = await fetchFromRiotHost(host, `/lol/league/v4/entries/by-puuid/${jogador.puuid}`, { source: 'cron', logger });
+  if (Array.isArray(entries)) {
+    const so = entries.find(q => q.queueType === 'RANKED_SOLO_5x5');
+    if (so) solo = { tier: so.tier, rank: so.rank, lp: so.leaguePoints, wins: so.wins, losses: so.losses, wr: wr(so.wins, so.losses) };
+    const fl = entries.find(q => q.queueType === 'RANKED_FLEX_SR');
+    if (fl) flex = { tier: fl.tier, rank: fl.rank, lp: fl.leaguePoints, wins: fl.wins, losses: fl.losses, wr: wr(fl.wins, fl.losses) };
+  }
+
+  await queryD1(
+    `UPDATE jogadores SET
+       tier = ?, rank = ?, lp = ?, win_rate = ?,
+       flex_tier = ?, flex_rank = ?, flex_lp = ?, flex_win_rate = ?,
+       profile_icon_id = ?, summoner_level = ?,
+       solo_wins = ?, solo_losses = ?, flex_wins = ?, flex_losses = ?,
+       ultima_atualizacao = CURRENT_TIMESTAMP
+     WHERE puuid = ?`,
+    [
+      solo.tier, solo.rank, solo.lp, solo.wr,
+      flex.tier, flex.rank, flex.lp, flex.wr,
+      profileIconId, summonerLevel,
+      solo.wins, solo.losses, flex.wins, flex.losses,
+      jogador.puuid
+    ]
+  );
+  logger(`   👤 [PERFIL] Solo ${solo.tier}${solo.rank ? ' ' + solo.rank : ''} ${solo.lp}LP · Flex ${flex.tier}${flex.rank ? ' ' + flex.rank : ''} · nível ${summonerLevel ?? '?'} (host ${host}).`);
+}
+
 // Reordena os jogadores do banco: núcleo do time primeiro (na ordem fixa), resto depois.
 function ordenarPorPrioridade(jogadores) {
   const prioridade = new Map(PUUIDS_PRIORITARIOS.map((p, i) => [p, i]));
@@ -125,8 +173,14 @@ async function processarJogador(jogador, fs) {
     fs.appendFileSync(logPath, texto + '\n');
   };
 
-  // 0) Maestrias (1 chamada): roda ANTES das partidas para não ser pulada pelos
-  //    early-returns de "banco já atualizado". Falha aqui não derruba o jogador.
+  // 0) Perfil (elo/LP/ícone/nível/V-D) + Maestrias: rodam ANTES das partidas para não
+  //    serem puladas pelos early-returns de "banco já atualizado" (o elo precisa ser
+  //    atualizado mesmo quando não há jogo novo). Falha em qualquer um NÃO derruba o jogador.
+  try {
+    await sincronizarPerfil(jogador, logger);
+  } catch (pErr) {
+    logger(`   ⚠️ [PERFIL] Falhou (${pErr.message}) — mantendo elo/ícone anteriores.`);
+  }
   try {
     await sincronizarMaestrias(jogador, logger);
   } catch (mErr) {
@@ -227,7 +281,12 @@ async function rodarSincronizacao() {
     if (!fs.existsSync('logs')) fs.mkdirSync('logs');
 
     console.log('🗄️  [D1] Baixando a lista de jogadores monitorados...');
-    const dbResult = await queryD1('SELECT puuid, game_name, tag_line, has_premium, platform_host FROM jogadores');
+    const dbResult = await queryD1(
+      `SELECT puuid, game_name, tag_line, has_premium, platform_host,
+              tier, rank, lp, win_rate, flex_tier, flex_rank, flex_lp, flex_win_rate,
+              profile_icon_id, summoner_level, solo_wins, solo_losses, flex_wins, flex_losses
+       FROM jogadores`
+    );
     let jogadores = ordenarPorPrioridade(dbResult.results || []);
 
     // 🎯 Filtro opcional: roda só os puuids-alvo, se configurados (escape hatch manual,
