@@ -1,5 +1,5 @@
 <template>
-  <section class="mx-auto w-full max-w-6xl overflow-hidden rounded-xl border border-cyan-900/50 bg-slate-950/80 shadow-2xl">
+  <section class="mx-auto w-full overflow-hidden rounded-xl border border-cyan-900/50 bg-slate-950/80 shadow-2xl">
     <div
       class="relative p-3 sm:p-4"
       style="background-image: linear-gradient(rgba(2, 6, 23, 0.74), rgba(2, 6, 23, 0.9)), url('https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Ashe_0.jpg'); background-size: cover; background-position: center;"

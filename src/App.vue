@@ -31,7 +31,7 @@
   <!-- Cinematic Overlay — animação ÚNICA de busca (vale para busca normal e entrada direta por link) -->
   <div
     v-if="overlayVisible"
-    class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/88 backdrop-blur-sm transition-all"
+    class="fixed inset-0 z-[90] flex flex-col items-center justify-center bg-slate-950/88 backdrop-blur-sm transition-all"
   >
     <span class="uga-word text-cyan-400/70"  style="top:9%;  left:7%;  font-size:1.4rem; animation-duration:2.8s; animation-delay:0s">UGA</span>
     <span class="uga-word text-fuchsia-400/70" style="top:14%; left:74%; font-size:1.1rem; animation-duration:3.2s; animation-delay:0.4s">Buga</span>
@@ -73,7 +73,7 @@
   </div>
 
   <!-- Header -->
-  <header class="fixed inset-x-0 top-0 z-40 border-b border-slate-800/80 bg-slate-950/95 backdrop-blur">
+  <header class="fixed inset-x-0 top-0 z-[61] border-b border-slate-800/80 bg-slate-950/95 backdrop-blur">
     <div class="relative flex w-full items-center gap-4 py-3 pl-4 pr-2 md:pl-6">
       <button
         type="button"
@@ -105,6 +105,7 @@
           <SearchBar
             buttonText=""
             autocomplete
+            context="global"
             :routeToProfile="true"
             @show-overlay="handleShowOverlay"
             @hide-overlay="handleHideOverlay"
@@ -114,31 +115,92 @@
       </div>
 
       <nav class="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
-        <button
-          v-for="tab in topTabs"
-          :key="tab.id"
-          type="button"
-          @click="router.push(tab.path)"
-          class="px-3 py-1.5 font-cave text-xs sm:text-sm transition-all border-b-4 cursor-pointer"
-          :class="isTabActive(tab.path)
-            ? `${tab.border} scale-105 font-bold`
-            : 'border-transparent opacity-60 hover:opacity-100'"
-        >
-          <span v-if="tab.gradient" class="bg-gradient-to-r from-lime-300 via-yellow-300 to-orange-500 bg-clip-text text-transparent">{{ tab.label }}</span>
-          <span v-else :class="tab.text">{{ tab.label }}</span>
-        </button>
+        <div v-for="tab in topTabs" :key="tab.id" class="group relative">
+          <button
+            type="button"
+            @click="router.push(tab.path)"
+            class="px-3 py-1.5 font-cave text-xs sm:text-sm transition-all border-b-4 cursor-pointer"
+            :class="isTabActive(tab.path)
+              ? `${tab.border} scale-105 font-bold`
+              : 'border-transparent opacity-60 hover:opacity-100'"
+          >
+            <span v-if="tab.gradient" class="bg-gradient-to-r from-lime-300 via-yellow-300 to-orange-500 bg-clip-text text-transparent">{{ tab.label }}</span>
+            <span v-else :class="tab.text">{{ tab.label }}</span>
+          </button>
+
+          <!-- Prévia da aba (hover, desktop): mini mockup + descrição -->
+          <div
+            class="pointer-events-none absolute right-0 top-full z-[75] mt-2 hidden w-60 max-w-[80vw] translate-y-1 rounded-xl border border-slate-700 bg-slate-950/97 p-3 opacity-0 shadow-2xl backdrop-blur transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 md:group-hover:block"
+          >
+            <p class="mb-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" :class="tab.accent">
+              <i class="fa-solid" :class="tab.icon"></i> {{ tab.label }}
+            </p>
+
+            <!-- TEMPLO: 4 caminhos -->
+            <div v-if="tab.preview.type === 'home'" class="grid grid-cols-4 gap-1.5">
+              <div v-for="(c, i) in ['fa-scroll','fa-trophy','fa-dragon','fa-people-group']" :key="i" class="flex h-9 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-slate-400">
+                <i class="fa-solid text-xs" :class="c"></i>
+              </div>
+            </div>
+
+            <!-- CAÇADA: mini cards de partida -->
+            <div v-else-if="tab.preview.type === 'historico'" class="space-y-1.5">
+              <div v-for="win in [true, false]" :key="String(win)" class="flex items-center gap-2 rounded-md border p-1.5" :class="win ? 'border-blue-800/60 bg-blue-950/30' : 'border-red-800/60 bg-red-950/30'">
+                <div class="h-5 w-5 shrink-0 rounded bg-slate-700"></div>
+                <div class="flex-1 space-y-1"><div class="h-1.5 w-10 rounded bg-slate-600"></div><div class="h-1.5 w-14 rounded bg-slate-700"></div></div>
+                <span class="text-[9px] font-black" :class="win ? 'text-blue-400' : 'text-red-400'">{{ win ? 'V' : 'D' }}</span>
+              </div>
+            </div>
+
+            <!-- VISÃO: radar + barras -->
+            <div v-else-if="tab.preview.type === 'analise'" class="flex items-center gap-3">
+              <svg viewBox="0 0 40 40" class="h-12 w-12 shrink-0">
+                <polygon points="20,3 36,15 30,36 10,36 4,15" fill="none" stroke="#7c3aed" stroke-width="1" opacity="0.6" />
+                <polygon points="20,11 30,17 26,31 14,30 10,18" fill="rgba(167,139,250,0.25)" stroke="#c4b5fd" stroke-width="1" />
+              </svg>
+              <div class="flex-1 space-y-1.5">
+                <div class="h-1.5 rounded bg-violet-500/70" style="width:82%"></div>
+                <div class="h-1.5 rounded bg-violet-500/50" style="width:58%"></div>
+                <div class="h-1.5 rounded bg-violet-500/60" style="width:70%"></div>
+              </div>
+            </div>
+
+            <!-- META: tier list S/A/B -->
+            <div v-else-if="tab.preview.type === 'meta'" class="space-y-1.5">
+              <div v-for="row in [{ t: 'S', c: 'text-rose-300 border-rose-500/60 bg-rose-500/10', n: 4 }, { t: 'A', c: 'text-amber-300 border-amber-500/60 bg-amber-500/10', n: 3 }, { t: 'B', c: 'text-sky-300 border-sky-500/60 bg-sky-500/10', n: 5 }]" :key="row.t" class="flex items-center gap-2">
+                <span class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border text-[9px] font-black" :class="row.c">{{ row.t }}</span>
+                <div class="flex gap-1"><div v-for="i in row.n" :key="i" class="h-4 w-4 rounded-full border border-slate-600 bg-slate-700"></div></div>
+              </div>
+            </div>
+
+            <!-- PANTEÃO: grade de campeões -->
+            <div v-else-if="tab.preview.type === 'pantheon'" class="grid grid-cols-6 gap-1">
+              <div v-for="i in 12" :key="i" class="aspect-square rounded border border-slate-700 bg-slate-800"></div>
+            </div>
+
+            <!-- TRIBO: 5 vagas -->
+            <div v-else class="flex justify-center gap-1.5 py-1">
+              <div v-for="i in 5" :key="i" class="flex h-8 w-8 items-center justify-center rounded-lg border border-lime-700/50 bg-lime-950/40">
+                <i class="fa-solid fa-user text-[10px] text-lime-400/80"></i>
+              </div>
+            </div>
+
+            <p class="mt-2.5 text-[10px] font-medium leading-snug text-slate-400">{{ tab.preview.desc }}</p>
+            <span class="absolute right-4 top-0 h-2.5 w-2.5 -translate-y-[6px] rotate-45 border-l border-t border-slate-700 bg-slate-950"></span>
+          </div>
+        </div>
       </nav>
     </div>
   </header>
 
   <div
     v-if="store.ui.sidebarMobileOpen"
-    class="fixed inset-0 z-20 bg-slate-950/60 lg:hidden"
+    class="fixed inset-0 z-[58] bg-slate-950/60 lg:hidden"
     @click="store.ui.sidebarMobileOpen = false"
   ></div>
 
   <aside
-    class="fixed bottom-0 left-0 top-16 z-30 flex flex-col overflow-hidden border-r border-slate-800 bg-slate-950/95 backdrop-blur transition-all duration-300"
+    class="fixed bottom-0 left-0 top-16 z-[60] flex flex-col overflow-hidden border-r border-slate-800 bg-slate-950/95 backdrop-blur transition-all duration-300"
     :class="[
       effectiveCollapsed ? 'w-20' : 'w-72',
       store.ui.sidebarMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
@@ -186,77 +248,157 @@
     </div>
 
 
-    <nav class="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden p-3">
-      <button
-        v-for="tab in sidebarTabs"
-        :key="`side-${tab.id}`"
-        type="button"
-        @click="goToTab(tab.path)"
-        class="flex w-full items-center rounded-lg border py-2 text-xs font-bold transition"
-        :class="[
-          effectiveCollapsed ? 'justify-center px-0' : 'justify-start px-2 text-left',
-          isTabActive(tab.path)
-            ? tab.active
-            : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-600 hover:text-white'
-        ]"
-      >
-        <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-slate-700 bg-slate-950 text-sm">
-          <i class="fa-solid" :class="tab.icon"></i>
-        </span>
-        <span v-if="!effectiveCollapsed" class="ml-2 truncate">{{ tab.label }}</span>
-      </button>
+    <nav class="min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden p-3">
+      <!-- Seções temáticas: Jogadores, Campeões e Equipes. O TÍTULO é clicável e leva
+           ao hub do módulo (Equipes → Tribo). As sub-opções abaixo seguem diretas. -->
+      <div v-for="section in sidebarSections" :key="`sec-${section.id}`" class="space-y-1.5">
+        <button
+          type="button"
+          class="group flex w-full items-center gap-2 rounded-md px-1 py-0.5 transition hover:bg-slate-900/60"
+          :class="[effectiveCollapsed ? 'justify-center' : '', isItemActive({ match: [section.hub] }) ? 'bg-slate-900/50' : '']"
+          @click="goToTab(section.hub)"
+          :title="`Abrir ${section.label}`"
+        >
+          <span class="inline-flex h-5 w-5 items-center justify-center text-[11px]" :class="section.labelClass">
+            <i class="fa-solid" :class="section.icon"></i>
+          </span>
+          <span v-if="!effectiveCollapsed" class="text-[10px] font-black uppercase tracking-[0.15em]" :class="section.labelClass">{{ section.label }}</span>
+          <span v-if="!effectiveCollapsed" class="ml-1 h-px flex-1 bg-slate-800 transition group-hover:bg-slate-600"></span>
+          <i v-if="!effectiveCollapsed" class="fa-solid fa-chevron-right text-[8px] opacity-0 transition group-hover:opacity-60" :class="section.labelClass"></i>
+        </button>
+        <button
+          v-for="item in section.items"
+          :key="`side-${item.id}`"
+          type="button"
+          @click="goToTab(item.path)"
+          class="flex w-full items-center rounded-lg border py-2 text-xs font-bold transition"
+          :class="[
+            effectiveCollapsed ? 'justify-center px-0' : 'justify-start px-2 text-left',
+            isItemActive(item)
+              ? item.active
+              : 'border-slate-800 bg-slate-900 text-slate-300 hover:border-slate-600 hover:text-white'
+          ]"
+          :title="item.label"
+        >
+          <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-slate-700 bg-slate-950 text-sm">
+            <i class="fa-solid" :class="item.icon"></i>
+          </span>
+          <span v-if="!effectiveCollapsed" class="ml-2 truncate">{{ item.label }}</span>
+        </button>
+      </div>
     </nav>
 
-    <div class="shrink-0 border-t border-slate-800 p-3">
-      <div
-        class="rounded-xl border border-slate-700 bg-slate-900/90 p-3 backdrop-blur-sm transition-all"
-        :class="effectiveCollapsed ? 'px-2 py-2' : ''"
+    <!-- Botão especial: Ancestralidade (última opção da sidebar, fundo laranja) -->
+    <div class="shrink-0 border-t border-slate-800 px-3 pt-3">
+      <button
+        type="button"
+        @click="goToTab(ancestralButton.path)"
+        class="flex w-full items-center rounded-xl border-2 py-2.5 text-xs font-black uppercase tracking-wide transition"
+        :class="[
+          effectiveCollapsed ? 'justify-center px-0' : 'justify-start px-2 text-left',
+          isItemActive(ancestralButton)
+            ? 'border-orange-400 bg-orange-500/25 text-orange-100 shadow-[0_0_22px_rgba(249,115,22,0.35)]'
+            : 'border-orange-500/70 bg-gradient-to-r from-orange-600/40 to-amber-600/25 text-orange-200 hover:border-orange-400 hover:text-orange-50'
+        ]"
+        :title="ancestralButton.label"
       >
-        <div v-if="!effectiveCollapsed" class="mb-2 border-b border-slate-700/50 pb-2 text-center text-xs font-bold uppercase tracking-wider text-slate-400">
-          Monitor da API (Riot)
+        <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-orange-500/60 bg-slate-950 text-sm text-orange-300">
+          <i class="fa-solid" :class="ancestralButton.icon"></i>
+        </span>
+        <span v-if="!effectiveCollapsed" class="ml-2 truncate">{{ ancestralButton.label }}</span>
+      </button>
+    </div>
+
+    <div class="shrink-0 p-3">
+      <!-- NÍVEL TINY: uma linha mínima (também usado quando a sidebar está minimizada) -->
+      <div
+        v-if="telLevel === 'tiny'"
+        class="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/90 backdrop-blur-sm"
+        :class="effectiveCollapsed ? 'flex-col justify-center px-1 py-1.5' : 'px-2.5 py-1.5'"
+      >
+        <span class="inline-flex h-2 w-2 shrink-0 rounded-full" :class="telDotClass"></span>
+        <span v-if="!effectiveCollapsed" class="text-[10px] font-bold uppercase tracking-wider text-slate-500">API</span>
+        <span class="text-[11px] font-black text-white">{{ telUsage }}/100</span>
+        <button
+          v-if="!effectiveCollapsed"
+          type="button"
+          class="ml-auto inline-flex h-5 w-5 items-center justify-center rounded border border-slate-700 text-slate-400 transition hover:text-white"
+          @click="setTelemetryLevel('mini')"
+          title="Expandir monitor da API"
+        >
+          <i class="fa-solid fa-chevron-up text-[9px]"></i>
+        </button>
+      </div>
+
+      <!-- NÍVEL MINI (padrão) e FULL -->
+      <div v-else class="rounded-xl border border-slate-700 bg-slate-900/90 p-3 backdrop-blur-sm">
+        <div class="mb-2 flex items-center justify-between border-b border-slate-700/50 pb-2">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Monitor da API</span>
+          <div class="flex items-center gap-1">
+            <button
+              v-if="telLevel === 'mini'"
+              type="button"
+              class="inline-flex h-5 w-5 items-center justify-center rounded border border-slate-700 text-slate-400 transition hover:text-white"
+              @click="setTelemetryLevel('full')"
+              title="Ver detalhes"
+            ><i class="fa-solid fa-list text-[9px]"></i></button>
+            <button
+              v-else
+              type="button"
+              class="inline-flex h-5 w-5 items-center justify-center rounded border border-slate-700 text-slate-400 transition hover:text-white"
+              @click="setTelemetryLevel('mini')"
+              title="Recolher detalhes"
+            ><i class="fa-solid fa-chevron-up text-[9px]"></i></button>
+            <button
+              type="button"
+              class="inline-flex h-5 w-5 items-center justify-center rounded border border-slate-700 text-slate-400 transition hover:text-white"
+              @click="setTelemetryLevel('tiny')"
+              title="Diminuir ainda mais"
+            ><i class="fa-solid fa-minus text-[9px]"></i></button>
+          </div>
         </div>
-        <div class="flex items-center font-semibold" :class="effectiveCollapsed ? 'flex-col gap-0.5 text-center text-[10px]' : 'justify-between text-sm'">
-          <span class="text-slate-300">{{ effectiveCollapsed ? 'Uso' : 'Uso global (2 min)' }}</span>
+
+        <div class="flex items-center justify-between text-sm font-semibold">
+          <span class="text-slate-300">Uso global (2 min)</span>
           <span class="text-white">{{ telUsage }}/100</span>
         </div>
-        <div v-if="!effectiveCollapsed" class="mt-1 flex items-center justify-between text-sm font-semibold">
+        <div class="mt-1 flex items-center justify-between text-sm font-semibold">
           <span class="text-slate-300">Disponível</span>
           <span :class="telAvailableClass">{{ telAvailable }}</span>
         </div>
         <div class="mt-2 rounded py-1 text-center text-xs font-medium" :class="telTimeClass">
-          {{ effectiveCollapsed ? telAvailable : telTimeText }}
-        </div>
-        <div v-if="!effectiveCollapsed" class="mt-3 space-y-2 border-t border-slate-700/50 pt-3">
-          <div
-            v-for="group in telGroupSummaries"
-            :key="group.key"
-            class="rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1.5"
-          >
-            <div class="flex items-center justify-between text-[10px] font-bold uppercase tracking-wide">
-              <span :class="group.labelClass">{{ group.label }}</span>
-              <span class="text-slate-300">{{ group.usage }} pts</span>
-            </div>
-            <div class="mt-1 flex items-center justify-between text-[10px] text-slate-400">
-              <span>{{ group.requestCount }} req</span>
-              <span>{{ group.timeText }}</span>
-            </div>
-          </div>
+          {{ telTimeText }}
         </div>
 
-        <!-- Toggle de dados brutos do worker (funciona aberto e minimizado) -->
-        <button
-          type="button"
-          @click="showWorkerDebug = !showWorkerDebug"
-          class="mt-2 flex w-full items-center justify-center gap-1 rounded border border-slate-700 bg-slate-950 py-1 text-slate-300 transition hover:border-slate-500 hover:text-white"
-          :class="[
-            effectiveCollapsed ? 'text-xs' : 'text-[11px] font-bold',
-            showWorkerDebug ? 'border-cyan-700 text-cyan-300' : ''
-          ]"
-          :title="showWorkerDebug ? 'Esconder dados brutos do worker' : 'Mostrar dados brutos do worker'"
-        >
-          <template v-if="effectiveCollapsed"><i class="fa-solid" :class="showWorkerDebug ? 'fa-xmark' : 'fa-code'"></i></template>
-          <template v-else><i class="fa-solid" :class="showWorkerDebug ? 'fa-eye-slash' : 'fa-code'"></i>{{ showWorkerDebug ? 'Esconder dados brutos' : 'Dados brutos do worker' }}</template>
-        </button>
+        <template v-if="telLevel === 'full'">
+          <div class="mt-3 space-y-2 border-t border-slate-700/50 pt-3">
+            <div
+              v-for="group in telGroupSummaries"
+              :key="group.key"
+              class="rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1.5"
+            >
+              <div class="flex items-center justify-between text-[10px] font-bold uppercase tracking-wide">
+                <span :class="group.labelClass">{{ group.label }}</span>
+                <span class="text-slate-300">{{ group.usage }} pts</span>
+              </div>
+              <div class="mt-1 flex items-center justify-between text-[10px] text-slate-400">
+                <span>{{ group.requestCount }} req</span>
+                <span>{{ group.timeText }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Toggle de dados brutos do worker (só nos detalhes) -->
+          <button
+            type="button"
+            @click="showWorkerDebug = !showWorkerDebug"
+            class="mt-2 flex w-full items-center justify-center gap-1 rounded border border-slate-700 bg-slate-950 py-1 text-[11px] font-bold text-slate-300 transition hover:border-slate-500 hover:text-white"
+            :class="showWorkerDebug ? 'border-cyan-700 text-cyan-300' : ''"
+            :title="showWorkerDebug ? 'Esconder dados brutos do worker' : 'Mostrar dados brutos do worker'"
+          >
+            <i class="fa-solid" :class="showWorkerDebug ? 'fa-eye-slash' : 'fa-code'"></i>{{ showWorkerDebug ? 'Esconder dados brutos' : 'Dados brutos do worker' }}
+          </button>
+        </template>
       </div>
     </div>
   </aside>
@@ -264,7 +406,7 @@
   <!-- Painel flutuante: Dados Brutos do Worker -->
   <div
     v-if="showWorkerDebug"
-    class="fixed bottom-4 left-4 z-[60] flex max-h-[60vh] w-[min(92vw,34rem)] flex-col rounded-xl border border-slate-700 bg-[#0d1117] shadow-2xl"
+    class="fixed bottom-4 left-4 z-[62] flex max-h-[60vh] w-[min(92vw,34rem)] flex-col rounded-xl border border-slate-700 bg-[#0d1117] shadow-2xl"
   >
     <div class="flex shrink-0 items-center justify-between border-b border-slate-800 px-4 py-2">
       <span class="text-xs font-black uppercase tracking-wider text-slate-400">Dados Brutos do Worker</span>
@@ -365,20 +507,73 @@ watch(
 // No modo minimizado, a barra expande visualmente enquanto o mouse estiver sobre ela.
 // O estado real (store.ui.sidebarCollapsed) continua governando o pin, a margem do main e o localStorage.
 const effectiveCollapsed = computed(() => store.ui.sidebarCollapsed && !sidebarHovered.value);
+
+// Nível do Monitor da API: quando a sidebar está minimizada, força 'tiny'; senão
+// respeita a escolha do usuário (padrão 'mini'). Persistido no localStorage.
+const telLevel = computed(() => (effectiveCollapsed.value ? 'tiny' : store.ui.telemetryLevel));
+function setTelemetryLevel(level) {
+  store.ui.telemetryLevel = level;
+  localStorage.setItem('telemetry-level', level);
+}
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1440);
 
 const topTabs = [
-  { id: 'home', path: '/', label: 'TEMPLO', icon: 'fa-fire', gradient: true, border: 'border-orange-500', active: 'border-orange-500 bg-orange-500/10 text-orange-300' },
-  { id: 'historico', path: '/historico', label: 'CAÇADA', icon: 'fa-paw', text: 'text-cyan-400', border: 'border-cyan-500', active: 'border-cyan-500 bg-cyan-500/10 text-cyan-400' },
-  { id: 'analise', path: '/analise', label: 'VISÃO', icon: 'fa-chart-simple', text: 'text-violet-400', border: 'border-violet-500', active: 'border-violet-500 bg-violet-500/10 text-violet-400' },
-  { id: 'maestria', path: '/mastery', label: 'CAVERNA', icon: 'fa-trophy', text: 'text-amber-400', border: 'border-amber-500', active: 'border-amber-500 bg-amber-500/10 text-amber-400' },
-  { id: 'sinergia', path: '/synergy', label: 'TRIBO', icon: 'fa-people-group', text: 'text-lime-400', border: 'border-lime-500', active: 'border-lime-500 bg-lime-500/10 text-lime-400' },
+  { id: 'home', path: '/', label: 'TEMPLO', icon: 'fa-fire', gradient: true, border: 'border-orange-500', active: 'border-orange-500 bg-orange-500/10 text-orange-300', accent: 'text-orange-300', preview: { type: 'home', desc: 'Escolha seu caminho ancestral: jogador, campeões ou tribo.' } },
+  { id: 'historico', path: '/historico', label: 'CAÇADA', icon: 'fa-paw', text: 'text-cyan-400', border: 'border-cyan-500', active: 'border-cyan-500 bg-cyan-500/10 text-cyan-400', accent: 'text-cyan-300', preview: { type: 'historico', desc: 'Histórico de partidas: KDA, itens e confrontos por rota.' } },
+  { id: 'analise', path: '/analise', label: 'VISÃO', icon: 'fa-chart-simple', text: 'text-violet-400', border: 'border-violet-500', active: 'border-violet-500 bg-violet-500/10 text-violet-400', accent: 'text-violet-300', preview: { type: 'analise', desc: 'Estatísticas e radar de desempenho sobre todo o histórico.' } },
+  { id: 'meta', path: '/meta', label: 'META', icon: 'fa-ranking-star', text: 'text-amber-400', border: 'border-amber-500', active: 'border-amber-500 bg-amber-500/10 text-amber-400', accent: 'text-amber-300', preview: { type: 'meta', desc: 'Tier list S/A/B/C/D por rota no patch atual.' } },
+  { id: 'pantheon', path: '/champions', label: 'PANTEÃO', icon: 'fa-dragon', text: 'text-sky-400', border: 'border-sky-500', active: 'border-sky-500 bg-sky-500/10 text-sky-400', accent: 'text-sky-300', preview: { type: 'pantheon', desc: 'Fichas de campeões: habilidades, perfil tático e relíquias.' } },
+  { id: 'sinergia', path: '/synergy', label: 'TRIBO', icon: 'fa-people-group', text: 'text-lime-400', border: 'border-lime-500', active: 'border-lime-500 bg-lime-500/10 text-lime-400', accent: 'text-lime-300', preview: { type: 'tribo', desc: 'Planejador de composição: encaixe 1 a 5 e ache a sinergia.' } },
 ];
 
-const sidebarTabs = [
-  ...topTabs,
-  { id: 'ancestralidade', path: '/ancestralidade', label: 'ANCESTRALIDADE', icon: 'fa-user-secret', active: 'border-fuchsia-500 bg-fuchsia-500/10 text-fuchsia-400' },
+// Sidebar temática: duas seções grandes (Jogadores e Campeões). `match` = prefixos
+// de rota que acendem o item (cobre sub-rotas e apelidos como /historico, /analise).
+const sidebarSections = [
+  {
+    id: 'players',
+    label: 'Jogadores',
+    icon: 'fa-crown',
+    labelClass: 'text-cyan-300',
+    hub: '/jogadores',
+    items: [
+      { id: 'historico', path: '/historico', match: ['/historico', '/profile'], label: 'Caçadas Passadas', icon: 'fa-paw', active: 'border-cyan-500 bg-cyan-500/10 text-cyan-300' },
+      { id: 'analise', path: '/analise', match: ['/analise'], label: 'Olhar Espiritual', icon: 'fa-chart-simple', active: 'border-violet-500 bg-violet-500/10 text-violet-300' },
+      { id: 'mastery', path: '/mastery', match: ['/mastery'], label: 'Caverna dos Monos', icon: 'fa-trophy', active: 'border-amber-500 bg-amber-500/10 text-amber-300' },
+    ]
+  },
+  {
+    id: 'champions',
+    label: 'Campeões',
+    icon: 'fa-dragon',
+    labelClass: 'text-violet-300',
+    hub: '/campeoes',
+    items: [
+      { id: 'meta', path: '/meta', match: ['/meta'], label: 'Meta & Tier List', icon: 'fa-ranking-star', active: 'border-amber-500 bg-amber-500/10 text-amber-300' },
+      { id: 'pantheon', path: '/champions', match: ['/champions'], label: 'Panteão dos Campeões', icon: 'fa-dragon', active: 'border-sky-500 bg-sky-500/10 text-sky-300' },
+      { id: 'items', path: '/items', match: ['/items'], label: 'Relíquias Ancestrais', icon: 'fa-gem', active: 'border-fuchsia-500 bg-fuchsia-500/10 text-fuchsia-300' },
+    ]
+  },
+  {
+    id: 'teams',
+    label: 'Equipes',
+    icon: 'fa-people-group',
+    labelClass: 'text-lime-300',
+    hub: '/synergy',
+    items: [
+      { id: 'sinergia', path: '/synergy', match: ['/synergy'], label: 'Tribo Perfeita', icon: 'fa-people-group', active: 'border-lime-500 bg-lime-500/10 text-lime-300' },
+      { id: 'custom', path: '/saguaoCustom', match: ['/saguaoCustom'], label: 'Customizada 5x5', icon: 'fa-shuffle', active: 'border-orange-500 bg-orange-500/10 text-orange-300' },
+    ]
+  }
 ];
+
+// Ancestralidade (consulta avançada ao D1): botão especial ISOLADO no rodapé da
+// sidebar — não aparece em nenhuma seção nem na Home.
+const ancestralButton = { path: '/ancestralidade', match: ['/ancestralidade'], label: 'Ancestralidade', icon: 'fa-user-secret' };
+
+function isItemActive(item) {
+  const p = route.path;
+  return (item.match || [item.path]).some((prefix) => p === prefix || p.startsWith(prefix + '/'));
+}
 
 // A animação de busca agora é única e guiada por store.searchProfile.loading.
 // Os handlers são mantidos como no-op pois o evento @show-overlay/@hide-overlay
@@ -437,6 +632,9 @@ const pageThemeBorder = computed(() => {
   if (p.startsWith('/synergy')) return 'border-lime-500/60';
   if (p.startsWith('/saguaoCustom')) return 'border-orange-500/60';
   if (p.startsWith('/ancestralidade')) return 'border-fuchsia-500/60';
+  if (p.startsWith('/meta')) return 'border-amber-500/60';
+  if (p.startsWith('/champions')) return 'border-sky-500/60';
+  if (p.startsWith('/items')) return 'border-fuchsia-500/60';
   return 'border-transparent';
 });
 
@@ -492,6 +690,10 @@ onMounted(() => {
   const saved = localStorage.getItem('sidebar-collapsed');
   if (saved !== null) {
     store.ui.sidebarCollapsed = saved === 'true';
+  }
+  const savedTel = localStorage.getItem('telemetry-level');
+  if (savedTel === 'tiny' || savedTel === 'mini' || savedTel === 'full') {
+    store.ui.telemetryLevel = savedTel;
   }
   updateViewport();
 });
@@ -565,6 +767,14 @@ const telAvailableClass = computed(() => {
   if (a > 25) return 'text-green-400';
   if (a > 10) return 'text-amber-400';
   return 'text-red-500 animate-pulse font-black';
+});
+
+// Indicador colorido (bolinha) do nível 'tiny'/cabeçalho, pelo saldo disponível.
+const telDotClass = computed(() => {
+  const a = telAvailable.value;
+  if (a > 25) return 'bg-green-400';
+  if (a > 10) return 'bg-amber-400';
+  return 'bg-red-500 animate-pulse';
 });
 
 const telTimeText = computed(() => {

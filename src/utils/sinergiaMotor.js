@@ -39,7 +39,10 @@ const META_STALE_DIAS = 30;
 /**
  * Parser do CSV de meta no estilo do parseSynergyCsv.
  * - 1ª linha de comentário carrega patch e data: "# patch: X | atualizado: YYYY-MM-DD".
- * - table: chave `champion|ROLE` -> { tier, score }.
+ * - table: chave `champion|ROLE` -> { tier, score, winrate?, pickrate?, banrate? }.
+ * - Cabeçalho dinâmico: além de champion,role,tier aceita as colunas OPCIONAIS
+ *   winrate,pickrate,banrate (percentuais). Ausência = campos undefined (a UI
+ *   exibe fallback neutro). Sem cabeçalho, assume a ordem clássica de 3 colunas.
  * Retorna { patch, updatedAt, table }.
  */
 function parseMetaCsv(csvText) {
@@ -61,15 +64,40 @@ function parseMetaCsv(csvText) {
     .filter((line) => line && !line.startsWith('#'));
 
   const table = {};
-  // pula o cabeçalho (champion,role,tier) se presente
-  const dataRows = rows.length && rows[0].toLowerCase().startsWith('champion,') ? rows.slice(1) : rows;
+  const hasHeader = rows.length && rows[0].toLowerCase().startsWith('champion,');
+  const headers = hasHeader
+    ? rows[0].split(',').map((part) => part.trim().toLowerCase())
+    : ['champion', 'role', 'tier'];
+  const col = (name, fallbackIdx) => {
+    const idx = headers.indexOf(name);
+    return idx >= 0 ? idx : fallbackIdx;
+  };
+  const idxChampion = col('champion', 0);
+  const idxRole = col('role', 1);
+  const idxTier = col('tier', 2);
+  const idxWinrate = headers.indexOf('winrate');
+  const idxPickrate = headers.indexOf('pickrate');
+  const idxBanrate = headers.indexOf('banrate');
+  const pct = (cells, idx) => {
+    if (idx < 0) return undefined;
+    const value = Number(String(cells[idx] || '').replace('%', '').replace(',', '.'));
+    return Number.isFinite(value) ? value : undefined;
+  };
+
+  const dataRows = hasHeader ? rows.slice(1) : rows;
   for (const row of dataRows) {
     const cells = row.split(',').map((part) => part.trim());
-    const champion = cells[0];
-    const role = String(cells[1] || '').toUpperCase();
-    const tier = String(cells[2] || '').toUpperCase();
+    const champion = cells[idxChampion];
+    const role = String(cells[idxRole] || '').toUpperCase();
+    const tier = String(cells[idxTier] || '').toUpperCase();
     if (!champion || !role || META_TIER_VALUES[tier] === undefined) continue;
-    table[`${champion}|${role}`] = { tier, score: META_TIER_VALUES[tier] };
+    table[`${champion}|${role}`] = {
+      tier,
+      score: META_TIER_VALUES[tier],
+      winrate: pct(cells, idxWinrate),
+      pickrate: pct(cells, idxPickrate),
+      banrate: pct(cells, idxBanrate)
+    };
   }
 
   return { patch, updatedAt, table };

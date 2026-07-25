@@ -1,7 +1,8 @@
 <template>
-  <div class="relative min-h-[74vh] space-y-6 rounded-2xl border border-orange-950/30 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-orange-950/20 to-slate-950 p-4">
+  <div class="relative min-h-[74vh] space-y-6">
 
-    <!-- Busca sobreposta enquanto nenhum perfil foi pesquisado -->
+    <!-- Busca sobreposta enquanto nenhum perfil foi pesquisado (mesmo container/espaçamento
+         das telas Caçadas Passadas e Olhar Espiritual — todas usam o SearchGate). -->
     <SearchGate
       title="BUGA! Caverna dos Monos"
       @show-overlay="c => $emit('show-overlay', c)"

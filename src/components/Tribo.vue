@@ -19,7 +19,7 @@
 
     <section
       v-if="viewMode === 'selection'"
-      class="rounded-2xl bg-slate-900/70 backdrop-blur-md border border-slate-800 p-6 shadow-xl"
+      class="flex min-h-[58vh] items-center justify-center rounded-2xl bg-slate-900/70 backdrop-blur-md border border-slate-800 p-6 shadow-xl"
     >
       <FilaSelecao
         mode-label="Lobby"

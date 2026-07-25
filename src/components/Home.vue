@@ -4,9 +4,9 @@
     :class="activeBg !== 0 ? 'border-slate-800' : 'border-transparent'"
   >
     <!-- CAMADA DE FUNDO (recortada nas bordas arredondadas). O conteúdo fica FORA
-         deste wrapper para que os cards de prévia possam "vazar" pra cima sem corte. -->
+         deste wrapper para que os portais possam "vazar" pra cima sem corte. -->
     <div class="absolute inset-0 overflow-hidden rounded-3xl">
-      <!-- Fundo PADRÃO (sem hover): floresta + udyr lado a lado. -->
+      <!-- Fundo PADRÃO (sem hover): a roda de fogo do Udyr nas duas versões (floresta + udyr). -->
       <div
         class="absolute inset-0 flex transition-opacity duration-500"
         :style="{ opacity: activeBg === 0 ? '0.6' : '0' }"
@@ -15,7 +15,7 @@
         <div class="h-full w-1/2 bg-cover bg-top bg-no-repeat" :style="{ backgroundImage: `url('${HOME_UDYR}')` }"></div>
       </div>
 
-      <!-- Um fundo por espírito: aparece quando o mouse está no botão correspondente. -->
+      <!-- Um fundo por espírito: aparece quando o mouse está no portal correspondente. -->
       <div
         v-for="p in paths"
         :key="`bg-${p.key}`"
@@ -27,118 +27,86 @@
            pra a arte do bicho aparecer atrás sem matar a legibilidade do texto. -->
       <div
         class="absolute inset-0 transition-all duration-500"
-        :class="activeBg !== 0 ? 'bg-gradient-to-b from-slate-950/50 via-slate-950/45 to-slate-950/70' : 'bg-slate-950/72'"
+        :class="activeBg !== 0 ? 'bg-gradient-to-b from-slate-950/55 via-slate-950/50 to-slate-950/75' : 'bg-slate-950/72'"
       ></div>
     </div>
 
     <!-- CONTEÚDO -->
     <div class="relative z-10 flex min-h-[74vh] flex-col items-center justify-center w-full">
-      <h2 class="mb-10 text-center text-3xl font-black tracking-wide text-slate-100 drop-shadow-[0_2px_16px_rgba(6,182,212,0.5)] sm:text-5xl">
-        <span class="bg-gradient-to-r from-lime-300 via-yellow-300 to-orange-500 bg-clip-text text-transparent">Selecione Seu Caminho Ancestral</span>
-      </h2>
+      <!-- Marca + subtítulo -->
+      <div class="mb-6 text-center">
+        <p class="mb-1 text-[11px] font-black uppercase tracking-[0.35em] text-slate-400/80">bUGAdão Analytics</p>
+        <h2 class="text-3xl font-black tracking-wide text-slate-100 drop-shadow-[0_2px_16px_rgba(6,182,212,0.5)] sm:text-5xl">
+          <span class="bg-gradient-to-r from-lime-300 via-yellow-300 to-orange-500 bg-clip-text text-transparent">Escolha Seu Caminho Ancestral</span>
+        </h2>
+        <p class="mx-auto mt-2 max-w-lg text-sm text-slate-300/90">
+          Invocador, campeão ou tribo — passe o espírito do Udyr sobre cada portal e siga a trilha.
+        </p>
+      </div>
 
-      <!-- CAIXA DE BUSCA NO CENTRO DA HOME -->
-      <div data-search-morph="home" class="mb-12 w-full max-w-md bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-2xl">
+      <!-- CAIXA DE BUSCA (híbrida: jogador ou campeão) -->
+      <div data-search-morph="home" class="mb-10 w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/85 p-5 shadow-2xl backdrop-blur">
         <SearchBar
           buttonText="Começar Jornada"
           autocomplete
+          context="global"
           :routeToProfile="true"
           @search-start="$emit('search-start')"
           @show-overlay="c => $emit('show-overlay', c)"
           @hide-overlay="$emit('hide-overlay')"
           @show-udyr="$emit('show-udyr')"
         />
+        <p class="mt-2 text-center text-[11px] text-slate-500">
+          Digite <span class="font-bold text-slate-400">Nome#TAG</span> para um jogador ou o nome de um <span class="font-bold text-slate-400">campeão</span>.
+        </p>
       </div>
 
-      <!-- OS 4 ESPÍRITOS DO UDYR -->
-      <div class="grid w-full max-w-6xl gap-4 px-2 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
+      <!-- OS 4 PORTAIS = OS 4 ESPÍRITOS DO UDYR -->
+      <div class="grid w-full max-w-6xl gap-4 px-2 sm:grid-cols-2 xl:grid-cols-4">
         <div
           v-for="p in paths"
           :key="p.key"
-          class="group relative"
+          class="group relative overflow-hidden rounded-2xl border shadow-2xl transition duration-300 hover:scale-[1.02]"
+          :class="p.cardCls"
           @mouseenter="setBg(p.n)"
           @mouseleave="setBg(0)"
         >
-          <!-- CARD DE PRÉVIA (flutua acima do botão ao passar o mouse) -->
-          <div
-            class="pointer-events-none absolute bottom-full left-1/2 z-40 mb-3 w-64 max-w-[80vw] -translate-x-1/2 translate-y-2 rounded-xl border border-slate-700 bg-slate-950/95 p-3 opacity-0 shadow-2xl backdrop-blur transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100"
-          >
-            <p class="mb-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" :class="p.tagCls">
-              <i class="fa-solid" :class="p.icon"></i> Prévia · {{ p.title }}
-            </p>
+          <!-- Glow + arte do espírito (decorativa) -->
+          <div class="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full blur-3xl transition-all duration-500 group-hover:opacity-90" :class="p.glowCls"></div>
+          <img
+            :src="p.img"
+            :alt="p.title"
+            class="pointer-events-none absolute -bottom-6 -right-5 h-40 w-40 select-none object-contain opacity-25 drop-shadow-2xl transition duration-500 group-hover:scale-110 group-hover:opacity-55"
+          />
 
-            <!-- Mockup do Histórico (Tigre): mini cards de partida -->
-            <div v-if="p.key === 'historico'" class="space-y-1.5">
-              <div
-                v-for="win in [true, false]"
-                :key="String(win)"
-                class="flex items-center gap-2 rounded-md border p-1.5"
-                :class="win ? 'border-blue-800/60 bg-blue-950/30' : 'border-red-800/60 bg-red-950/30'"
-              >
-                <div class="h-6 w-6 shrink-0 rounded bg-slate-700"></div>
-                <div class="flex-1 space-y-1">
-                  <div class="h-1.5 w-12 rounded bg-slate-600"></div>
-                  <div class="h-1.5 w-16 rounded bg-slate-700"></div>
-                </div>
-                <span class="text-[9px] font-black" :class="win ? 'text-blue-400' : 'text-red-400'">{{ win ? 'V' : 'D' }}</span>
-              </div>
-            </div>
-
-            <!-- Mockup da Análise (Fênix): mini radar + barras -->
-            <div v-else-if="p.key === 'analise'" class="flex items-center gap-3">
-              <svg viewBox="0 0 40 40" class="h-14 w-14 shrink-0">
-                <polygon points="20,3 36,15 30,36 10,36 4,15" fill="none" stroke="#7c3aed" stroke-width="1" opacity="0.6" />
-                <polygon points="20,11 30,17 26,31 14,30 10,18" fill="rgba(167,139,250,0.25)" stroke="#c4b5fd" stroke-width="1" />
-              </svg>
-              <div class="flex-1 space-y-1.5">
-                <div class="h-1.5 rounded bg-violet-500/70" style="width:82%"></div>
-                <div class="h-1.5 rounded bg-violet-500/50" style="width:58%"></div>
-                <div class="h-1.5 rounded bg-violet-500/60" style="width:70%"></div>
-                <div class="h-1.5 rounded bg-violet-500/40" style="width:45%"></div>
-              </div>
-            </div>
-
-            <!-- Mockup das Maestrias (Urso): mini tiles de monos -->
-            <div v-else-if="p.key === 'maestria'" class="flex justify-center gap-3 py-1">
-              <div v-for="i in 3" :key="i" class="flex flex-col items-center">
-                <div class="relative h-9 w-9 rounded-full border-2 border-amber-600/60 bg-slate-700">
-                  <span class="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded bg-amber-600 px-1 text-[7px] font-black text-white">M{{ 8 - i }}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Mockup da Tribo (Tartaruga): 5 vagas de rota -->
-            <div v-else class="flex justify-center gap-1.5 py-1">
-              <div v-for="i in 5" :key="i" class="flex h-8 w-8 items-center justify-center rounded-lg border border-lime-700/50 bg-lime-950/40">
-                <i class="fa-solid fa-user text-[10px] text-lime-400/80"></i>
-              </div>
-            </div>
-
-            <p class="mt-2.5 text-[10px] font-medium leading-snug text-slate-400">{{ p.previewDesc }}</p>
-            <span class="absolute left-1/2 top-full h-2.5 w-2.5 -translate-x-1/2 -translate-y-[6px] rotate-45 border-b border-r border-slate-700 bg-slate-950"></span>
-          </div>
-
-          <!-- BOTÃO -->
-          <button
-            type="button"
-            @click="go(p)"
-            class="relative min-h-[200px] w-full overflow-hidden rounded-2xl border p-5 text-left shadow-2xl transition duration-300 group-hover:scale-[1.03]"
-            :class="p.cardCls"
-          >
-            <div class="absolute -right-12 -top-12 h-44 w-44 rounded-full blur-3xl transition-all duration-500 group-hover:opacity-90" :class="p.glowCls"></div>
-            <img
-              :src="p.img"
-              :alt="p.title"
-              class="pointer-events-none absolute -bottom-5 -right-4 h-36 w-36 object-contain opacity-30 drop-shadow-2xl transition duration-500 group-hover:scale-110 group-hover:opacity-60"
-            />
-            <div class="relative z-10">
+          <div class="relative z-10 flex h-full flex-col p-5">
+            <!-- Cabeçalho clicável: leva ao hub da categoria -->
+            <button type="button" class="text-left" @click="goPrimary(p)">
               <p class="text-[10px] font-black uppercase tracking-[0.18em]" :class="p.spiritCls">{{ p.spirit }}</p>
-              <p class="mt-1 text-2xl font-black drop-shadow-[0_0_12px_rgba(0,0,0,0.6)]" :class="p.bigCls">{{ p.big }}</p>
-              <p class="text-xl font-black drop-shadow-[0_0_12px_rgba(0,0,0,0.6)]" :class="p.titleCls">{{ p.title }}</p>
-              <p class="mt-3 text-sm font-semibold text-slate-200">{{ p.desc }}</p>
-              <p class="mt-1.5 text-[10px] uppercase tracking-widest" :class="p.tagCls">{{ p.tags }}</p>
+              <p class="mt-1 flex items-center gap-2 text-2xl font-black drop-shadow-[0_0_12px_rgba(0,0,0,0.6)]" :class="p.titleCls">
+                <i class="fa-solid text-lg" :class="[p.icon, p.spiritCls]"></i>{{ p.title }}
+              </p>
+              <p class="mt-2 text-sm font-semibold leading-snug text-slate-200/90">{{ p.desc }}</p>
+            </button>
+
+            <!-- Sub-links diretos para as páginas da categoria -->
+            <div class="mt-4 flex flex-1 flex-col justify-end gap-1.5">
+              <button
+                v-for="link in p.links"
+                :key="link.to"
+                type="button"
+                class="flex items-center gap-2 rounded-lg border bg-slate-950/50 px-2.5 py-1.5 text-left text-xs font-bold text-slate-200 backdrop-blur-sm transition hover:text-white"
+                :class="p.chipCls"
+                @click.stop="goTo(link.to)"
+              >
+                <span class="inline-flex h-5 w-5 shrink-0 items-center justify-center" :class="p.spiritCls">
+                  <i class="fa-solid text-[11px]" :class="link.icon"></i>
+                </span>
+                <span class="truncate">{{ link.label }}</span>
+                <i class="fa-solid fa-chevron-right ml-auto text-[9px] opacity-50"></i>
+              </button>
             </div>
-          </button>
+          </div>
         </div>
       </div>
     </div>
@@ -155,69 +123,80 @@ const router = useRouter();
 const store = state;
 defineEmits(['show-overlay', 'hide-overlay', 'show-udyr', 'search-start']);
 
-// Imagens locais mostradas por padrão (lado a lado), antes de hover nos botões.
+// Fundo PADRÃO: a roda de fogo do Udyr nas duas versões (mantido).
 const HOME_UDYR_FOREST = '/home_udyr_forest.png';
 const HOME_UDYR = '/home_udyr.png';
 
-// Fundo ativo: 0 = padrão; 1..4 = espírito sob o mouse (casa com `n` de cada path).
+// Fundo ativo: 0 = padrão (roda de fogo); 1..4 = espírito sob o mouse (casa com `n`).
 const activeBg = ref(0);
 function setBg(n) {
   activeBg.value = n;
 }
 
-// Os 4 caminhos = os 4 espíritos do Udyr. `n` casa com a camada de fundo no hover.
+// Os 4 portais = os 4 espíritos do Udyr, agora mapeados aos PILARES da nova arquitetura.
+// Cada portal tem um hub (clique no cabeçalho) e sub-links diretos às páginas.
 const paths = [
   {
-    n: 1, key: 'historico', route: '/historico', img: '/Udyr_notudyr_tiger.png', icon: 'fa-scroll',
-    spirit: 'Espírito do Tigre', big: 'UGA!', title: 'Caçadas Passadas',
-    desc: 'Reviva o histórico de partidas do jogador',
-    tags: 'Partidas · KDA · Confrontos',
-    previewDesc: 'Últimas partidas com KDA, itens, runas e confrontos por rota.',
+    n: 1, key: 'jogador', img: '/Udyr_notudyr_tiger.png', icon: 'fa-user-astronaut', primary: '/profile',
+    spirit: 'Espírito do Tigre', title: 'Jogador',
+    desc: 'Perfil, histórico de caçadas e o olhar espiritual sobre o invocador.',
+    links: [
+      { label: 'Perfil & Histórico', to: '/historico', icon: 'fa-scroll' },
+      { label: 'Olhar Espiritual', to: '/analise', icon: 'fa-chart-simple' }
+    ],
     cardCls: 'border-cyan-500/40 bg-gradient-to-br from-blue-900/80 via-cyan-800/40 to-slate-950 hover:shadow-[0_0_40px_rgba(6,182,212,0.35)]',
-    glowCls: 'bg-cyan-400/20', spiritCls: 'text-cyan-400/70', bigCls: 'text-cyan-400', titleCls: 'text-cyan-200', tagCls: 'text-cyan-300/80'
+    glowCls: 'bg-cyan-400/20', spiritCls: 'text-cyan-400', titleCls: 'text-cyan-100', chipCls: 'border-cyan-800/50 hover:border-cyan-500'
   },
   {
-    n: 2, key: 'analise', route: '/analise', img: '/Udyr_notudyr_phoenix.png', icon: 'fa-chart-simple',
-    spirit: 'Espírito da Fênix', big: 'BUGA?', title: 'Olhar da Espiritual',
-    desc: 'Estatísticas e tendências do jogador',
-    tags: 'Gráficos · Radar · Campeões',
-    previewDesc: 'Radar de desempenho, rotas, campeões e evolução sobre todo o histórico.',
-    cardCls: 'border-violet-500/40 bg-gradient-to-br from-fuchsia-950/80 via-violet-800/40 to-slate-950 hover:shadow-[0_0_40px_rgba(139,92,246,0.35)]',
-    glowCls: 'bg-violet-400/25', spiritCls: 'text-violet-400/70', bigCls: 'text-violet-400', titleCls: 'text-violet-200', tagCls: 'text-violet-300/80'
-  },
-  {
-    n: 3, key: 'maestria', route: '/mastery', img: '/Udyr_notudyr_bear.png', icon: 'fa-trophy',
-    spirit: 'Espírito do Urso', big: 'BUGA!', title: 'Caverna dos Monos',
-    desc: 'Veja as maestrias de campeões do jogador',
-    tags: 'Monos · Pontos · Ranking',
-    previewDesc: 'Ranking de maestrias: nível, pontos e os campeões mais dominados.',
+    n: 2, key: 'maestria', img: '/Udyr_notudyr_bear.png', icon: 'fa-trophy', primary: '/mastery',
+    spirit: 'Espírito do Urso', title: 'Maestrias',
+    desc: 'A caverna dos monos: os campeões mais dominados e seus pontos.',
+    links: [
+      { label: 'Caverna dos Monos', to: '/mastery', icon: 'fa-trophy' }
+    ],
     cardCls: 'border-amber-700/50 bg-gradient-to-br from-red-950/90 via-orange-900/40 to-slate-950 hover:shadow-[0_0_40px_rgba(251,146,60,0.3)]',
-    glowCls: 'bg-orange-500/25', spiritCls: 'text-amber-400/70', bigCls: 'text-amber-500', titleCls: 'text-amber-200', tagCls: 'text-amber-300/80'
+    glowCls: 'bg-orange-500/25', spiritCls: 'text-amber-400', titleCls: 'text-amber-100', chipCls: 'border-amber-800/50 hover:border-amber-500'
   },
   {
-    n: 4, key: 'time', route: '/synergy', img: '/Udyr_notudyr_turtle.png', icon: 'fa-people-group',
-    spirit: 'Espírito da Tartaruga', big: 'UGA! BUGA!', title: 'Tribo Perfeita',
-    desc: 'Monte a composição com sinergia',
-    tags: 'Planejador · Sinergia · Conforto',
-    previewDesc: 'Planejador de time: encaixe de 1 a 5 jogadores e ache a melhor sinergia.',
+    n: 3, key: 'campeoes', img: '/Udyr_notudyr_phoenix.png', icon: 'fa-dragon', primary: '/meta',
+    spirit: 'Espírito da Fênix', title: 'Campeões',
+    desc: 'Tier list do patch, fichas do panteão e o arsenal de relíquias.',
+    links: [
+      { label: 'Meta & Tier List', to: '/meta', icon: 'fa-ranking-star' },
+      { label: 'Panteão dos Campeões', to: '/champions', icon: 'fa-dragon' },
+      { label: 'Relíquias Ancestrais', to: '/items', icon: 'fa-gem' }
+    ],
+    cardCls: 'border-violet-500/40 bg-gradient-to-br from-fuchsia-950/80 via-violet-800/40 to-slate-950 hover:shadow-[0_0_40px_rgba(139,92,246,0.35)]',
+    glowCls: 'bg-violet-400/25', spiritCls: 'text-violet-400', titleCls: 'text-violet-100', chipCls: 'border-violet-800/50 hover:border-violet-500'
+  },
+  {
+    n: 4, key: 'equipes', img: '/Udyr_notudyr_turtle.png', icon: 'fa-people-group', primary: '/synergy',
+    spirit: 'Espírito da Tartaruga', title: 'Equipes',
+    desc: 'Monte a tribo perfeita por sinergia e equilibre partidas customizadas.',
+    links: [
+      { label: 'Tribo Perfeita', to: '/synergy', icon: 'fa-people-group' },
+      { label: 'Customizada 5x5', to: '/saguaoCustom', icon: 'fa-shuffle' }
+    ],
     cardCls: 'border-lime-500/40 bg-gradient-to-br from-emerald-900/80 via-teal-900/40 to-slate-950 hover:shadow-[0_0_40px_rgba(132,204,22,0.3)]',
-    glowCls: 'bg-lime-400/25', spiritCls: 'text-lime-400/70', bigCls: 'text-lime-500', titleCls: 'text-lime-200', tagCls: 'text-lime-300/80'
+    glowCls: 'bg-lime-400/25', spiritCls: 'text-lime-400', titleCls: 'text-lime-100', chipCls: 'border-lime-800/50 hover:border-lime-500'
   }
 ];
 
-// Histórico e Análise dependem de um jogador. Se já há um carregado, entra direto
-// nele; senão abre a rota (gate de busca da seção). Maestrias/Tribo têm busca própria.
-function go(p) {
-  if (p.key === 'historico' || p.key === 'analise') {
-    const base = p.key === 'historico' ? '/historico' : '/analise';
+// Navegação direta para uma página (sub-link).
+function goTo(to) {
+  router.push(to);
+}
+
+// Clique no cabeçalho do portal: vai ao hub. O Jogador entra direto no perfil já
+// carregado (se houver); senão abre o gate de busca da seção.
+function goPrimary(p) {
+  if (p.key === 'jogador') {
     const { puuid, gameName, tagLine } = store.searchProfile;
     if (puuid && gameName && tagLine) {
-      router.push(`${base}/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`);
+      router.push(`/profile/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`);
       return;
     }
-    router.push(base);
-    return;
   }
-  router.push(p.route);
+  router.push(p.primary);
 }
 </script>

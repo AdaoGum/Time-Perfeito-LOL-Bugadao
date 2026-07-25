@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e ' *)",
+      "Bash(node \"C:/Users/AdaoJr/AppData/Local/Temp/claude/c--Users-AdaoJr-Projetos-Pessoais-Time-Perfeito-LOL-Bugadao/14a6ac60-6e3f-41b0-a5dd-d828ce64d3be/scratchpad/gen-meta.js\")",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('src/data/builds-champs.json','utf8'\\)\\); console.log\\('builds-champs.json: JSON valido'\\)\")"
+    ]
+  }
+}

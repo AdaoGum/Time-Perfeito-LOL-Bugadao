@@ -67,9 +67,59 @@ export function summonerSpellImage(full) {
   return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/spell/${full}`;
 }
 
+// Ícone de habilidade ativa do campeão (Q/W/E/R). `full` = spell.image.full.
+export function championSpellImage(full) {
+  return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/spell/${full}`;
+}
+
+// Ícone da passiva do campeão. `full` = passive.image.full.
+export function championPassiveImage(full) {
+  return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/passive/${full}`;
+}
+
+// Splash art / loading art NÃO usam a versão do patch na URL (caminho fixo).
+export function championSplashImage(name, skin = 0) {
+  return `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${encodeURIComponent(getChampionIdFromName(name))}_${skin}.jpg`;
+}
+
+export function championLoadingImage(name, skin = 0) {
+  return `https://ddragon.leagueoflegends.com/cdn/img/champion/loading/${encodeURIComponent(getChampionIdFromName(name))}_${skin}.jpg`;
+}
+
+// Ficha completa de um campeão (champion/<id>.json do Data Dragon), com cache em
+// memória por (versão + id). Best-effort: em falha lança para o chamador tratar.
+const _championDetailCache = new Map();
+export async function fetchChampionDetail(name) {
+  const id = getChampionIdFromName(name);
+  const cacheKey = `${DDRAGON_VERSION}:${id}`;
+  if (_championDetailCache.has(cacheKey)) return _championDetailCache.get(cacheKey);
+  const res = await fetch(`https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/data/pt_BR/champion/${id}.json`);
+  if (!res.ok) throw new Error('Não foi possível carregar a ficha do campeão.');
+  const json = await res.json();
+  const detail = json?.data?.[id] || null;
+  if (!detail) throw new Error('Ficha do campeão indisponível neste patch.');
+  _championDetailCache.set(cacheKey, detail);
+  return detail;
+}
+
 // Ícones de runa usam o caminho "icon" do runesReforged.json, sem versão na URL
 export function runeImage(icon) {
   return `https://ddragon.leagueoflegends.com/cdn/img/${icon}`;
+}
+
+// Ícones OFICIAIS de rota/posição do LoL (Community Dragon) — os mesmos usados
+// no seletor de posição do cliente. Aceita as chaves do app (TOP/JUNGLE/MID/ADC/SUP)
+// e também os nomes de posição do match-history (MIDDLE/BOTTOM/UTILITY).
+const ROLE_POSITION_KEY = {
+  TOP: 'top', JUNGLE: 'jungle', JG: 'jungle',
+  MID: 'middle', MIDDLE: 'middle',
+  ADC: 'bottom', BOT: 'bottom', BOTTOM: 'bottom',
+  SUP: 'utility', SUPPORT: 'utility', UTILITY: 'utility',
+  FILL: 'fill', AUTOFILL: 'fill'
+};
+export function roleIconImage(roleKey) {
+  const pos = ROLE_POSITION_KEY[String(roleKey || '').toUpperCase()] || 'fill';
+  return `https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-clash/global/default/assets/images/position-selector/positions/icon-position-${pos}.png`;
 }
 
 export function calculateKdaRatio(k, d, a) {

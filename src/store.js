@@ -42,7 +42,10 @@ export const state = reactive({
 
   ui: {
     sidebarCollapsed: false,
-    sidebarMobileOpen: false
+    sidebarMobileOpen: false,
+    // Nível de exibição do Monitor da API: 'tiny' | 'mini' (padrão) | 'full'.
+    // Começa minimizado; o usuário pode diminuir ainda mais (tiny) ou abrir detalhes (full).
+    telemetryLevel: 'mini'
   },
 
   // Planeador de equipes (Página da Tribo)
@@ -69,6 +72,9 @@ export const state = reactive({
 
   staticData: {
     championList: [],
+    // Cache das fichas completas do Data Dragon (champion/<id>.json), por id.
+    // Preenchido sob demanda ao abrir a ficha no Panteão — nada no boot.
+    championDetails: {},
     // Mapa de itens do Data Dragon, indexado pelo id (string) -> { name, ... }
     items: {},
     // Feitiços de invocador indexados pelo id numérico -> { name, image }
