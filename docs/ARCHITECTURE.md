@@ -8,15 +8,24 @@
 
 ## 1. O que é
 
-Aplicação web para um grupo de jogadores de League of Legends. Faz três coisas:
+Aplicação web para um grupo de jogadores de League of Legends. Tem **dois grandes
+mundos**, que usam planos de dados diferentes:
 
+**Mundo JOGADORES** (depende do Worker + D1 + Riot):
 1. **Perfil / histórico** — busca e exibe estatísticas ranqueadas, últimas
    partidas (KDA, itens, dano) e maestrias de um jogador.
-2. **Planejador de Sinergia** — um motor que ranqueia composições de time com base
-   na proficiência real dos jogadores nos campeões + meta + encaixe tático.
+2. **Planejador de Sinergia (Tribo)** — um motor que ranqueia composições de time com
+   base na proficiência real dos jogadores nos campeões + meta + encaixe tático; e um
+   lobby **Customizado 5x5** que balanceia times.
 3. **Coleta contínua** — um job noturno ("trator") que ingere o histórico de
    partidas dos jogadores monitorados num banco próprio (Cloudflare D1), incluindo
    *snapshots* da timeline ("Marcos Temporais") para gráficos de evolução.
+
+**Mundo CAMPEÕES** (100% client-side — Data Dragon + arquivos estáticos do repo):
+4. **Panteão** (fichas de campeão: habilidades, radar tático, até 3 builds com runas+itens,
+   meta por rota, lore, galeria de skins), **Relíquias** (catálogo de itens + sinergia
+   inversa) e **Meta & Tier List** (S/A/B/C/D por rota, com WR/PR/BR). **Não toca o Worker
+   nem gasta a chave da Riot** — motor em `src/utils/championCatalog.js`.
 
 ---
 
@@ -62,6 +71,14 @@ Aplicação web para um grupo de jogadores de League of Legends. Faz três coisa
 > e `cron/backfill.js`. O bundle do Cloudflare (Wrangler/esbuild) resolve esse import
 > relativo normalmente, então **não há mais cópia duplicada**: coluna nova entra num
 > lugar só. (Antes o worker mantinha uma cópia manual — essa dívida foi paga.)
+
+> **Dois planos de dados:** o diagrama acima é o plano **JOGADORES** (Worker→D1→Riot).
+> O plano **CAMPEÕES** (Panteão/Relíquias/Meta) é **client-side puro**: lê o **Data
+> Dragon** da Riot (via `fetch` no boot + `fetchChampionDetail` sob demanda) e três
+> arquivos estáticos do repo — `data/meta-tiers.csv`, `data/sinergia-champs.csv`,
+> `data/builds-champs.json` — cruzados em `utils/championCatalog.js`. Não passa pelo
+> Worker nem pelo D1 e **não gasta o orçamento da chave**. Degradação graciosa é regra:
+> dado ausente vira fallback neutro/"—" (nunca crash).
 
 ---
 
@@ -127,16 +144,19 @@ explícito (vetor vazio / sem `PUUIDS`) processa SÓ premium** — paridade com 
 | Arquivo | Papel |
 |---|---|
 | `main.js` | Inicializa o app Vue, monta o router e estilos globais. |
-| `App.vue` | Componente raiz: cabeçalho, telemetria de API, overlay, tooltip. |
-| `Router.js` | Rotas: `/`, `/profile[/:gameName/:tagLine]`, `/mastery`, `/synergy`, `/saguaoCustom`, `/ancestralidade`. |
-| `store.js` | Estado global reativo (`reactive()`): `searchProfile`, `masteryDashboard`, `staticData`, `telemetry`. |
-| `api.js` | Cliente do worker (`workerRequest`), normalização de perfil e telemetria de rate limit. |
-| `utils.js` | `WORKER_URL`, versão do Data Dragon, helpers de imagem (campeão/ícone/item). |
+| `App.vue` | Layout global: topbar (com prévias por aba), **sidebar em seções** (Jogadores/Campeões/Equipes, com **títulos clicáveis → hubs**), botão especial **Ancestralidade** no rodapé, **Monitor da API** minimizável (`ui.telemetryLevel`), overlay de busca, tooltip. Carrega o Data Dragon no boot (champion/item/summoner/runes). |
+| `Router.js` | Rotas: `/`, `/jogadores`, `/campeoes` (hubs), `/historico`, `/analise`, `/profile[/:g/:t/:view?]`, `/mastery`, `/synergy`, `/saguaoCustom`, `/ancestralidade`, `/meta`, `/champions/:championId?`, `/items/:itemId?`. `scrollBehavior` não rola quando só muda o param da mesma rota (abrir/fechar modal). |
+| `store.js` | Estado global reativo: `searchProfile`, `masteryDashboard`, `telemetry`, `ui` (sidebarCollapsed, `telemetryLevel`), **`staticData`** (`championList`, `items`, `runes`, `summonerSpells`, `championDetails`). |
+| `api.js` | Cliente do worker (`workerRequest`), normalização de perfil, telemetria de rate limit, `fetchPlayerSuggestions`. |
+| `utils.js` | `WORKER_URL`, versão do Data Dragon, helpers de imagem (campeão/ícone/item/**splash**/**loading**/**runa**), `roleIconImage` (ícones **oficiais** de rota), `fetchChampionDetail` (ficha sob demanda, com cache). |
+| `utils/championCatalog.js` | **Motor do módulo Campeões:** `rolesOf`, `buildsFor` (até 3 builds com runas+itens), `championsForItem`, `metaTiersByRole`, `metaEntriesOf`, `TIER_STYLES`, `ROLES`, `sanitizeDDragonText`. |
 | `utils/proficiencia.js` | Proficiência real do jogador no campeão (winrate bayesiano, recência, maestria, KDA/CS). |
-| `utils/sinergiaMotor.js` | Motor de sinergia v2 (score de time, arquétipos, pares). |
-| `data/meta-tiers.csv` | Tier list manual (S/A/B/C/D) que pondera o meta. |
-| `data/sinergia-champs.csv` | Vetores táticos por campeão (8 dimensões + cc/scaling/mechTags). |
-| `components/` | Telas: `Home`, `Profile`, `Mastery`, `Tribo` (sinergia), `saguaoCustom`, `Ancestralidade`, e auxiliares (`SearchBar`, `RadarChart`, `PlayerAnalysis`, …). |
+| `utils/sinergiaMotor.js` | Motor de sinergia v2 (score de time, arquétipos, pares) + `parseMetaCsv` (lê o meta com colunas opcionais `winrate,pickrate,banrate`). |
+| `data/meta-tiers.csv` | Tier list manual: `champion,role,tier` + `winrate,pickrate,banrate` (opcionais). Pondera o meta e alimenta a Tier List/ficha. |
+| `data/sinergia-champs.csv` | Vetores táticos por campeão (8 dimensões + cc/scaling/mechTags/roles). |
+| `data/builds-champs.json` | Builds do módulo Campeões: `presets` (itens+runas por estilo), `runePages` (IDs de perk), `champions` (itens da build principal). |
+| `components/` (Campeões) | `Champions` + `ChampionSheet` (ficha com modal expansível + galeria de skins), `Items` + `ItemDetail`, `MetaTierList`, `ModuleHub` (hubs). |
+| `components/` (Jogador/Tribo) | `Home`, `Profile`, `Mastery`, `Tribo`, `saguaoCustom`, `Ancestralidade`, e auxiliares (`SearchBar` com busca híbrida, `SearchGate`, `RadarChart`, `PlayerAnalysis`, `KpiCard`, `CustomSlotCard`, `FilaSelecao`, `AsyncState`). |
 
 ### Back-end e coleta
 | Arquivo | Papel |

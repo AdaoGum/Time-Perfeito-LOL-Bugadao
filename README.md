@@ -13,26 +13,54 @@ dados históricos, sem estourar o rate limit da API da Riot.
 - **Stack:** Vue 3 + Vite + Tailwind v4 (front) · Cloudflare Worker (proxy) · Cloudflare D1 (banco) · Node (coletor)
 
 > 📚 **Documentação para IAs e devs:**
+> [`CLAUDE.md`](CLAUDE.md) (resumo do sistema p/ IAs) ·
 > [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (sistema como um todo) ·
 > [`docs/DATABASE.md`](docs/DATABASE.md) (schema do banco).
+
+O app tem **dois grandes mundos**: **Jogadores** (perfil/histórico/maestrias/tribo,
+que dependem do Worker+D1) e **Campeões** (Panteão/Relíquias/Meta, **100% client-side**
+sobre o Data Dragon + arquivos estáticos do repo — sem tocar no Worker nem gastar a chave).
 
 ---
 
 ## 🚀 Funcionalidades
 
+### 👑 Jogadores
 - **Perfil / Histórico:** estatísticas ranqueadas (Solo/Duo e Flex), taxa de vitória
   e as últimas partidas com KDA, itens, dano e duração. O perfil se divide em duas
-  páginas — **Histórico** e **Estatísticas** — com alternador no canto; um banner
-  mostra quantos jogos ainda não foram buscados e um botão baixa os **últimos 10**.
-  Jogadores **premium** chegam "tudo montado" (sincronizados de madrugada); os demais
-  trabalham sob demanda com o que há no banco + 10 jogos por clique.
-- **Maestrias:** Top campeões em lista progressiva + grade densa interativa.
-- **Planejador de Sinergia:** simulador de composições (Solo/Duo ou Flex) que trava
+  páginas — **Histórico** ("Caçadas Passadas") e **Estatísticas** ("Olhar Espiritual") —
+  com alternador no canto; um banner mostra quantos jogos ainda não foram buscados e um
+  botão baixa os **últimos 10**. Jogadores **premium** chegam "tudo montado" (sincronizados
+  de madrugada); os demais trabalham sob demanda com o que há no banco + 10 jogos por clique.
+- **Maestrias ("Caverna dos Monos"):** Top campeões em lista progressiva + grade densa interativa.
+- **Ancestralidade:** painel de consulta avançada ao D1 (admin, exige senha no Worker).
+
+### 🐉 Campeões
+- **Panteão ("/champions"):** catálogo de todos os campeões com filtro por rota; ficha
+  (modal) com habilidades, **radar tático 8D**, **até 3 builds** (runas + itens em
+  mini-abas), meta por rota (tier + WR/PR/BR) e **lore**. A ficha tem um botão
+  **Expandir** que a leva a ocupar a área entre a sidebar e a topbar, exibindo a
+  **galeria de skins** (splash em destaque + carrossel).
+- **Relíquias ("/items"):** arsenal de itens do Rift com busca, filtro por categoria,
+  descrição/atributos, ouro (receita/venda), componentes/evoluções navegáveis e
+  **sinergia inversa** (campeões que constroem o item).
+- **Meta & Tier List ("/meta"):** matriz S/A/B/C/D por rota (seletor com ícones oficiais),
+  com WR por campeão; clique num campeão abre a ficha no Panteão.
+
+### 🐢 Equipes
+- **Tribo Perfeita ("/synergy"):** simulador de composições (Solo/Duo ou Flex) que trava
   campeões pela maestria/proficiência real e avalia o time (dano, CC, frontline, ritmo).
+- **Customizada 5x5 ("/saguaoCustom"):** lobby custom com balanceamento de times.
+
+### 🔎 Transversal
+- **Busca híbrida:** o `SearchBar` aceita jogador (`Nome#TAG`) **e** campeão no mesmo
+  campo (prop `context`: players/champions/global — global mostra até 6, ideal 3+3).
+- **Navegação temática:** sidebar em seções com **títulos clicáveis** (hubs de Jogadores
+  e Campeões), prévias nas abas da topbar, e Home com 4 portais (espíritos do Udyr).
 - **Coleta contínua:** job noturno que ingere o histórico e extrai *snapshots* da
   timeline nos minutos-chave (Marcos Temporais) para gráficos de evolução.
-- **Telemetria de API:** widget que monitora o rate limit da Riot (janela deslizante)
-  contando **só** as chamadas reais — leituras do cache D1 não gastam o orçamento.
+- **Monitor de API:** widget minimizável que monitora o rate limit da Riot (janela
+  deslizante) contando **só** as chamadas reais — leituras do cache D1 não gastam o orçamento.
 
 ---
 
@@ -274,30 +302,82 @@ scoreDeTime     = Σ scoreIndividual + 0.30·(aderênciaArquétipo + sinergiaDeP
 - Composição resolvida por **otimização global** (produto cartesiano dos top 8 por slot).
 - Dados ausentes degradam para **neutro** — nunca quebram.
 
-### Atualizar o meta (tier list)
+### Atualizar o meta (tier list + WR/PR/BR)
 
-1. Abra o Claude (web, com busca) e cole o prompt de `.github/prompts/PLANNER-FINAL-sinergia-v2.md` (Anexo A).
-2. Salve a resposta como `src/data/meta-tiers.csv` (substituindo o anterior).
-3. Confira a 1ª linha: `# patch: X | atualizado: YYYY-MM-DD`.
-4. Commit + deploy. A UI exibe o novo patch automaticamente.
+Use o slash command **`/atualizar-meta`** (definido em
+[`.claude/commands/atualizar-meta.md`](.claude/commands/atualizar-meta.md)). Ele:
+
+1. Arquiva o `meta-tiers.csv` vigente (`npm run meta:archive` → `src/data/meta-history/`).
+2. Descobre o patch atual e raspa as tier lists por rota (fonte primária: mobatrainer).
+3. Valida os nomes contra `sinergia-champs.csv` (descarta ruído/campeão sem perfil).
+4. Reescreve o CSV. **Formato atual (6 colunas):**
+   `champion,role,tier,winrate,pickrate,banrate` — as 3 estatísticas são **opcionais**
+   (célula vazia = sem dado; a UI mostra "—") e **retrocompatíveis** com o formato antigo
+   de 3 colunas. A 1ª linha é sempre `# patch: X | atualizado: YYYY-MM-DD | fonte: …`.
+5. Commit + deploy (você revisa). A UI exibe o novo patch e o WR na Tier List/ficha.
 
 Se o CSV passar de 30 dias, a UI avisa "meta desatualizado" e o peso do meta cai pela metade.
+
+> ⚠️ **WR/PR/BR e builds não vêm da API da Riot** (ela não expõe estatística agregada de
+> campeão). WR/PR/BR só existem se preenchidos no CSV via `/atualizar-meta` (fonte externa).
+> As builds de `builds-champs.json` são **curadas/heurísticas**, não winrate ao vivo.
+
+---
+
+## 🐉 Módulo Campeões (client-side)
+
+O Panteão, as Relíquias e o Meta rodam **inteiramente no navegador**, sobre o Data Dragon
++ arquivos estáticos do repo — sem Worker, sem D1, sem gastar a chave da Riot.
+
+- **Motor:** [`src/utils/championCatalog.js`](src/utils/championCatalog.js) — cruza
+  `sinergia-champs.csv` (rotas/tags), `meta-tiers.csv` (tier + WR/PR/BR) e
+  [`builds-champs.json`](src/data/builds-champs.json) (builds). Expõe `rolesOf`,
+  `buildsFor` (até 3 builds com runas+itens), `championsForItem` (sinergia inversa),
+  `metaTiersByRole`, `metaEntriesOf`.
+- **Builds:** `builds-champs.json` tem `presets` (itens + página de runas por estilo),
+  `runePages` (IDs de perk do runesReforged) e `champions` (itens da build principal por
+  campeão). `classPresetChain` escolhe até 3 presets por classe/dano/rota.
+- **Fichas sob demanda:** `fetchChampionDetail` (em `utils.js`) busca `champion/<id>.json`
+  do Data Dragon ao abrir a ficha (habilidades, lore, **skins**) e cacheia por versão.
+- **Ícones de rota:** `roleIconImage` usa os ícones **oficiais** de posição (Community
+  Dragon), não FontAwesome, em todo o projeto.
 
 ---
 
 ## 📁 Estrutura do projeto
 
 ```
-src/                 Front-end Vue (App, Router, store, api, components, utils, data)
+CLAUDE.md            Resumo do sistema para IAs (onboarding rápido)
+src/                 Front-end Vue
+  App.vue            Layout global: topbar (com prévias), sidebar em seções, monitor de API
+  Router.js          Rotas (jogador, campeões, hubs, tribo)
+  store.js           Estado reativo (searchProfile, staticData, telemetry, ui)
+  api.js             Cliente do Worker + telemetria de rate limit
+  utils.js           WORKER_URL, Data Dragon, helpers de imagem (incl. roleIconImage oficial)
+  utils/championCatalog.js   Motor do módulo Campeões (rotas, builds, meta, sinergia inversa)
+  utils/sinergiaMotor.js     Motor de sinergia v2 + parser do meta (com WR/PR/BR)
+  utils/proficiencia.js      Proficiência do jogador no campeão
+  components/        Telas e auxiliares (ver abaixo)
+  data/              meta-tiers.csv, sinergia-champs.csv, builds-champs.json, meta-history/
 worker.js            Cloudflare Worker (proxy Riot + cache-first no D1)
 wrangler.toml        Config do deploy do Worker (Wrangler)
+shared/              Lógica única de extração de partidas (worker + coletor)
 cron/                Coletor Node (sync.js, backfill.js, relatorio-discord.js, lib/)
 migrations/          Migrations do D1 (SQL)
 scripts/             Utilitários Node (archive-meta.js)
+.claude/commands/    Slash commands do projeto (atualizar-meta.md)
 docs/                ARCHITECTURE.md + DATABASE.md (referência para devs e IAs)
 .github/workflows/   Automação (Pages, sync, relatório, deploy do Worker)
 public/ dist/        Assets estáticos e build
 ```
+
+**Componentes (`src/components/`):**
+- **Campeões:** `Champions.vue` + `ChampionSheet.vue` (ficha com modal expansível +
+  galeria de skins), `Items.vue` + `ItemDetail.vue`, `MetaTierList.vue`, `ModuleHub.vue` (hubs).
+- **Jogador/Tribo:** `Home.vue`, `Profile.vue`, `Mastery.vue`, `Tribo.vue`,
+  `saguaoCustom.vue`, `Ancestralidade.vue`.
+- **Auxiliares:** `SearchBar.vue` (busca híbrida), `SearchGate.vue`, `PlayerAnalysis.vue`,
+  `RadarChart.vue`, `KpiCard.vue`, `CustomSlotCard.vue`, `FilaSelecao.vue`, `AsyncState.vue`.
 
 ---
 

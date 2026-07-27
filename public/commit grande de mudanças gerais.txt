@@ -1,0 +1,30 @@
+Verificação do que está para commitar
+Branch atual: main (último commit d2afce3 atts). Há 14 arquivos modificados e 9 novos, totalizando ~1000 inserções.
+
+Dois arquivos merecem atenção antes de incluir:
+
+.claude/settings.json — foi gerado automaticamente com um allowlist de permissões que inclui um caminho de scratchpad específico desta sessão. Recomendo não commitar (é config local de máquina, não do projeto).
+.ai_context/PLANNER-CAMPEOES-E-RELIQUIAS.md — é o planner que criei. Commitar é opcional (documentação de planejamento); fica a seu critério.
+O resto (todos os src/, os dois docs do meta, o meta-tiers.csv novo e o arquivo de histórico) deve entrar.
+
+Resumo do que foi feito nesta sessão
+Novo módulo de Campeões
+
+Panteão (Champions.vue + ChampionSheet.vue): catálogo com filtro por rota, ficha com habilidades, radar tático, 3 builds com runas + itens (mini-abas), meta por rota, modal expansível e galeria de skins (splash + carrossel).
+Relíquias (Items.vue + ItemDetail.vue): arsenal de itens com busca, categorias, receita/evoluções e sinergia inversa com campeões.
+Meta & Tier List (MetaTierList.vue): matriz S/A/B/C/D por rota, agora com WR por campeão.
+Camada de dados: championCatalog.js + builds-champs.json (presets de build + páginas de runas).
+Navegação e UI
+
+Sidebar reorganizada em seções Jogadores / Campeões / Equipes com títulos clicáveis (hubs /jogadores e /campeoes via ModuleHub.vue; Equipes → Tribo), Ancestralidade como botão laranja isolado, e prévias nas abas da topbar.
+Home remodelada em 4 portais alinhados à arquitetura (mantendo os fundos do Udyr).
+Busca híbrida (SearchBar com prop context: jogadores/campeões/global 3+3).
+Monitor da API minimizável (tiny/mini/full).
+Ícones de rota agora usam as imagens oficiais do LoL.
+Correções
+
+Sidebar acima do conteúdo/modais (z-index); modais não "pulam" mais a tela de trás (scroll do router); busca da Caverna padronizada; layouts iniciais de Tribo e Customizada 5x5 melhor aproveitados; renome "Partida Customizada" → "Customizada 5x5".
+Meta
+
+meta-tiers.csv atualizado para patch 26.14 com WR/PR/BR (273 linhas, fonte mobatrainer); rotina /atualizar-meta ampliada para capturar essas estatísticas e builds; meta anterior arquivado.
+Build e os 27 testes passam.
