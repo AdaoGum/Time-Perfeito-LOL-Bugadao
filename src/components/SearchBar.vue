@@ -152,12 +152,14 @@ const placeholder = computed(() => {
 });
 
 // Base da rota do perfil conforme a seção onde a busca acontece. Assim uma busca
-// feita dentro de "Caçadas" (Histórico) leva ao histórico, e dentro de "Visão"
-// (Análise) leva às estatísticas; nos demais lugares abre o seletor de /profile.
+// feita dentro de "Caçadas" (Histórico) leva ao histórico, dentro de "Visão"
+// (Análise) leva às estatísticas e dentro da "Caverna dos Monos" FICA na maestria;
+// nos demais lugares abre o seletor de /profile.
 function sectionBase() {
   const p = router.currentRoute.value.path;
   if (p.startsWith('/historico')) return '/historico';
   if (p.startsWith('/analise')) return '/analise';
+  if (p.startsWith('/mastery')) return '/mastery';
   return '/profile';
 }
 
@@ -367,7 +369,7 @@ async function executeSearch() {
     const normalizedData = normalizeProfileData(data, gameName, tagLine);
 
     if (props.syncGlobalStore) {
-      applyProfileToStore(normalizedData, data);
+      applyProfileToStore(normalizedData, { brief: props.action === 'profile_brief' });
     }
 
     emit('search-success', props.syncGlobalStore ? state.searchProfile : normalizedData);

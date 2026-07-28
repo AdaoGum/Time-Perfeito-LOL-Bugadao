@@ -52,22 +52,10 @@
         </div>
         <div class="flex-1">
           <div v-if="tiers[tier].length" class="flex flex-wrap gap-2">
-            <button
-              v-for="champ in tiers[tier]"
-              :key="champ.name"
-              type="button"
-              class="group flex w-16 flex-col items-center"
-              :title="champ.name"
-              @click="openChampion(champ.name)"
-            >
-              <img :src="championImage(champ.name)" :alt="champ.name" loading="lazy" class="h-12 w-12 rounded-lg border border-slate-700 transition group-hover:scale-110 group-hover:border-amber-400" />
-              <span class="mt-0.5 w-full truncate text-center text-[9px] font-bold text-slate-400 group-hover:text-slate-100">{{ champ.name }}</span>
-              <span
-                v-if="Number.isFinite(champ.winrate)"
-                class="text-[9px] font-black"
-                :class="champ.winrate >= 50 ? 'text-emerald-400' : 'text-slate-500'"
-              >{{ champ.winrate }}%</span>
-            </button>
+            <!-- w-28/sm:w-32 = tamanho canônico do card compacto (mesmo da Caverna). -->
+            <div v-for="champ in tiers[tier]" :key="champ.name" class="w-28 sm:w-32">
+              <ChampionCard :champ="resolveChamp(champ.name)" :winrate="champ.winrate" @open="selected = $event" />
+            </div>
           </div>
           <p v-else class="py-3 text-center text-xs italic text-slate-500">Nenhum campeão neste tier para {{ roleLabel(activeRole) }}.</p>
         </div>
@@ -75,22 +63,36 @@
     </div>
 
     <p class="mt-5 text-center text-[11px] text-slate-500">
-      Clique num campeão para abrir a ficha completa no
+      Clique num campeão para abrir a ficha completa aqui mesmo, ou explore todos no
       <button type="button" class="font-bold text-cyan-400 hover:underline" @click="router.push('/champions')">Panteão</button>.
     </p>
+
+    <!-- Ficha (modal) — abre SOBRE a tela do meta, sem trocar de rota -->
+    <ChampionSheet
+      v-if="selected"
+      :champ="selected"
+      @close="selected = null"
+      @open-item="goToItem"
+      @open-champion="selected = $event"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { championImage, getChampionIdFromName, roleIconImage } from '../utils.js';
+import { state } from '../store.js';
+import { roleIconImage } from '../utils.js';
 import { metaIsStale } from '../utils/sinergiaMotor.js';
 import { ROLES, TIER_ORDER, TIER_STYLES, metaInfo, metaTiersByRole } from '../utils/championCatalog.js';
+import ChampionCard from './ChampionCard.vue';
+import ChampionSheet from './ChampionSheet.vue';
 
 const router = useRouter();
+const store = state;
 
 const activeRole = ref('TOP');
+const selected = ref(null);
 const info = metaInfo();
 const stale = metaIsStale();
 
@@ -104,7 +106,17 @@ function roleLabel(role) {
   return ROLES.find((r) => r.key === role)?.label || role;
 }
 
-function openChampion(name) {
-  router.push(`/champions/${getChampionIdFromName(name)}`);
+// Resolve nome (do CSV do meta) → objeto do campeão do DDragon (pro card/ficha).
+const champByName = computed(() => {
+  const map = {};
+  for (const c of store.staticData.championList || []) map[c.name] = c;
+  return map;
+});
+function resolveChamp(name) {
+  return champByName.value[name] || { name };
+}
+
+function goToItem(itemId) {
+  router.push(`/items/${itemId}`);
 }
 </script>

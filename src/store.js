@@ -30,6 +30,9 @@ export const state = reactive({
     hasPremium: false,
     // Partidas ranqueadas recentes que ainda NÃO estão no banco (o worker informa)
     pendingCount: 0,
+    // True quando o perfil veio do `profile_brief` (leve: sem histórico/proficiência/
+    // companheiros). A tela de Perfil usa isso para "promover" para o overview completo.
+    brief: false,
     // True enquanto o botão "buscar últimos 10 jogos" está trabalhando
     fetchingMatches: false
   },
@@ -37,6 +40,10 @@ export const state = reactive({
   // Painel de maestrias que as outras telas consultam
   masteryDashboard: {
     allMasteries: [],
+    // Dono da lista atual — trocar de jogador limpa `allMasteries` (não mostra os
+    // monos do jogador anterior enquanto os novos carregam).
+    puuid: null,
+    loading: false,
     error: null
   },
 

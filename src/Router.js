@@ -29,7 +29,10 @@ const routes = [
   // `view` opcional: sem ele = seletor; /historico e /estatisticas abrem a visão direta.
   { path: '/profile/:gameName/:tagLine/:view(historico|estatisticas)?', component: Profile },
 
+  // Caverna dos Monos. Com o jogador na URL a busca feita aqui NÃO sai da tela
+  // (antes caía no /profile) e sobrevive ao refresh, igual às Caçadas/Visão.
   { path: '/mastery', component: Mastery },
+  { path: '/mastery/:gameName/:tagLine', component: Mastery },
   { path: '/synergy', component: Tribo },
   { path: '/saguaoCustom', component: SaguaoCustom },
   { path: '/ancestralidade', component: Ancestralidade },

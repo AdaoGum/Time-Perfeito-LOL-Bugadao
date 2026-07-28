@@ -44,27 +44,15 @@
 
     <AsyncState :loading="!championList.length" accent="cyan" loading-text="Invocando o panteão..." :retryable="false">
       <p class="mb-3 text-xs font-bold text-slate-500">{{ filtered.length }} campeões</p>
-      <div class="grid grid-cols-3 gap-2.5 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8">
-        <button
+      <!-- Tamanho do card = largura da coluna (o ChampionCard é w-full). Uma coluna a
+           mais por faixa deixa o card ~20% menor que a grade anterior (3/4/5/6/8). -->
+      <div class="grid grid-cols-4 gap-2.5 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">
+        <ChampionCard
           v-for="champ in filtered"
           :key="champ.id"
-          type="button"
-          class="group relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60 p-2 text-center transition hover:border-cyan-500/70 hover:bg-slate-800/60"
-          @click="openChamp(champ)"
-        >
-          <img
-            :src="championImage(champ.name)"
-            :alt="champ.name"
-            loading="lazy"
-            class="mx-auto h-14 w-14 rounded-lg border border-slate-700 transition group-hover:scale-110 sm:h-16 sm:w-16"
-          />
-          <p class="mt-1.5 truncate text-[11px] font-bold text-slate-200 group-hover:text-white">{{ champ.name }}</p>
-          <div class="mt-1 flex flex-wrap justify-center gap-0.5">
-            <span v-for="role in rolesOf(champ).slice(0, 3)" :key="role" class="inline-flex h-4 w-4 items-center justify-center rounded bg-slate-950/80">
-              <img :src="roleIconImage(role)" :alt="role" class="h-3 w-3" />
-            </span>
-          </div>
-        </button>
+          :champ="champ"
+          @open="openChamp"
+        />
       </div>
 
       <p v-if="!filtered.length" class="rounded-2xl border border-slate-800 bg-slate-900/40 p-8 text-center text-sm text-slate-400">
@@ -78,6 +66,7 @@
       :champ="selected"
       @close="closeChamp"
       @open-item="goToItem"
+      @open-champion="openChamp"
     />
   </div>
 </template>
@@ -86,9 +75,10 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { state } from '../store.js';
-import { championImage, getChampionIdFromName, roleIconImage } from '../utils.js';
+import { getChampionIdFromName, roleIconImage } from '../utils.js';
 import { ROLES, rolesOf, normalizeSearch } from '../utils/championCatalog.js';
 import SearchBar from './SearchBar.vue';
+import ChampionCard from './ChampionCard.vue';
 import ChampionSheet from './ChampionSheet.vue';
 import AsyncState from './AsyncState.vue';
 

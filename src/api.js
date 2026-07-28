@@ -148,7 +148,10 @@ export function normalizeProfileData(data, gameName, tagLine) {
   };
 }
 
-export function applyProfileToStore(normalizedData) {
+// `brief` marca que o perfil veio do `profile_brief` (sem partidas/proficiência/
+// companheiros). A tela de Perfil enxerga essa flag e recarrega o overview completo
+// em vez de mostrar um histórico vazio.
+export function applyProfileToStore(normalizedData, { brief = false } = {}) {
   state.searchProfile.puuid = normalizedData.puuid || null;
   state.searchProfile.gameName = normalizedData.gameName;
   state.searchProfile.tagLine = normalizedData.tagLine;
@@ -161,6 +164,7 @@ export function applyProfileToStore(normalizedData) {
   state.searchProfile.companions = normalizedData.companions;
   state.searchProfile.hasPremium = normalizedData.hasPremium === true;
   state.searchProfile.pendingCount = Number(normalizedData.pendingCount || 0);
+  state.searchProfile.brief = brief === true;
   state.searchProfile.error = null;
 }
 
@@ -203,6 +207,13 @@ export async function fetchRecentMatches() {
 // `refresh=true` força a rebusca na Riot (usado quando o perfil detectou partida
 // nova); senão o worker serve as maestrias do cache D1 sem gastar a chave.
 export function loadMasteriesInBackground(puuid, gameName, tagLine, refresh = false) {
+  // Trocou de jogador: descarta a lista antiga para a tela não exibir os monos do
+  // anterior enquanto os novos não chegam.
+  if (state.masteryDashboard.puuid !== puuid) {
+    state.masteryDashboard.allMasteries = [];
+    state.masteryDashboard.puuid = puuid;
+  }
+  state.masteryDashboard.loading = true;
   return workerRequest('masteries', { puuid, gameName, tagLine, refresh })
     .then((masteryData) => {
       const fromStaticChamp = (entry) => {
@@ -219,18 +230,23 @@ export function loadMasteriesInBackground(puuid, gameName, tagLine, refresh = fa
     })
     .catch((mErr) => {
       console.warn('Erro nas maestrias em background:', mErr);
+    })
+    .finally(() => {
+      state.masteryDashboard.loading = false;
     });
 }
 
 // Busca o perfil completo e já o coloca no store global (com loading/erro).
 // Usada pelo refresh por URL e por qualquer fluxo que precise recarregar o jogador atual.
-export async function loadProfileIntoStore(gameName, tagLine, { loadMasteries = true } = {}) {
+// `action`: 'profile_overview' (completo, com histórico) ou 'profile_brief' (leve —
+// usado pela Caverna dos Monos, que só precisa de identidade + maestrias).
+export async function loadProfileIntoStore(gameName, tagLine, { loadMasteries = true, action = 'profile_overview' } = {}) {
   state.searchProfile.loading = true;
   state.searchProfile.error = null;
   try {
-    const data = await workerRequest('profile_overview', { gameName, tagLine });
+    const data = await workerRequest(action, { gameName, tagLine });
     const normalized = normalizeProfileData(data, gameName, tagLine);
-    applyProfileToStore(normalized);
+    applyProfileToStore(normalized, { brief: action === 'profile_brief' });
     if (loadMasteries && normalized.puuid) {
       loadMasteriesInBackground(normalized.puuid, gameName, tagLine, data?.hadNewGames === true);
     }

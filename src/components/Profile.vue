@@ -632,13 +632,17 @@ defineEmits(['show-overlay', 'hide-overlay', 'show-udyr']);
 // Carrega automaticamente o jogador presente na URL (/profile/:gameName/:tagLine).
 // Permite atualizar a página sem precisar buscar de novo.
 async function loadFromRoute() {
-  const gameName = route.params.gameName ? decodeURIComponent(route.params.gameName) : '';
-  const tagLine = route.params.tagLine ? decodeURIComponent(route.params.tagLine) : '';
+  // Sem jogador na URL (ex.: entrou pela sidebar) cai no jogador ativo do store —
+  // isso permite "promover" um perfil leve (brief) para o overview completo.
+  const gameName = route.params.gameName ? decodeURIComponent(route.params.gameName) : (store.searchProfile.gameName || '');
+  const tagLine = route.params.tagLine ? decodeURIComponent(route.params.tagLine) : (store.searchProfile.tagLine || '');
   if (!gameName || !tagLine) return;
 
-  // Já está carregado este mesmo jogador? Não refaz.
+  // Já está carregado este mesmo jogador COM histórico? Não refaz. Um perfil `brief`
+  // (vindo da Caverna dos Monos) não tem partidas/proficiência — precisa do overview.
   const sameLoaded =
     store.searchProfile.puuid &&
+    !store.searchProfile.brief &&
     (store.searchProfile.gameName || '').toLowerCase() === gameName.toLowerCase() &&
     (store.searchProfile.tagLine || '').toLowerCase() === tagLine.toLowerCase();
   if (sameLoaded) return;

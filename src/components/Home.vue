@@ -141,8 +141,8 @@ const paths = [
     spirit: 'Espírito do Tigre', title: 'Jogador',
     desc: 'Perfil, histórico de caçadas e o olhar espiritual sobre o invocador.',
     links: [
-      { label: 'Perfil & Histórico', to: '/historico', icon: 'fa-scroll' },
-      { label: 'Olhar Espiritual', to: '/analise', icon: 'fa-chart-simple' }
+      { label: 'Caçada (Histórico)', to: '/historico', icon: 'fa-scroll' },
+      { label: 'Olhar Espiritual (Estatísticas)', to: '/analise', icon: 'fa-chart-simple' }
     ],
     cardCls: 'border-cyan-500/40 bg-gradient-to-br from-blue-900/80 via-cyan-800/40 to-slate-950 hover:shadow-[0_0_40px_rgba(6,182,212,0.35)]',
     glowCls: 'bg-cyan-400/20', spiritCls: 'text-cyan-400', titleCls: 'text-cyan-100', chipCls: 'border-cyan-800/50 hover:border-cyan-500'
@@ -152,7 +152,7 @@ const paths = [
     spirit: 'Espírito do Urso', title: 'Maestrias',
     desc: 'A caverna dos monos: os campeões mais dominados e seus pontos.',
     links: [
-      { label: 'Caverna dos Monos', to: '/mastery', icon: 'fa-trophy' }
+      { label: 'Caverna dos Monos (Maestrias)', to: '/mastery', icon: 'fa-trophy' }
     ],
     cardCls: 'border-amber-700/50 bg-gradient-to-br from-red-950/90 via-orange-900/40 to-slate-950 hover:shadow-[0_0_40px_rgba(251,146,60,0.3)]',
     glowCls: 'bg-orange-500/25', spiritCls: 'text-amber-400', titleCls: 'text-amber-100', chipCls: 'border-amber-800/50 hover:border-amber-500'

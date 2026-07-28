@@ -24,7 +24,10 @@
       "Bash(rm -f out/_morde.html)",
       "Bash(rm -rf out/raw)",
       "Bash(node local/scrape/verify.mjs)",
-      "Bash(node -e \"const j=JSON.parse\\(require\\('fs'\\).readFileSync\\('src/data/meta-builds.json','utf8'\\)\\);console.log\\('entradas:',Object.keys\\(j.builds\\).length\\)\")"
+      "Bash(node -e \"const j=JSON.parse\\(require\\('fs'\\).readFileSync\\('src/data/meta-builds.json','utf8'\\)\\);console.log\\('entradas:',Object.keys\\(j.builds\\).length\\)\")",
+      "Bash(node local/scrape/_inspect-counters.mjs)",
+      "Bash(node local/scrape/fetch-builds.mjs --limit 1)",
+      "Bash(rm -f local/scrape/_inspect-counters.mjs local/scrape/out/_morde.html)"
     ]
   }
 }

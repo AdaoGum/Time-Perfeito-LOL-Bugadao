@@ -10,6 +10,7 @@
  */
 
 import buildsData from '../data/builds-champs.json';
+import metaBuildsData from '../data/meta-builds.json';
 import { CHAMP_TAGS, META_DATA, getChampionMetrics } from './sinergiaMotor.js';
 
 // Rotas oficiais do app (mesma grafia dos CSVs) com rótulo e ícone FontAwesome.
@@ -226,6 +227,31 @@ export function metaEntriesOf(champName) {
     if (entry) entries.push({ role: key, ...entry });
   }
   return entries;
+}
+
+// ----------------------------------------------------------------------
+// META-BUILDS (meta-builds.json: build+WR, situacionais, skill order, counters)
+// ----------------------------------------------------------------------
+
+/** Entrada raspada do meta (build/skill/counters) do campeão na rota, ou null. */
+export function metaBuildFor(champName, role) {
+  return metaBuildsData?.builds?.[`${champName}|${String(role || '').toUpperCase()}`] || null;
+}
+
+/**
+ * Counters por rota onde há dado: [{ role, strongAgainst: [ids], counteredBy: [ids] }].
+ * IDs são do Data Dragon (ex.: "TahmKench"); o consumidor resolve para o campeão.
+ * Vazio quando o campeão não tem counters no meta-builds atual.
+ */
+export function countersEntriesOf(champName) {
+  const out = [];
+  for (const { key } of ROLES) {
+    const c = metaBuildsData?.builds?.[`${champName}|${key}`]?.counters;
+    if (c && ((c.strongAgainst?.length || 0) + (c.counteredBy?.length || 0) > 0)) {
+      out.push({ role: key, strongAgainst: c.strongAgainst || [], counteredBy: c.counteredBy || [] });
+    }
+  }
+  return out;
 }
 
 /**

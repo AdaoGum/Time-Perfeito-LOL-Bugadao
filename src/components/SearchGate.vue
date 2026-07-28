@@ -14,6 +14,7 @@
       <SearchBar
         buttonText="Começar Jornada"
         autocomplete
+        :action="action"
         :routeToProfile="true"
         @show-overlay="c => $emit('show-overlay', c)"
         @hide-overlay="$emit('hide-overlay')"
@@ -32,6 +33,13 @@ defineProps({
   title: {
     type: String,
     default: 'Busque um Invocador'
+  },
+  // Peso da busca: 'profile_overview' (completo, com histórico) ou 'profile_brief'
+  // (leve). Telas que só precisam de identidade — como a Caverna dos Monos — usam
+  // o brief para não pagar a verificação/baixa de partidas.
+  action: {
+    type: String,
+    default: 'profile_overview'
   }
 });
 

@@ -115,7 +115,9 @@
       </div>
 
       <nav class="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
-        <div v-for="tab in topTabs" :key="tab.id" class="group relative">
+        <!-- `secondary`: atalhos que também vivem na sidebar. Somem abaixo de lg para a
+             nav não quebrar linha (o header é fixed — crescer aqui cobre o conteúdo). -->
+        <div v-for="tab in topTabs" :key="tab.id" class="group relative" :class="tab.secondary ? 'hidden lg:block' : ''">
           <button
             type="button"
             @click="router.push(tab.path)"
@@ -162,6 +164,24 @@
                 <div class="h-1.5 rounded bg-violet-500/70" style="width:82%"></div>
                 <div class="h-1.5 rounded bg-violet-500/50" style="width:58%"></div>
                 <div class="h-1.5 rounded bg-violet-500/60" style="width:70%"></div>
+              </div>
+            </div>
+
+            <!-- CAVERNA: pódio de maestria (ouro, prata, bronze) -->
+            <div v-else-if="tab.preview.type === 'mastery'" class="flex items-end justify-center gap-1.5 py-1">
+              <div
+                v-for="m in [{ h: 'h-8', c: 'border-slate-400/70 bg-slate-400/10 text-slate-200', i: 'fa-medal' }, { h: 'h-11', c: 'border-yellow-400/70 bg-yellow-400/10 text-yellow-300', i: 'fa-crown' }, { h: 'h-7', c: 'border-orange-500/70 bg-orange-500/10 text-orange-300', i: 'fa-medal' }]"
+                :key="m.i + m.h"
+                class="flex w-8 flex-col items-center justify-end rounded border pb-1" :class="[m.h, m.c]"
+              >
+                <i class="fa-solid text-[10px]" :class="m.i"></i>
+              </div>
+            </div>
+
+            <!-- RELÍQUIAS: grade de itens -->
+            <div v-else-if="tab.preview.type === 'items'" class="grid grid-cols-6 gap-1">
+              <div v-for="i in 12" :key="i" class="flex aspect-square items-center justify-center rounded border border-fuchsia-800/50 bg-fuchsia-950/30">
+                <i class="fa-solid fa-gem text-[8px] text-fuchsia-400/70"></i>
               </div>
             </div>
 
@@ -521,8 +541,10 @@ const topTabs = [
   { id: 'home', path: '/', label: 'TEMPLO', icon: 'fa-fire', gradient: true, border: 'border-orange-500', active: 'border-orange-500 bg-orange-500/10 text-orange-300', accent: 'text-orange-300', preview: { type: 'home', desc: 'Escolha seu caminho ancestral: jogador, campeões ou tribo.' } },
   { id: 'historico', path: '/historico', label: 'CAÇADA', icon: 'fa-paw', text: 'text-cyan-400', border: 'border-cyan-500', active: 'border-cyan-500 bg-cyan-500/10 text-cyan-400', accent: 'text-cyan-300', preview: { type: 'historico', desc: 'Histórico de partidas: KDA, itens e confrontos por rota.' } },
   { id: 'analise', path: '/analise', label: 'VISÃO', icon: 'fa-chart-simple', text: 'text-violet-400', border: 'border-violet-500', active: 'border-violet-500 bg-violet-500/10 text-violet-400', accent: 'text-violet-300', preview: { type: 'analise', desc: 'Estatísticas e radar de desempenho sobre todo o histórico.' } },
+  { id: 'mastery', path: '/mastery', label: 'CAVERNA', icon: 'fa-trophy', text: 'text-amber-400', border: 'border-amber-500', active: 'border-amber-500 bg-amber-500/10 text-amber-400', accent: 'text-amber-300', secondary: true, preview: { type: 'mastery', desc: 'Caverna dos Monos: os campeões mais dominados, nível e pontos.' } },
   { id: 'meta', path: '/meta', label: 'META', icon: 'fa-ranking-star', text: 'text-amber-400', border: 'border-amber-500', active: 'border-amber-500 bg-amber-500/10 text-amber-400', accent: 'text-amber-300', preview: { type: 'meta', desc: 'Tier list S/A/B/C/D por rota no patch atual.' } },
   { id: 'pantheon', path: '/champions', label: 'PANTEÃO', icon: 'fa-dragon', text: 'text-sky-400', border: 'border-sky-500', active: 'border-sky-500 bg-sky-500/10 text-sky-400', accent: 'text-sky-300', preview: { type: 'pantheon', desc: 'Fichas de campeões: habilidades, perfil tático e relíquias.' } },
+  { id: 'items', path: '/items', label: 'RELÍQUIAS', icon: 'fa-gem', text: 'text-fuchsia-400', border: 'border-fuchsia-500', active: 'border-fuchsia-500 bg-fuchsia-500/10 text-fuchsia-400', accent: 'text-fuchsia-300', secondary: true, preview: { type: 'items', desc: 'Arsenal de itens: efeitos, custo e quem se dá bem com cada um.' } },
   { id: 'sinergia', path: '/synergy', label: 'TRIBO', icon: 'fa-people-group', text: 'text-lime-400', border: 'border-lime-500', active: 'border-lime-500 bg-lime-500/10 text-lime-400', accent: 'text-lime-300', preview: { type: 'tribo', desc: 'Planejador de composição: encaixe 1 a 5 e ache a sinergia.' } },
 ];
 
