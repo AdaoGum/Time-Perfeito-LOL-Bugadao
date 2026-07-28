@@ -84,7 +84,7 @@ import { useRouter } from 'vue-router';
 import { state } from '../store.js';
 import { roleIconImage } from '../utils.js';
 import { metaIsStale } from '../utils/sinergiaMotor.js';
-import { ROLES, TIER_ORDER, TIER_STYLES, metaInfo, metaTiersByRole } from '../utils/championCatalog.js';
+import { ROLES, TIER_ORDER, TIER_STYLES, championByName, metaInfo, metaTiersByRole } from '../utils/championCatalog.js';
 import ChampionCard from './ChampionCard.vue';
 import ChampionSheet from './ChampionSheet.vue';
 
@@ -107,13 +107,8 @@ function roleLabel(role) {
 }
 
 // Resolve nome (do CSV do meta) → objeto do campeão do DDragon (pro card/ficha).
-const champByName = computed(() => {
-  const map = {};
-  for (const c of store.staticData.championList || []) map[c.name] = c;
-  return map;
-});
 function resolveChamp(name) {
-  return champByName.value[name] || { name };
+  return championByName(store.staticData.championList, name);
 }
 
 function goToItem(itemId) {

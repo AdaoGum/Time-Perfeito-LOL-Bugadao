@@ -117,6 +117,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { state } from '../store.js';
+import { championByName } from '../utils/championCatalog.js';
 import { loadProfileIntoStore, loadMasteriesInBackground } from '../api.js';
 import SearchGate from './SearchGate.vue';
 import ChampionCard from './ChampionCard.vue';
@@ -172,13 +173,8 @@ const grupos = computed(() => {
 });
 
 // Nome do campeão (vindo da maestria) → objeto do DDragon usado pelo card/ficha.
-const champByName = computed(() => {
-  const map = {};
-  for (const c of store.staticData.championList || []) map[c.name] = c;
-  return map;
-});
 function resolveChamp(name) {
-  return champByName.value[name] || { name };
+  return championByName(store.staticData.championList, name);
 }
 
 function masteryPct(entry) {

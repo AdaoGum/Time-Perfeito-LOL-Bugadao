@@ -71,6 +71,23 @@ export function normalizeSearch(text) {
     .replace(/[^a-z0-9]/g, '');
 }
 
+// Nome de exibição (pt_BR) → campeão do Data Dragon. Usado por toda tela que só tem
+// o NOME do campeão (meta, maestrias, histórico) e precisa do objeto para o
+// ChampionCard/ChampionSheet. O índice é memoizado pela própria lista: enquanto o
+// `championList` do store for o mesmo array, não remonta o mapa.
+// Campeão desconhecido (fora do patch) devolve `{ name }` — os componentes trabalham
+// só com o nome e degradam sem quebrar.
+let _byNameList = null;
+let _byNameMap = null;
+export function championByName(championList, name) {
+  if (_byNameList !== championList) {
+    _byNameList = championList || [];
+    _byNameMap = {};
+    for (const champ of _byNameList) _byNameMap[champ.name] = champ;
+  }
+  return _byNameMap[name] || { name };
+}
+
 // Tags DDragon → rotas prováveis (fallback p/ campeão fora da planilha de sinergia).
 const TAG_TO_ROLES = {
   Marksman: ['ADC'],

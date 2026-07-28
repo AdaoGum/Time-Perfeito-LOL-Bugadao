@@ -386,59 +386,74 @@
           <article
             v-for="match in pagedMatches"
             :key="match.matchId || match.championName + Math.random()"
-            class="rounded-2xl border p-4 bg-slate-900/40 backdrop-blur-sm transition hover:brightness-110 flex flex-col justify-between gap-4 shadow-xl"
+            class="flex gap-3 rounded-2xl border p-3 bg-slate-900/40 backdrop-blur-sm transition hover:brightness-110 shadow-xl"
             :class="match.win ? 'border-blue-800/50 bg-blue-950/20 text-blue-100' : 'border-red-800/50 bg-red-950/20 text-red-100'"
           >
-            <!-- CABEÇALHO DO CARD: STATUS GLOBAL DA ROW -->
-            <div class="flex flex-wrap items-start justify-between gap-2 border-b border-slate-800/60 pb-2.5">
-              <div class="space-y-0.5">
-                <p class="font-black text-sm uppercase tracking-wider flex items-center gap-2" :class="match.win ? 'text-blue-400' : 'text-red-400'">
-                  {{ match.win ? 'VITÓRIA' : 'DERROTA' }}
-                  <span v-if="matchLp(match)"
-                    class="rounded-md border px-1.5 py-0.5 text-[11px] font-black tabular-nums"
-                    :class="matchLp(match).gain ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/60' : 'text-rose-300 border-rose-700/50 bg-rose-950/60'"
-                    title="A Riot não informa o LP ganho/perdido por partida — mostramos só o sinal (vitória/derrota).">
-                    {{ matchLp(match).text }} LP
-                  </span>
-                </p>
-                <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">{{ match.queueType || 'Outro Modo' }}</p>
-                
-                <div v-if="matchBadges(match).length" class="mt-1 flex flex-wrap gap-1">
-                  <span v-for="badge in matchBadges(match)" :key="badge.label"
-                    class="rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
-                    :class="badge.color">{{ badge.label }}</span>
-                </div>
-              </div>
-              
-              <div class="text-right">
-                <p class="text-[10px] font-semibold text-slate-400">{{ formatGameDate(match.gameStartTimestamp) }}</p>
-                <p class="text-xs font-semibold text-slate-300 mt-0.5">{{ formatDuration(match.gameDuration) }}</p>
-              </div>
+            <!-- COLUNA ESQUERDA: o MESMO card de campeão do Panteão/Meta, no tamanho do
+                 Meta (w-28 sm:w-32). Traz o nome, a arte e o popover/ficha de graça;
+                 rota, feitiços e runa entram como distintivos sobre a arte. -->
+            <div class="w-28 shrink-0 sm:w-32">
+              <ChampionCard
+                :champ="championByName(store.staticData.championList, match.championName)"
+                :frame-class="match.win
+                  ? 'border-blue-600/70 shadow-[0_0_16px_rgba(37,99,235,0.3)]'
+                  : 'border-red-700/70 shadow-[0_0_16px_rgba(220,38,38,0.25)]'"
+                @open="selectedChamp = $event"
+              >
+                <template #overlay>
+                  <img
+                    v-if="match.teamPosition && match.teamPosition !== 'Invalid'"
+                    :src="getMiniRoleIcon(match.teamPosition)"
+                    class="absolute left-1 top-1 h-5 w-5 rounded-full bg-slate-950/85 p-0.5 brightness-200"
+                    :title="match.teamPosition"
+                    :alt="match.teamPosition"
+                  />
+                  <div v-if="match.summoner1Id || match.perkKeystone" class="absolute right-1 top-1 flex flex-col gap-0.5">
+                    <img v-if="spellImg(match.summoner1Id)" :src="spellImg(match.summoner1Id)" :title="spellName(match.summoner1Id)" :alt="spellName(match.summoner1Id)" class="h-4 w-4 rounded border border-slate-700 bg-slate-900" />
+                    <img v-if="spellImg(match.summoner2Id)" :src="spellImg(match.summoner2Id)" :title="spellName(match.summoner2Id)" :alt="spellName(match.summoner2Id)" class="h-4 w-4 rounded border border-slate-700 bg-slate-900" />
+                    <img v-if="runeImg(match.perkKeystone)" :src="runeImg(match.perkKeystone)" :title="runeName(match.perkKeystone)" :alt="runeName(match.perkKeystone)" class="h-4 w-4 rounded-full border border-slate-700 bg-slate-950" />
+                  </div>
+                </template>
+              </ChampionCard>
             </div>
 
-            <!-- MEIO/FUNDO DO CARD: DIVIDIDO EM 2 SUB-COLUNAS ADAPTATIVAS -->
-            <div class="grid grid-cols-1 sm:grid-cols-[1.2fr_1fr] gap-4 items-center">
+            <!-- COLUNA DIREITA: tudo o que o card já mostrava -->
+            <div class="flex min-w-0 flex-1 flex-col gap-2">
+              <!-- CABEÇALHO DO CARD: STATUS GLOBAL DA ROW -->
+              <div class="flex flex-wrap items-start justify-between gap-2 border-b border-slate-800/60 pb-2.5">
+                <div class="space-y-0.5">
+                  <p class="font-black text-sm uppercase tracking-wider flex items-center gap-2" :class="match.win ? 'text-blue-400' : 'text-red-400'">
+                    {{ match.win ? 'VITÓRIA' : 'DERROTA' }}
+                    <span v-if="matchLp(match)"
+                      class="rounded-md border px-1.5 py-0.5 text-[11px] font-black tabular-nums"
+                      :class="matchLp(match).gain ? 'text-emerald-300 border-emerald-700/50 bg-emerald-950/60' : 'text-rose-300 border-rose-700/50 bg-rose-950/60'"
+                      title="A Riot não informa o LP ganho/perdido por partida — mostramos só o sinal (vitória/derrota).">
+                      {{ matchLp(match).text }} LP
+                    </span>
+                  </p>
+                  <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">{{ match.queueType || 'Outro Modo' }}</p>
+                
+                  <div v-if="matchBadges(match).length" class="mt-1 flex flex-wrap gap-1">
+                    <span v-for="badge in matchBadges(match)" :key="badge.label"
+                      class="rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                      :class="badge.color">{{ badge.label }}</span>
+                  </div>
+                </div>
               
-              <!-- SUB-COLUNA ESQUERDA: CAMPEÃO, KDA, CS E ITENS GRIDS -->
-              <div class="space-y-3">
-                <div class="flex items-center gap-3">
-                  <div class="relative flex-shrink-0">
-                    <img class="h-12 w-12 rounded-xl border border-slate-700 object-cover shadow-md" :src="championImage(match.championName || 'Aatrox')" :alt="match.championName" loading="lazy" />
-                    <img v-if="match.teamPosition && match.teamPosition !== 'Invalid'" :src="getMiniRoleIcon(match.teamPosition)" class="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-slate-950 p-0.5 brightness-200" :title="match.teamPosition" :alt="match.teamPosition" />
-                  </div>
+                <div class="text-right">
+                  <p class="text-[10px] font-semibold text-slate-400">{{ formatGameDate(match.gameStartTimestamp) }}</p>
+                  <p class="text-xs font-semibold text-slate-300 mt-0.5">{{ formatDuration(match.gameDuration) }}</p>
+                </div>
+              </div>
 
-                  <!-- Feitiços de invocador + runa principal (quando houver dados) -->
-                  <div v-if="match.summoner1Id || match.perkKeystone" class="flex flex-shrink-0 items-center gap-1">
-                    <div class="flex flex-col gap-0.5">
-                      <img v-if="spellImg(match.summoner1Id)" :src="spellImg(match.summoner1Id)" :title="spellName(match.summoner1Id)" :alt="spellName(match.summoner1Id)" class="h-5 w-5 rounded border border-slate-700 bg-slate-800" />
-                      <img v-if="spellImg(match.summoner2Id)" :src="spellImg(match.summoner2Id)" :title="spellName(match.summoner2Id)" :alt="spellName(match.summoner2Id)" class="h-5 w-5 rounded border border-slate-700 bg-slate-800" />
-                    </div>
-                    <img v-if="runeImg(match.perkKeystone)" :src="runeImg(match.perkKeystone)" :title="runeName(match.perkKeystone)" :alt="runeName(match.perkKeystone)" class="h-6 w-6 rounded-full border border-slate-700 bg-slate-950" />
-                  </div>
+              <!-- MEIO/FUNDO DO CARD: DIVIDIDO EM 2 SUB-COLUNAS ADAPTATIVAS -->
+              <div class="grid flex-1 grid-cols-1 sm:grid-cols-2 gap-3 items-center">
 
+                <!-- SUB-COLUNA ESQUERDA: KDA, CS E ITENS GRIDS (campeão/rota/feitiços
+                     agora vivem no card de campeão à esquerda) -->
+                <div class="space-y-2">
                   <div class="min-w-0">
-                    <p class="text-xs font-black text-slate-200 uppercase tracking-wide truncate">{{ match.championName }}</p>
-                    <p class="text-sm font-black text-white tracking-widest mt-0.5">
+                    <p class="text-sm font-black text-white tracking-widest">
                       {{ match.kills }} <span class="text-slate-600">/</span> {{ match.deaths }} <span class="text-slate-600">/</span> {{ match.assists }}
                     </p>
                     <p class="text-[11px] font-bold text-slate-400 truncate">
@@ -454,40 +469,40 @@
                       </template>
                     </p>
                   </div>
-                </div>
 
-                <!-- ITEMS COMPACT GRID -->
-                <div class="flex flex-wrap gap-1">
-                  <template v-for="(itemId, idx) in [match.item0, match.item1, match.item2, match.item3, match.item4, match.item5, match.item6]" :key="idx">
-                    <img v-if="itemId" class="h-6 w-6 rounded border border-slate-700 bg-slate-800 shadow-sm" :src="itemImage(itemId)" :title="itemName(itemId)" :alt="itemName(itemId)" loading="lazy" />
-                    <div v-else class="h-6 w-6 rounded border border-slate-800/30 bg-slate-900/40"></div>
-                  </template>
-                </div>
-              </div>
-
-              <!-- SUB-COLUNA DIREITA: CONFRONTOS POR ROTA (ALIADO vs INIMIGO, COMO NO OP.GG) -->
-              <div class="bg-slate-950/40 rounded-xl p-2 border border-slate-900/60 h-full flex flex-col justify-center gap-0.5">
-                <div v-for="(lane, i) in laneMatchups(match)" :key="i" class="flex items-center gap-1">
-                  <!-- ALIADO -->
-                  <div class="flex items-center gap-1 flex-1 min-w-0" :title="playerLabel(lane.ally)">
-                    <img class="h-4 w-4 rounded-sm border border-slate-800 flex-shrink-0 shadow-sm" :src="championImage(lane.ally?.championName || 'Aatrox')" :alt="lane.ally?.championName" loading="lazy" />
-                    <span class="truncate text-[9px] font-bold" :class="isSearchedPlayer(lane.ally) ? 'text-amber-300 font-black' : 'text-blue-300/80'">
-                      {{ lane.ally?.gameName || '—' }}
-                    </span>
-                  </div>
-                  <!-- ROTA -->
-                  <img v-if="lane.role" :src="getMiniRoleIcon(lane.role)" class="h-3 w-3 flex-shrink-0 opacity-60 brightness-200" :title="lane.role" :alt="lane.role" />
-                  <span v-else class="text-[8px] text-slate-600 flex-shrink-0">vs</span>
-                  <!-- INIMIGO -->
-                  <div class="flex items-center gap-1 flex-1 min-w-0 justify-end" :title="playerLabel(lane.enemy)">
-                    <span class="truncate text-right text-[9px] font-bold" :class="isSearchedPlayer(lane.enemy) ? 'text-amber-300 font-black' : 'text-red-300/80'">
-                      {{ lane.enemy?.gameName || '—' }}
-                    </span>
-                    <img class="h-4 w-4 rounded-sm border border-slate-800 flex-shrink-0 shadow-sm" :src="championImage(lane.enemy?.championName || 'Aatrox')" :alt="lane.enemy?.championName" loading="lazy" />
+                  <!-- ITEMS COMPACT GRID -->
+                  <div class="flex flex-wrap gap-1">
+                    <template v-for="(itemId, idx) in [match.item0, match.item1, match.item2, match.item3, match.item4, match.item5, match.item6]" :key="idx">
+                      <img v-if="itemId" class="h-6 w-6 rounded border border-slate-700 bg-slate-800 shadow-sm" :src="itemImage(itemId)" :title="itemName(itemId)" :alt="itemName(itemId)" loading="lazy" />
+                      <div v-else class="h-6 w-6 rounded border border-slate-800/30 bg-slate-900/40"></div>
+                    </template>
                   </div>
                 </div>
-              </div>
 
+                <!-- SUB-COLUNA DIREITA: CONFRONTOS POR ROTA (ALIADO vs INIMIGO, COMO NO OP.GG) -->
+                <div class="bg-slate-950/40 rounded-xl p-2 border border-slate-900/60 h-full flex flex-col justify-center gap-0.5">
+                  <div v-for="(lane, i) in laneMatchups(match)" :key="i" class="flex items-center gap-1">
+                    <!-- ALIADO -->
+                    <div class="flex items-center gap-1 flex-1 min-w-0" :title="playerLabel(lane.ally)">
+                      <img class="h-4 w-4 rounded-sm border border-slate-800 flex-shrink-0 shadow-sm" :src="championImage(lane.ally?.championName || 'Aatrox')" :alt="lane.ally?.championName" loading="lazy" />
+                      <span class="truncate text-[9px] font-bold" :class="isSearchedPlayer(lane.ally) ? 'text-amber-300 font-black' : 'text-blue-300/80'">
+                        {{ lane.ally?.gameName || '—' }}
+                      </span>
+                    </div>
+                    <!-- ROTA -->
+                    <img v-if="lane.role" :src="getMiniRoleIcon(lane.role)" class="h-3 w-3 flex-shrink-0 opacity-60 brightness-200" :title="lane.role" :alt="lane.role" />
+                    <span v-else class="text-[8px] text-slate-600 flex-shrink-0">vs</span>
+                    <!-- INIMIGO -->
+                    <div class="flex items-center gap-1 flex-1 min-w-0 justify-end" :title="playerLabel(lane.enemy)">
+                      <span class="truncate text-right text-[9px] font-bold" :class="isSearchedPlayer(lane.enemy) ? 'text-amber-300 font-black' : 'text-red-300/80'">
+                        {{ lane.enemy?.gameName || '—' }}
+                      </span>
+                      <img class="h-4 w-4 rounded-sm border border-slate-800 flex-shrink-0 shadow-sm" :src="championImage(lane.enemy?.championName || 'Aatrox')" :alt="lane.enemy?.championName" loading="lazy" />
+                    </div>
+                  </div>
+                </div>
+
+              </div>
             </div>
           </article>
         </div>
@@ -519,6 +534,15 @@
           </button>
         </div>
       </section>
+
+      <!-- Ficha do campeão de uma partida (modal) — mesma do Meta/Panteão/Caverna -->
+      <ChampionSheet
+        v-if="selectedChamp"
+        :champ="selectedChamp"
+        @close="selectedChamp = null"
+        @open-item="goToItem"
+        @open-champion="selectedChamp = $event"
+      />
     </template>
   </div>
 </template>
@@ -528,9 +552,12 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { state } from '../store.js';
 import { championImage, profileIconImage, itemImage, calculateKdaRatio, formatDuration, summonerSpellImage, runeImage } from '../utils.js';
+import { championByName } from '../utils/championCatalog.js';
 import { loadProfileIntoStore, fetchRecentMatches } from '../api.js';
 import SearchGate from './SearchGate.vue';
 import PlayerAnalysis from './PlayerAnalysis.vue';
+import ChampionCard from './ChampionCard.vue';
+import ChampionSheet from './ChampionSheet.vue';
 
 const store = state;
 
@@ -564,6 +591,12 @@ function goView(v) {
   if (v === 'historico') router.push(`/historico/${enc(gn)}/${enc(tl)}`);
   else if (v === 'estatisticas') router.push(`/analise/${enc(gn)}/${enc(tl)}`);
   else router.push(`/profile/${enc(gn)}/${enc(tl)}`); // seletor
+}
+
+// Ficha aberta pelo card de campeão de uma partida (modal, sem trocar de rota).
+const selectedChamp = ref(null);
+function goToItem(itemId) {
+  router.push(`/items/${itemId}`);
 }
 
 // ---- Botão "buscar últimos 10 jogos" (banner de pendências + hiato) ----
