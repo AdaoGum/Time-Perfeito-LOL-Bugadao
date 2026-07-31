@@ -37,6 +37,8 @@ npm run build      # build de produção (valida imports; roda antes de finaliza
 npm test           # node --test em src/utils/__tests__/*.test.js (27 testes)
 npm run meta:archive   # arquiva o meta-tiers.csv atual em src/data/meta-history/
 ```
+Slash commands: **`/atualizar-meta`** (tier list) e **`/atualizar-builds`** (builds do
+lolalytics — roda `local/scrape/`, gitignored, ~6 min de rede local, zero IA).
 Sempre rode `npm run build` **e** `npm test` antes de dar por concluída uma mudança.
 
 ## Mapa de rotas (front)
@@ -49,7 +51,7 @@ Sempre rode `npm run build` **e** `npm test` antes de dar por concluída uma mud
 | `/historico[/:g/:t]` | Profile (histórico) | "Caçadas Passadas" |
 | `/analise[/:g/:t]` | Profile (estatísticas) | "Olhar Espiritual" |
 | `/profile[/:g/:t/:view?]` | Profile | Seletor Histórico↔Estatísticas |
-| `/mastery` | Mastery | "Caverna dos Monos" |
+| `/mastery[/:g/:t]` | Mastery | "Caverna dos Monos" (busca aqui NÃO sai da tela) |
 | `/synergy` | Tribo | "Tribo Perfeita" (planejador de sinergia) |
 | `/saguaoCustom` | saguaoCustom | "Customizada 5x5" (lobby custom) |
 | `/ancestralidade` | Ancestralidade | Painel D1 (admin, exige senha no Worker) |
@@ -71,25 +73,35 @@ rota (abrir/fechar modal de ficha/item) — evita o "pulo" da tela de fundo.
   `ui` (sidebarCollapsed, telemetryLevel), e **`staticData`** (`championList`, `items`,
   `runes`, `summonerSpells`, `championDetails` — cache das fichas). O Data Dragon é
   carregado no boot em `App.vue`.
+  - `searchProfile.brief` = o perfil veio do `profile_brief` (leve, **sem** partidas /
+    proficiência / companheiros). O `Profile.vue` vê essa flag e recarrega o overview
+    completo — senão mostraria histórico vazio.
+  - `masteryDashboard` tem `loading` e `puuid` (trocar de jogador limpa a lista antiga).
 - **`api.js`** — cliente do Worker (`workerRequest`), normalização de perfil, telemetria
   de rate limit, `fetchPlayerSuggestions` (autocomplete de jogadores).
+  `loadProfileIntoStore(gameName, tagLine, { action })` aceita `profile_overview`
+  (completo) ou `profile_brief` (leve).
 - **`utils.js`** — `WORKER_URL`, versão do Data Dragon (`resolveDDragonVersion`), e
   helpers de imagem: `championImage`, `itemImage`, `runeImage`, `championSplashImage`,
   `championLoadingImage`, `championSpellImage`, `championPassiveImage`,
   **`roleIconImage`** (ícones OFICIAIS de rota via Community Dragon — não FontAwesome),
   `fetchChampionDetail` (ficha do campeão sob demanda, com cache).
-- **`utils/championCatalog.js`** — motor do módulo Campeões: `rolesOf`, `buildsFor`
-  (até 3 builds por campeão, cada uma com runas+itens), `championsForItem` (sinergia
-  inversa), `metaTiersByRole`, `metaEntriesOf`, `TIER_STYLES`, `ROLES`, `sanitizeDDragonText`.
+- **`utils/championCatalog.js`** — motor do módulo Campeões: `rolesOf`, **`rolesWithMeta`**,
+  `championByName`, `buildsFor` (até 3 presets por campeão, com runas+itens),
+  **`metaBuildVariants`**, `championsForItem` (sinergia inversa), `metaTiersByRole`,
+  `metaEntriesOf`, `countersEntriesOf`, `TIER_STYLES`, `ROLES`, `sanitizeDDragonText`.
 - **`utils/sinergiaMotor.js`** — motor de sinergia v2 + `parseMetaCsv` (lê o meta com
   colunas opcionais `winrate,pickrate,banrate`).
 - **`utils/proficiencia.js`** — proficiência real do jogador no campeão.
+- **`utils/tilt3d.js`** — `useTilt3d()`: inclinação 3D no hover seguindo o cursor
+  (equivalente ao `hover-3d` do daisyUI, sem a dependência — ver Convenções).
 - **`data/`** — `meta-tiers.csv` (tier + WR/PR/BR), `sinergia-champs.csv` (vetores 8D),
   **`builds-champs.json`** (presets de build + páginas de runas + overrides por campeão),
+  **`meta-builds.json`** (build REAL por campeão×rota, do lolalytics),
   `meta-history/` (arquivos versionados do meta).
 - **Componentes de Campeões:** `Champions.vue` + `ChampionSheet.vue` (ficha com modal
   **expansível** e **galeria de skins**), `Items.vue` + `ItemDetail.vue`,
-  `MetaTierList.vue`, `ModuleHub.vue` (hubs).
+  `MetaTierList.vue`, `ModuleHub.vue` (hubs), e o **`ChampionCard.vue`**.
 - **Componentes de Jogador/Tribo:** `Home`, `Profile`, `Mastery`, `Tribo`, `saguaoCustom`,
   `Ancestralidade`, `SearchBar`, `SearchGate`, `PlayerAnalysis`, `RadarChart`, `KpiCard`,
   `CustomSlotCard`, `FilaSelecao`, `AsyncState`.
@@ -99,6 +111,31 @@ rota (abrir/fechar modal de ficha/item) — evita o "pulo" da tela de fundo.
 - **Nome canônico de campeão = nome de exibição pt_BR** (`champ.name`, ex.: "Dr. Mundo",
   "Cho'Gath") — é a chave dos CSVs e do `builds-champs.json`. Nas **URLs** usa-se o **id
   do Data Dragon** (`champ.id`, ex.: `MonkeyKing`) via `getChampionIdFromName`.
+  Nome → objeto do campeão é **sempre** `championByName(store.staticData.championList, nome)`
+  (índice memoizado, com fallback `{ name }`). Dois nomes dos nossos CSVs divergem do
+  rótulo pt_BR e têm apelido lá dentro: `Bard`→`Bardo`, `Nunu & Willump`→`Nunu e Willump`.
+- **Numeração de patch: são DOIS sistemas, e nenhum está errado.** O Data Dragon usa a
+  versão dele (`16.14.1`); o patch do JOGO é `26.14` (defasagem de 10). Por isso
+  `meta-tiers.csv` diz `26.14` e `meta-builds.json._meta.patch` (gerado do DDragon) diz
+  `16.14`. **Não "corrija" um pelo outro.**
+- **`rolesOf` vs `rolesWithMeta`** — não são intercambiáveis:
+  - `rolesOf(champ)` = **identidade** do campeão (planilha de sinergia → tags DDragon).
+    É o que alimenta `classPresetChain` (escolha do preset de build por classe). Somar
+    rota de nicho aqui troca a build padrão do campeão.
+  - `rolesWithMeta(champ)` = identidade **+ rotas onde ele aparece no meta do patch**.
+    É o que a UI usa (ícones do card, chips da ficha, rotas com build). 43 das 273
+    entradas do meta estão numa rota fora da planilha (Riven MID, Naafiri JUNGLE…);
+    sem a união o campeão aparece na coluna do meio com o ícone de topo e a build
+    daquela rota fica inalcançável.
+- **`ChampionCard.vue` é o ÚNICO card de campeão** (Panteão, Meta, Caverna dos Monos e
+  cards de partida do Histórico). Ele é `w-full` com proporção fixa 308×560 — **quem usa
+  define a largura**. Tamanho compacto canônico: `w-28 sm:w-32`. Encaixes por tela sem
+  duplicar o componente: prop `winrate`, prop `frameClass` (troca a moldura) e slots
+  `overlay` (sobre a arte) e `footer` (abaixo dela).
+- **Nada de daisyUI.** O `hover-3d` dele exige 8 divs de zona sobre o conteúdo e a doc
+  proíbe conteúdo clicável dentro — nossos cards são `<button>` com clique e popover.
+  Use `useTilt3d()` (`utils/tilt3d.js`), que faz o mesmo com `mousemove`, é contínuo em
+  vez de quantizado em 8 direções e respeita `prefers-reduced-motion`.
 - **Degradação graciosa é regra:** dado ausente (campeão novo, item fora do patch, meta
   sem WR) vira fallback neutro/"—", **nunca** crash. IDs de item mortos são filtrados em
   runtime contra o `item.json` do patch.
@@ -114,12 +151,34 @@ rota (abrir/fechar modal de ficha/item) — evita o "pulo" da tela de fundo.
 - **Builds (`builds-champs.json`)** são **curadas/heurísticas**, não winrate ao vivo:
   `presets` (itens + página de runas por estilo) + `champions` (itens da build principal
   por campeão). `championCatalog.classPresetChain` escolhe até 3 presets por classe/dano/rota.
+  **Só daqui saem as RUNAS** — o scrape do lolalytics não captura runa.
+- **Builds do meta (`meta-builds.json`)** são dados REAIS, raspados do lolalytics por
+  campeão×rota (`/atualizar-builds`, pipeline local em `local/scrape/`, ~6 min):
+  `buildWr`, `start`, `core`, `boots`, **`slots`**, `situational`, `skillMax`,
+  `skillLevels`, `counters`. O campo **`slots`** é o Item 4/5/6 agrupado, com até 3
+  opções por slot (id + winrate + amostra) — é dele que `metaBuildVariants()` monta as
+  **até 3 builds** da ficha: a 1ª pega a opção mais jogada de cada slot, a 2ª a seguinte.
+  A função pula item repetido (o mesmo item costuma ser opção de dois slots) e, se um
+  slot ficar sem opção livre, ele **some** em vez de duplicar.
+  Sem `slots` (JSON antigo) a ficha cai na lista achatada de `situational`.
 
 ## Limites honestos (diga isto ao usuário quando perguntarem)
 
-- **Não temos winrate por build nem lista de counters** — a API da Riot não expõe
-  estatística agregada de campeão; WR/PR/BR por campeão/rota só existem se preenchidos no
-  `meta-tiers.csv` (via `/atualizar-meta`, fonte externa mobatrainer). Não invente números.
+- **A API da Riot não expõe estatística agregada de campeão.** Todo WR/PR/BR, tier,
+  build e counter vem de **fonte externa raspada** (mobatrainer no `meta-tiers.csv`,
+  lolalytics no `meta-builds.json`). Não invente números; se o campo está vazio, é "—".
+- **Winrate por build existe, mas por ITEM, não pela build inteira** — cada opção de
+  slot tem seu WR e sua amostra. Não some nem faça média para inventar um "WR da build".
+  E `buildWr` é a aba "Highest Win Build" do lolalytics: infla em amostra baixa (há ~10
+  entradas acima de 65%). Sempre mostre a amostra junto.
+- **Runas por build são heurísticas** — pareamos a build *i* com o preset curado *i*.
+  O rótulo na ficha diz "da build N"; não venda isso como dado do lolalytics.
+- **Modelos 3D dos campeões não dá para embutir.** Verificado: o Community Dragon serve
+  a malha (`.skn`) e as texturas, mas **404 no esqueleto (`.skl`) e nos clipes (`.anm`)** —
+  sem eles não há nem pose, quanto mais animação. Converter exigiria extrair os WADs de
+  uma instalação local (lol2gltf/LeagueConvert) e o peso não cabe no GitHub Pages. A ficha
+  resolve com um link para o **Khada** (`modelviewer.lol/model-viewer?id=<skinId>`, onde
+  `skinId = champ.key × 1000 + skin.num`). Ele não tem API nem iframe — só link.
 - O módulo **Campeões é estático**: reflete o que está nos arquivos do repo + Data Dragon.
 
 ## Backend (resumo — detalhes no README/ARCHITECTURE)

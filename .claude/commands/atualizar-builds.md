@@ -28,13 +28,13 @@ re-rodar com `--delay 2500` ou por lane.
 
 ## Passo 3 — Verificar
 Rode `node local/scrape/verify.mjs` e leia o relatório (é conciso).
-Confirme: entradas == esperadas, 0 IDs de Arena, 0 sem core/skillMax/skillLevels.
+Confirme: entradas == esperadas, 0 IDs de Arena, 0 sem core/skillMax/skillLevels, e a
+linha `builds por entrada` (quantas entradas rendem 1, 2 ou 3 caminhos de finalização).
 
 ## Passo 4 — Relatar
 Resuma pro usuário:
 - total OK/FAIL e cobertura (entradas vs tier list);
 - itens com `buildWr` ausente (—) e os com `buildWr > 65%` (low-sample da aba "Highest
   Win Build" — não são WR real; avise);
-- lembrete: `meta-builds.json` ainda NÃO é importado por código (falta ligar na
-  `championCatalog.js` + `ChampionSheet.vue`);
+- quantas entradas ficaram sem `slots` (essas mostram só a build única na ficha);
 - NÃO commite nem faça deploy — deixe pro usuário revisar.

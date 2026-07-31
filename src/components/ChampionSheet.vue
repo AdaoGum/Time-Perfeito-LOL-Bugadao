@@ -81,12 +81,20 @@
           <!-- Splash da skin como FUNDO da tela inteira (modo expandido) -->
           <template v-if="isExpanded">
             <img :key="selectedSkinSplash" :src="selectedSkinSplash" :alt="skinName(selectedSkin)" class="absolute inset-0 h-full w-full animate-[skinFade_0.4s_ease] object-cover object-center" @error="markSkinBroken(selectedSkin?.num)" />
-            <div class="pointer-events-none absolute inset-0 bg-gradient-to-br from-slate-950/95 via-slate-950/85 to-slate-950/70"></div>
+            <!-- Véu bem mais leve que antes: a arte precisa aparecer. O gradiente ainda
+                 escurece o lado esquerdo, onde fica o texto. -->
+            <div class="pointer-events-none absolute inset-0 bg-gradient-to-br from-slate-950/80 via-slate-950/60 to-slate-950/35"></div>
           </template>
 
           <!-- Bloco de informações (único; POR CIMA do fundo quando expandido) -->
           <div class="relative" :class="isExpanded ? 'h-full min-h-0 overflow-y-auto' : ''">
-            <div class="grid gap-5 p-4 sm:p-6" :class="isExpanded ? 'md:grid-cols-2 xl:gap-8 xl:p-8' : 'lg:grid-cols-2'">
+            <!-- Duplo clique numa área vazia traz a arte da skin para a frente (.self =
+                 só quando o clique cai na própria grade, não em cima de um card). -->
+            <div
+              class="grid gap-5 p-4 sm:p-6"
+              :class="isExpanded ? 'md:grid-cols-2 xl:grid-cols-[1.1fr_1.1fr_17rem] xl:gap-6 xl:p-6' : 'lg:grid-cols-2'"
+              @dblclick.self="isExpanded && (artFullscreen = true)"
+            >
               <!-- Coluna 1: meta + radar + lore -->
               <div class="space-y-5">
                 <!-- Meta no patch -->
@@ -94,11 +102,12 @@
                   <h3 class="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-300">
                     <i class="fa-solid fa-ranking-star"></i> Meta no Patch {{ metaPatch }}
                   </h3>
-                  <div v-if="metaEntries.length" class="space-y-1.5">
+                  <!-- Uma rota do lado da outra: cada bloco é curto, não precisa de linha inteira. -->
+                  <div v-if="metaEntries.length" class="grid gap-1.5 sm:grid-cols-2">
                     <div v-for="entry in metaEntries" :key="entry.role" class="flex items-center gap-2 rounded-lg border px-2.5 py-1.5" :class="TIER_STYLES[entry.tier].row">
-                      <span class="inline-flex h-6 w-6 items-center justify-center rounded border text-[11px] font-black" :class="TIER_STYLES[entry.tier].badge">{{ entry.tier }}</span>
-                      <span class="inline-flex items-center gap-1 text-xs font-black text-slate-200"><img :src="roleIconImage(entry.role)" :alt="entry.role" class="h-3.5 w-3.5" />{{ roleLabel(entry.role) }}</span>
-                      <div class="ml-auto flex gap-2 text-[10px] font-bold">
+                      <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border text-xs font-black" :class="TIER_STYLES[entry.tier].badge">{{ entry.tier }}</span>
+                      <span class="inline-flex shrink-0 items-center gap-1 text-xs font-black text-slate-200"><img :src="roleIconImage(entry.role)" :alt="entry.role" class="h-4 w-4" />{{ roleLabel(entry.role) }}</span>
+                      <div class="ml-auto flex gap-1.5 text-[10px] font-bold">
                         <span class="text-slate-400">WR <span class="text-slate-200">{{ formatPct(entry.winrate) }}</span></span>
                         <span class="text-slate-400">PR <span class="text-slate-200">{{ formatPct(entry.pickrate) }}</span></span>
                         <span class="text-slate-400">BR <span class="text-slate-200">{{ formatPct(entry.banrate) }}</span></span>
@@ -113,27 +122,31 @@
                   <h3 class="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-rose-300">
                     <i class="fa-solid fa-hand-fist"></i> Counters
                   </h3>
+                  <!-- Forte/Fraco lado a lado dentro da rota: cabem em meia largura e
+                       sobra espaço para ícone e nome maiores. -->
                   <div class="space-y-2">
                     <div v-for="entry in counterEntries" :key="entry.role" class="rounded-lg border border-slate-800 bg-slate-900/40 p-2.5">
-                      <p class="mb-1.5 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                        <img :src="roleIconImage(entry.role)" :alt="entry.role" class="h-3.5 w-3.5" /> {{ roleLabel(entry.role) }}
+                      <p class="mb-2 inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-slate-300">
+                        <img :src="roleIconImage(entry.role)" :alt="entry.role" class="h-4 w-4" /> {{ roleLabel(entry.role) }}
                       </p>
-                      <div v-if="entry.strongAgainst.length" class="mb-2">
-                        <p class="mb-1 text-[10px] font-bold text-emerald-400"><i class="fa-solid fa-arrow-up"></i> Forte contra</p>
-                        <div class="flex flex-wrap gap-1.5">
-                          <button v-for="c in entry.strongAgainst" :key="`s-${c.id}`" type="button" class="group flex w-11 flex-col items-center" :title="c.name" @click="$emit('open-champion', c)">
-                            <img :src="championImage(c.name)" :alt="c.name" class="h-9 w-9 rounded-md border border-emerald-700/50 transition group-hover:scale-110 group-hover:border-emerald-400" />
-                            <span class="mt-0.5 w-full truncate text-center text-[8px] text-slate-400 group-hover:text-slate-200">{{ c.name }}</span>
-                          </button>
+                      <div class="grid gap-2 sm:grid-cols-2">
+                        <div v-if="entry.strongAgainst.length">
+                          <p class="mb-1.5 text-[11px] font-black text-emerald-400"><i class="fa-solid fa-arrow-up"></i> Forte contra</p>
+                          <div class="flex flex-wrap gap-2">
+                            <button v-for="c in entry.strongAgainst" :key="`s-${c.id}`" type="button" class="group flex w-14 flex-col items-center" :title="c.name" @click="$emit('open-champion', c)">
+                              <img :src="championImage(c.name)" :alt="c.name" class="h-12 w-12 rounded-md border-2 border-emerald-700/50 transition group-hover:scale-110 group-hover:border-emerald-400" />
+                              <span class="mt-1 w-full truncate text-center text-[10px] font-semibold text-slate-300 group-hover:text-white">{{ c.name }}</span>
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                      <div v-if="entry.counteredBy.length">
-                        <p class="mb-1 text-[10px] font-bold text-rose-400"><i class="fa-solid fa-arrow-down"></i> Fraco contra</p>
-                        <div class="flex flex-wrap gap-1.5">
-                          <button v-for="c in entry.counteredBy" :key="`w-${c.id}`" type="button" class="group flex w-11 flex-col items-center" :title="c.name" @click="$emit('open-champion', c)">
-                            <img :src="championImage(c.name)" :alt="c.name" class="h-9 w-9 rounded-md border border-rose-700/50 transition group-hover:scale-110 group-hover:border-rose-400" />
-                            <span class="mt-0.5 w-full truncate text-center text-[8px] text-slate-400 group-hover:text-slate-200">{{ c.name }}</span>
-                          </button>
+                        <div v-if="entry.counteredBy.length">
+                          <p class="mb-1.5 text-[11px] font-black text-rose-400"><i class="fa-solid fa-arrow-down"></i> Fraco contra</p>
+                          <div class="flex flex-wrap gap-2">
+                            <button v-for="c in entry.counteredBy" :key="`w-${c.id}`" type="button" class="group flex w-14 flex-col items-center" :title="c.name" @click="$emit('open-champion', c)">
+                              <img :src="championImage(c.name)" :alt="c.name" class="h-12 w-12 rounded-md border-2 border-rose-700/50 transition group-hover:scale-110 group-hover:border-rose-400" />
+                              <span class="mt-1 w-full truncate text-center text-[10px] font-semibold text-slate-300 group-hover:text-white">{{ c.name }}</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -145,8 +158,8 @@
                   <h3 class="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-cyan-300">
                     <i class="fa-solid fa-chart-area"></i> Perfil Tático
                   </h3>
-                  <div class="rounded-2xl border border-slate-800 bg-slate-900/40 p-2">
-                    <RadarChart :axes="radarAxes" color="#22d3ee" :size="240" />
+                  <div class="flex justify-center rounded-2xl border border-slate-800 bg-slate-900/40 p-2">
+                    <RadarChart :axes="radarAxes" color="#22d3ee" :size="150" />
                   </div>
                 </section>
 
@@ -203,80 +216,129 @@
                     </button>
                   </div>
 
-                  <div v-if="activeMetaBuild" class="flex flex-col gap-3 rounded-2xl border border-lime-500/40 bg-slate-900/40 p-3">
-                    <!-- Runas (do preset por classe — meta-builds não raspa runa) -->
-                    <div v-if="presetRunes">
-                      <p class="mb-1.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-violet-300">
+                  <!-- Abas de build: trocam JUNTOS os itens finais e a página de runas
+                       (a build 2 não roda com as runas da build 1). -->
+                  <div v-if="activeMetaBuild && metaVariants.length > 1" class="flex gap-1">
+                    <button
+                      v-for="(v, i) in metaVariants"
+                      :key="`mv-${i}`"
+                      type="button"
+                      class="relative -mb-px min-w-0 flex-1 truncate rounded-t-lg border border-b-0 px-2 py-1.5 text-[10px] font-black uppercase tracking-wide transition"
+                      :class="i === activeVariant ? 'border-lime-500/60 bg-slate-900/70 text-lime-300' : 'border-slate-800 bg-slate-950/60 text-slate-500 hover:text-slate-300'"
+                      :title="v.exata ? 'Caminho completo do lolalytics' : 'Caminho parcial — algum slot não tinha opção nesta posição'"
+                      @click="activeVariant = i"
+                    >
+                      Build {{ i + 1 }}<span v-if="!v.exata" class="ml-0.5 text-slate-600">*</span>
+                    </button>
+                  </div>
+
+                  <div
+                    v-if="activeMetaBuild"
+                    class="flex flex-col gap-3 border border-lime-500/40 bg-slate-900/40 p-3"
+                    :class="metaVariants.length > 1 ? 'rounded-b-2xl rounded-tr-2xl' : 'rounded-2xl'"
+                  >
+                    <!-- Itens: iniciais → NÚCLEO (com borda) → FINALIZAÇÃO ao lado -->
+                    <div>
+                      <p class="mb-1.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-lime-300">
+                        <i class="fa-solid fa-shield-halved"></i> Itens
+                      </p>
+                      <div class="flex flex-wrap items-stretch gap-2">
+                        <!-- Iniciais -->
+                        <div v-if="(activeMetaBuild.start || []).length" class="flex items-center gap-1 self-center">
+                          <template v-for="id in activeMetaBuild.start" :key="`mst-${id}`">
+                            <button v-if="itemsMap[id]" type="button" class="group" :title="`Inicial: ${itemsMap[id]?.name}`" @click="$emit('open-item', id)">
+                              <img :src="itemImage(id)" :alt="itemsMap[id]?.name" class="h-8 w-8 rounded-md border border-slate-700 opacity-80 transition group-hover:border-lime-500" />
+                            </button>
+                          </template>
+                          <i class="fa-solid fa-chevron-right text-[9px] text-slate-600"></i>
+                        </div>
+
+                        <!-- Núcleo: os primeiros itens + botas, cercados -->
+                        <div class="rounded-xl border-2 border-lime-500/50 bg-lime-950/20 p-1.5">
+                          <p class="mb-1 text-center text-[8px] font-black uppercase tracking-wider text-lime-300">Núcleo</p>
+                          <div class="flex items-center gap-1.5">
+                            <button
+                              v-for="(id, i) in (activeMetaBuild.core || [])"
+                              :key="`mco-${id}-${i}`"
+                              type="button"
+                              class="group relative"
+                              :title="itemsMap[id]?.name"
+                              @click="$emit('open-item', id)"
+                            >
+                              <img :src="itemImage(id)" :alt="itemsMap[id]?.name" class="h-11 w-11 rounded-md border border-slate-700 transition group-hover:scale-110 group-hover:border-lime-500" />
+                              <span class="absolute -left-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-lime-600 text-[9px] font-black text-white">{{ i + 1 }}</span>
+                            </button>
+                            <button v-if="activeMetaBuild.boots && itemsMap[activeMetaBuild.boots]" type="button" class="group relative" :title="`Botas: ${itemsMap[activeMetaBuild.boots]?.name}`" @click="$emit('open-item', activeMetaBuild.boots)">
+                              <img :src="itemImage(activeMetaBuild.boots)" :alt="itemsMap[activeMetaBuild.boots]?.name" class="h-11 w-11 rounded-md border border-sky-700/60 transition group-hover:scale-110 group-hover:border-sky-400" />
+                              <span class="absolute -bottom-1 -right-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-sky-600 text-[8px] text-white"><i class="fa-solid fa-shoe-prints"></i></span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <i class="fa-solid fa-chevron-right self-center text-[9px] text-slate-600"></i>
+
+                        <!-- Finalização: os 3 últimos slots, com WR e amostra -->
+                        <div class="rounded-xl border-2 border-amber-500/40 bg-amber-950/15 p-1.5">
+                          <p class="mb-1 text-center text-[8px] font-black uppercase tracking-wider text-amber-300">Situacionais</p>
+                          <div class="flex items-start gap-1.5">
+                            <!-- Caminho da build ativa (Item 4 → 5 → 6) -->
+                            <template v-if="metaVariants.length">
+                              <button
+                                v-for="(o, i) in (metaVariants[activeVariant]?.items || [])"
+                                :key="`mvi-${o.id}-${i}`"
+                                type="button"
+                                class="group flex w-11 flex-col items-center"
+                                :title="itemsMap[o.id]?.name"
+                                @click="$emit('open-item', o.id)"
+                              >
+                                <img v-if="itemsMap[o.id]" :src="itemImage(o.id)" :alt="itemsMap[o.id]?.name" class="h-11 w-11 rounded-md border border-slate-700 transition group-hover:scale-110 group-hover:border-amber-400" />
+                                <span v-if="Number.isFinite(o.wr)" class="mt-0.5 text-[9px] font-black text-amber-400">{{ o.wr }}%</span>
+                                <span v-if="o.games" class="text-[8px] font-semibold text-slate-500">{{ fmtGames(o.games) }}</span>
+                              </button>
+                            </template>
+                            <!-- JSON antigo, sem os slots agrupados: lista achatada -->
+                            <template v-else>
+                              <button
+                                v-for="s in (activeMetaBuild.situational || [])"
+                                :key="`msi-${s.id}`"
+                                type="button"
+                                class="group flex w-11 flex-col items-center"
+                                :title="itemsMap[s.id]?.name"
+                                @click="$emit('open-item', s.id)"
+                              >
+                                <img v-if="itemsMap[s.id]" :src="itemImage(s.id)" :alt="itemsMap[s.id]?.name" class="h-11 w-11 rounded-md border border-slate-700 transition group-hover:scale-110 group-hover:border-amber-400" />
+                                <span v-if="Number.isFinite(s.wr)" class="mt-0.5 text-[9px] font-black text-amber-400">{{ s.wr }}%</span>
+                              </button>
+                            </template>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Runas DESTA build (preset curado — o scrape do lolalytics não pega runa) -->
+                    <div v-if="runesForVariant">
+                      <p class="mb-1.5 flex flex-wrap items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-violet-300">
                         <i class="fa-solid fa-scroll"></i> Runas
+                        <span v-if="metaVariants.length > 1" class="font-bold normal-case tracking-normal text-slate-500">— da build {{ activeVariant + 1 }}</span>
                       </p>
                       <div class="flex flex-wrap items-center gap-3">
                         <div class="flex items-center gap-1.5">
-                          <img v-if="runeSrc(presetRunes.primary)" :src="runeSrc(presetRunes.primary)" :alt="runeInfo(presetRunes.primary)?.name" class="h-5 w-5 opacity-80" :title="runeInfo(presetRunes.primary)?.name" />
-                          <img v-if="runeSrc(presetRunes.keystone)" :src="runeSrc(presetRunes.keystone)" :alt="runeInfo(presetRunes.keystone)?.name" class="h-10 w-10 rounded-full border-2 border-violet-500/70 bg-slate-950" :title="runeInfo(presetRunes.keystone)?.name" />
+                          <img v-if="runeSrc(runesForVariant.primary)" :src="runeSrc(runesForVariant.primary)" :alt="runeInfo(runesForVariant.primary)?.name" class="h-5 w-5 opacity-80" :title="runeInfo(runesForVariant.primary)?.name" />
+                          <img v-if="runeSrc(runesForVariant.keystone)" :src="runeSrc(runesForVariant.keystone)" :alt="runeInfo(runesForVariant.keystone)?.name" class="h-10 w-10 rounded-full border-2 border-violet-500/70 bg-slate-950" :title="runeInfo(runesForVariant.keystone)?.name" />
                           <div class="flex gap-1">
-                            <template v-for="pid in presetRunes.primaryPicks" :key="`mpp-${pid}`">
+                            <template v-for="pid in runesForVariant.primaryPicks" :key="`mpp-${pid}`">
                               <img v-if="runeSrc(pid)" :src="runeSrc(pid)" :alt="runeInfo(pid)?.name" class="h-7 w-7 rounded-full border border-slate-700 bg-slate-950" :title="runeInfo(pid)?.name" />
                             </template>
                           </div>
                         </div>
                         <div class="flex items-center gap-1.5 border-l border-slate-700 pl-3">
-                          <img v-if="runeSrc(presetRunes.secondary)" :src="runeSrc(presetRunes.secondary)" :alt="runeInfo(presetRunes.secondary)?.name" class="h-5 w-5 opacity-80" :title="runeInfo(presetRunes.secondary)?.name" />
+                          <img v-if="runeSrc(runesForVariant.secondary)" :src="runeSrc(runesForVariant.secondary)" :alt="runeInfo(runesForVariant.secondary)?.name" class="h-5 w-5 opacity-80" :title="runeInfo(runesForVariant.secondary)?.name" />
                           <div class="flex gap-1">
-                            <template v-for="sid in presetRunes.secondaryPicks" :key="`msp-${sid}`">
+                            <template v-for="sid in runesForVariant.secondaryPicks" :key="`msp-${sid}`">
                               <img v-if="runeSrc(sid)" :src="runeSrc(sid)" :alt="runeInfo(sid)?.name" class="h-7 w-7 rounded-full border border-slate-700 bg-slate-950" :title="runeInfo(sid)?.name" />
                             </template>
                           </div>
                         </div>
-                      </div>
-                    </div>
-
-                    <!-- Itens: iniciais → core (ordem) → botas -->
-                    <div>
-                      <p class="mb-1.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-lime-300">
-                        <i class="fa-solid fa-shield-halved"></i> Itens
-                      </p>
-                      <div class="flex flex-wrap items-center gap-2">
-                        <template v-for="id in (activeMetaBuild.start || [])" :key="`mst-${id}`">
-                          <button v-if="itemsMap[id]" type="button" class="group relative" :title="`Inicial: ${itemsMap[id]?.name}`" @click="$emit('open-item', id)">
-                            <img :src="itemImage(id)" :alt="itemsMap[id]?.name" class="h-8 w-8 rounded-md border border-slate-700 opacity-80 transition group-hover:border-lime-500" />
-                          </button>
-                        </template>
-                        <i v-if="(activeMetaBuild.start || []).length" class="fa-solid fa-chevron-right text-[9px] text-slate-600"></i>
-                        <button
-                          v-for="(id, i) in (activeMetaBuild.core || [])"
-                          :key="`mco-${id}-${i}`"
-                          type="button"
-                          class="group relative"
-                          :title="itemsMap[id]?.name"
-                          @click="$emit('open-item', id)"
-                        >
-                          <img :src="itemImage(id)" :alt="itemsMap[id]?.name" class="h-11 w-11 rounded-md border border-slate-700 transition group-hover:scale-110 group-hover:border-lime-500" />
-                          <span class="absolute -left-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-lime-600 text-[9px] font-black text-white">{{ i + 1 }}</span>
-                        </button>
-                        <button v-if="activeMetaBuild.boots && itemsMap[activeMetaBuild.boots]" type="button" class="group relative" :title="`Botas: ${itemsMap[activeMetaBuild.boots]?.name}`" @click="$emit('open-item', activeMetaBuild.boots)">
-                          <img :src="itemImage(activeMetaBuild.boots)" :alt="itemsMap[activeMetaBuild.boots]?.name" class="h-11 w-11 rounded-md border border-sky-700/60 transition group-hover:scale-110 group-hover:border-sky-400" />
-                          <span class="absolute -bottom-1 -right-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-sky-600 text-[8px] text-white"><i class="fa-solid fa-shoe-prints"></i></span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <!-- Situacionais (com WR) -->
-                    <div v-if="(activeMetaBuild.situational || []).length">
-                      <p class="mb-1.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-amber-300">
-                        <i class="fa-solid fa-scale-balanced"></i> Situacionais
-                      </p>
-                      <div class="flex flex-wrap gap-2">
-                        <button
-                          v-for="s in activeMetaBuild.situational"
-                          :key="`msi-${s.id}`"
-                          type="button"
-                          class="group flex w-11 flex-col items-center"
-                          :title="itemsMap[s.id]?.name"
-                          @click="$emit('open-item', s.id)"
-                        >
-                          <img v-if="itemsMap[s.id]" :src="itemImage(s.id)" :alt="itemsMap[s.id]?.name" class="h-9 w-9 rounded-md border border-slate-700 transition group-hover:scale-110 group-hover:border-amber-400" />
-                          <span v-if="Number.isFinite(s.wr)" class="mt-0.5 text-[8px] font-black text-amber-400">{{ s.wr }}%</span>
-                        </button>
                       </div>
                     </div>
 
@@ -382,12 +444,105 @@
                   <p v-else class="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-400">Builds ainda carregando ou indisponíveis neste patch.</p>
                 </section>
               </div>
+
+              <!-- Coluna 3 (só expandido): o campeão com a skin escolhida -->
+              <div v-if="isExpanded" class="hidden xl:block">
+                <section class="sticky top-0">
+                  <h3 class="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-300">
+                    <i class="fa-solid fa-user-astronaut"></i> {{ skinName(selectedSkin) }}
+                  </h3>
+                  <div
+                    class="overflow-hidden rounded-2xl border border-amber-600/40 bg-slate-950/70 transition-transform duration-200 ease-out will-change-transform"
+                    :style="tiltStyle"
+                    @mousemove="onTiltMove"
+                    @mouseleave="onTiltLeave"
+                  >
+                    <button type="button" class="group relative block w-full" :title="'Ver a arte inteira'" @click="artFullscreen = true">
+                      <img
+                        :key="`card-${selectedSkin?.num}`"
+                        :src="championLoadingImage(champ.name, selectedSkin?.num ?? 0)"
+                        :alt="skinName(selectedSkin)"
+                        class="w-full object-cover"
+                        style="aspect-ratio: 308 / 560;"
+                        @error="markSkinBroken(selectedSkin?.num)"
+                      />
+                      <span class="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent"></span>
+                      <!-- Brilho que segue o cursor (as vars vêm do useTilt3d) -->
+                      <span
+                        class="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                        style="background: radial-gradient(circle at var(--brilho-x, 50%) var(--brilho-y, 50%), rgba(255,255,255,0.22), transparent 55%)"
+                      ></span>
+                      <span class="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border border-slate-600 bg-slate-950/85 px-2.5 py-1 text-[10px] font-bold text-slate-300 opacity-0 transition group-hover:opacity-100">
+                        <i class="fa-solid fa-expand"></i> Arte inteira
+                      </span>
+                    </button>
+
+                    <!-- 3D: o Khada não permite embed, então abre em outra aba -->
+                    <a
+                      v-if="skin3dUrl"
+                      :href="skin3dUrl"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="flex items-center justify-center gap-2 border-t border-amber-600/30 bg-amber-950/30 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-amber-300 transition hover:bg-amber-900/40 hover:text-amber-200"
+                      title="Abre o modelo 3D desta skin no Khada (site de fãs), com rotação, cromas e animações"
+                    >
+                      <i class="fa-solid fa-cube"></i> Ver modelo 3D
+                      <i class="fa-solid fa-arrow-up-right-from-square text-[9px] opacity-70"></i>
+                    </a>
+                  </div>
+                  <!-- Navegador compacto: setas + anterior · atual · próxima, logo abaixo
+                       do card da skin selecionada (substitui a tira larga no rodapé). -->
+                  <div v-if="skins.length > 1" class="mt-2 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      class="inline-flex h-8 w-6 shrink-0 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-slate-300 transition hover:border-amber-500 hover:text-white"
+                      @click="prevSkin"
+                      aria-label="Skin anterior"
+                    ><i class="fa-solid fa-chevron-left text-[10px]"></i></button>
+
+                    <div class="flex flex-1 justify-center gap-1.5">
+                      <button
+                        v-for="t in skinTrio"
+                        :key="t.skin.id"
+                        type="button"
+                        class="group relative overflow-hidden rounded-md border-2 transition"
+                        :class="t.atual ? 'border-amber-400/80 shadow-[0_0_10px_rgba(251,191,36,0.4)]' : 'border-slate-700/70 opacity-60 hover:opacity-100'"
+                        :title="skinName(t.skin)"
+                        @click="selectSkin(t.i)"
+                      >
+                        <img
+                          :src="championLoadingImage(champ.name, t.skin.num)"
+                          :alt="skinName(t.skin)"
+                          loading="lazy"
+                          class="h-16 w-[2.6rem] object-cover object-top"
+                          @error="markSkinBroken(t.skin.num)"
+                        />
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      class="inline-flex h-8 w-6 shrink-0 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-slate-300 transition hover:border-amber-500 hover:text-white"
+                      @click="nextSkin"
+                      aria-label="Próxima skin"
+                    ><i class="fa-solid fa-chevron-right text-[10px]"></i></button>
+                  </div>
+                  <p class="mt-1 text-center text-[9px] text-slate-500">
+                    {{ selectedSkinIndex + 1 }} de {{ skins.length }} skins
+                  </p>
+
+                  <p class="mt-1.5 text-center text-[9px] leading-snug text-slate-500">
+                    O 3D abre no Khada, projeto de fãs — a Riot não publica os modelos em formato web.
+                  </p>
+                </section>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- CARROSSEL DE SKINS (apenas no modo expandido) -->
-        <div v-if="isExpanded" class="shrink-0 border-t border-slate-800 bg-slate-950/95 p-3">
+        <!-- CARROSSEL DE SKINS (expandido). Some a partir de xl, onde o navegador
+             compacto do card da direita assume — senão ficariam dois controles. -->
+        <div v-if="isExpanded" class="shrink-0 border-t border-slate-800 bg-slate-950/95 p-3 xl:hidden">
           <div class="mb-1.5 flex items-center justify-between">
             <p class="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-cyan-300">
               <i class="fa-solid fa-images"></i> Skins ({{ skins.length }})
@@ -424,6 +579,36 @@
         </div>
       </div>
     </div>
+
+    <!-- Arte da skin em tela cheia: `object-contain` mostra a splash INTEIRA (o fundo
+         da ficha usa object-cover e corta as laterais). Fecha no X, no fundo ou no Esc. -->
+    <div
+      v-if="artFullscreen"
+      class="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/95 p-4 backdrop-blur-sm"
+      @click.self="artFullscreen = false"
+      @mousemove="onArtTiltMove"
+      @mouseleave="onArtTiltLeave"
+    >
+      <!-- O giro é medido contra a TELA inteira (o mousemove está no fundo), então a
+           arte acompanha o cursor em qualquer canto, não só em cima dela. -->
+      <img
+        :src="selectedSkinSplash"
+        :alt="skinName(selectedSkin)"
+        :style="artTiltStyle"
+        class="pointer-events-none max-h-full max-w-full object-contain transition-transform duration-200 ease-out will-change-transform"
+      />
+      <span class="pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-slate-700 bg-slate-950/85 px-3 py-1 text-xs font-bold text-slate-300">
+        {{ skinName(selectedSkin) }}
+      </span>
+      <button
+        type="button"
+        class="absolute right-5 top-5 inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-600 bg-slate-950/85 text-slate-300 transition hover:text-white"
+        @click="artFullscreen = false"
+        aria-label="Fechar arte"
+      >
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+    </div>
   </div>
 </template>
 
@@ -436,10 +621,11 @@ import {
 } from '../utils.js';
 import {
   TAG_LABELS, DAMAGE_LABELS, TACTICAL_DIMENSIONS, TIER_STYLES, ROLES,
-  rolesOf, buildsFor, metaBuildFor, metaEntriesOf, countersEntriesOf, metaInfo, formatPct, sanitizeDDragonText
+  rolesWithMeta, buildsFor, metaBuildFor, metaBuildVariants, metaEntriesOf, countersEntriesOf, metaInfo, formatPct, sanitizeDDragonText
 } from '../utils/championCatalog.js';
 import { getChampionMetrics } from '../utils/sinergiaMotor.js';
 import RadarChart from './RadarChart.vue';
+import { useTilt3d } from '../utils/tilt3d.js';
 import AsyncState from './AsyncState.vue';
 
 const props = defineProps({
@@ -474,7 +660,7 @@ const expandedStyle = computed(() => {
 });
 
 const metrics = computed(() => getChampionMetrics(props.champ?.name, props.champ?.tags || []));
-const roles = computed(() => rolesOf(props.champ));
+const roles = computed(() => rolesWithMeta(props.champ));
 const builds = computed(() => buildsFor(props.champ, itemsMap.value));
 const activeBuildIndex = ref(0);
 const activeBuild = computed(() => builds.value[activeBuildIndex.value] || builds.value[0] || null);
@@ -511,6 +697,37 @@ const carouselEl = ref(null);
 function skinName(skin) {
   return !skin || skin.name === 'default' ? props.champ?.name : skin.name;
 }
+
+// Arte da skin em tela cheia (duplo clique no fundo ou botão do card da direita).
+const artFullscreen = ref(false);
+
+// Inclinação 3D do card da skin, seguindo o cursor (mesmo efeito do hover-3d do daisyUI).
+const { style: tiltStyle, onMove: onTiltMove, onLeave: onTiltLeave } = useTilt3d();
+
+// Mesma inclinação na arte em tela cheia, mais contida: a imagem já ocupa o máximo,
+// então ângulo menor e SEM escala (escalar cortaria a arte nas bordas).
+const { style: artTiltStyle, onMove: onArtTiltMove, onLeave: onArtTiltLeave } =
+  useTilt3d({ max: 6, scale: 1, brilho: false });
+
+// Trio do navegador compacto (card da direita): anterior · atual · próxima, com volta
+// no fim da lista. Com 1 ou 2 skins mostra só o que existe, sem repetir.
+const skinTrio = computed(() => {
+  const n = skins.value.length;
+  if (!n) return [];
+  const atual = selectedSkinIndex.value;
+  const idx = n === 1 ? [atual] : n === 2 ? [atual, (atual + 1) % n] : [(atual - 1 + n) % n, atual, (atual + 1) % n];
+  return idx.map((i) => ({ i, skin: skins.value[i], atual: i === atual }));
+});
+
+// Modelo 3D: o Khada usa o skinId do LoL (chave do campeão × 1000 + nº da skin), o
+// mesmo id do Data Dragon. Não dá para embutir o visualizador (sem API/iframe), então
+// abrimos em outra aba — é o único caminho legal e sem peso para o 3D com animações.
+const KHADA_URL = 'https://modelviewer.lol/model-viewer?id=';
+const skin3dUrl = computed(() => {
+  const key = Number(props.champ?.key);
+  if (!Number.isFinite(key) || !key) return '';
+  return `${KHADA_URL}${key * 1000 + Number(selectedSkin.value?.num || 0)}`;
+});
 function scrollThumbIntoView(i) {
   nextTick(() => {
     const child = carouselEl.value?.children?.[i];
@@ -552,13 +769,35 @@ const counterEntries = computed(() =>
 
 // Build do meta (meta-builds.json), por rota. Runas continuam vindo do preset por classe
 // (o scrape não captura runa). Sem entrada de meta → cai na build recomendada (fallback).
-const metaRoles = computed(() => rolesOf(props.champ).filter((r) => metaBuildFor(props.champ?.name, r)));
+const metaRoles = computed(() => rolesWithMeta(props.champ).filter((r) => metaBuildFor(props.champ?.name, r)));
 const activeMetaRole = ref(null);
 const activeMetaBuild = computed(() => (activeMetaRole.value ? metaBuildFor(props.champ?.name, activeMetaRole.value) : null));
-const presetRunes = computed(() => builds.value[0]?.runes || null);
 watch(metaRoles, (roles) => {
   if (!roles.includes(activeMetaRole.value)) activeMetaRole.value = roles[0] || null;
 }, { immediate: true });
+
+// Caminhos de finalização (Item 4/5/6): até 3 por rota, cada slot com WR e amostra.
+// JSON gerado antes do campo `slots` devolve [] e a ficha cai nos situacionais soltos.
+const metaVariants = computed(() => (activeMetaRole.value ? metaBuildVariants(props.champ?.name, activeMetaRole.value) : []));
+const activeVariant = ref(0);
+
+// Cada build tem SUA página de runas: a build 2 não roda com as runas da build 1.
+// As runas continuam vindo dos presets curados (`builds-champs.json`) porque o scrape
+// do lolalytics não captura runa — por isso o rótulo diz "preset".
+const runesForVariant = computed(() => {
+  const lista = builds.value;
+  if (!lista.length) return null;
+  return lista[Math.min(activeVariant.value, lista.length - 1)]?.runes || lista[0]?.runes || null;
+});
+watch(metaVariants, (v) => { if (activeVariant.value >= v.length) activeVariant.value = 0; });
+watch(activeMetaRole, () => { activeVariant.value = 0; });
+
+// 126934 -> "127k jogos" (a amostra é o que separa build sólida de ruído).
+function fmtGames(n) {
+  const v = Number(n) || 0;
+  if (v >= 1000) return `${Math.round(v / 1000)}k`;
+  return String(v);
+}
 const damageLabel = computed(() => DAMAGE_LABELS[metrics.value?.damageType] || DAMAGE_LABELS.AD);
 
 const radarAxes = computed(() =>
@@ -609,11 +848,24 @@ async function loadDetail() {
   }
 }
 
+// Esc fecha a arte em tela cheia primeiro; só depois fecharia a ficha.
+function onKeydown(e) {
+  if (e.key !== 'Escape') return;
+  if (artFullscreen.value) {
+    e.stopPropagation();
+    artFullscreen.value = false;
+  }
+}
+
 onMounted(() => {
   loadDetail();
   window.addEventListener('resize', onResize);
+  window.addEventListener('keydown', onKeydown);
 });
-onUnmounted(() => window.removeEventListener('resize', onResize));
+onUnmounted(() => {
+  window.removeEventListener('resize', onResize);
+  window.removeEventListener('keydown', onKeydown);
+});
 
 watch(() => props.champ?.name, (novo, antigo) => {
   if (novo && novo !== antigo) {

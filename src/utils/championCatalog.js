@@ -77,6 +77,14 @@ export function normalizeSearch(text) {
 // `championList` do store for o mesmo array, não remonta o mapa.
 // Campeão desconhecido (fora do patch) devolve `{ name }` — os componentes trabalham
 // só com o nome e degradam sem quebrar.
+// Nossos CSVs guardam dois nomes que não batem com o rótulo pt_BR do Data Dragon.
+// Sem o apelido eles caem no fallback `{ name }` e perdem tags/título/key (a arte
+// continua certa, porque o ID vem do CHAMPION_KEY_OVERRIDES em utils.js).
+const APELIDOS_DDRAGON = {
+  Bard: 'Bardo',
+  'Nunu & Willump': 'Nunu e Willump'
+};
+
 let _byNameList = null;
 let _byNameMap = null;
 export function championByName(championList, name) {
@@ -85,7 +93,7 @@ export function championByName(championList, name) {
     _byNameMap = {};
     for (const champ of _byNameList) _byNameMap[champ.name] = champ;
   }
-  return _byNameMap[name] || { name };
+  return _byNameMap[name] || _byNameMap[APELIDOS_DDRAGON[name]] || { name };
 }
 
 // Tags DDragon → rotas prováveis (fallback p/ campeão fora da planilha de sinergia).
@@ -117,6 +125,29 @@ export function rolesOf(champ) {
 // ----------------------------------------------------------------------
 // BUILDS RECOMENDADAS (builds-champs.json): até 3 opções, cada uma com runas + itens
 // ----------------------------------------------------------------------
+
+/**
+ * Rotas do campeão INCLUINDO as que ele ocupa no meta do patch.
+ *
+ * `rolesOf` responde "quais são as rotas DELE" (identidade, da planilha de sinergia);
+ * o `meta-tiers.csv` traz também as rotas fora do padrão que o patch mostra — Riven no
+ * meio, Naafiri na selva, Veigar de atirador. As duas listas divergem em 43 das 273
+ * entradas do meta, quase todas com pickrate baixo (mediana 1%).
+ *
+ * Onde a tela fala do META (ícones do card, rotas com build na ficha), o certo é a
+ * UNIÃO: senão o campeão aparece na coluna do meio com o ícone de topo, e a build
+ * daquela rota — que existe no meta-builds.json — fica inalcançável.
+ *
+ * NÃO substitui o `rolesOf` porque ele também escolhe o preset de build por classe
+ * (`classPresetChain`): somar uma rota de 0,6% de pickrate ali trocaria a build padrão
+ * do campeão. A rota principal vem primeiro; as do meta entram depois.
+ */
+export function rolesWithMeta(champ) {
+  const todas = [];
+  for (const r of rolesOf(champ)) if (!todas.includes(r)) todas.push(r);
+  for (const e of metaEntriesOf(champ?.name)) if (!todas.includes(e.role)) todas.push(e.role);
+  return todas;
+}
 
 /**
  * Cadeia ORDENADA de presets (até 3) por classe/dano/rota. O 1º é o melhor encaixe;
@@ -256,6 +287,54 @@ export function metaBuildFor(champName, role) {
 }
 
 /**
+ * Variações da build do meta (até 3) para um campeão×rota.
+ *
+ * O lolalytics lista, para cada slot final (Item 4/5/6), até 3 opções com winrate e
+ * amostra. O scraper guarda isso em `slots`; aqui montamos as builds "em coluna":
+ * a 1ª pega a opção mais jogada de cada slot, a 2ª pega a segunda, e assim por diante.
+ * Slot com menos opções repete a última — a build alternativa nunca fica com buraco.
+ *
+ * Sem `slots` (JSON de antes do re-scrape) devolve [] e a ficha mostra a build única.
+ */
+export function metaBuildVariants(champName, role) {
+  const build = metaBuildFor(champName, role);
+  const slots = Array.isArray(build?.slots) ? build.slots.filter((s) => s?.length) : [];
+  if (!slots.length) return [];
+
+  // Itens que já estão na base: um slot final nunca pode repetir core/botas.
+  const base = new Set([...(build.core || []), build.boots].filter(Boolean));
+  const total = Math.min(3, Math.max(...slots.map((s) => s.length)));
+  const variantes = [];
+
+  for (let i = 0; i < total; i++) {
+    const usados = new Set(base);
+    let exata = true;
+    const items = slots.map((opcoes) => {
+      const preferida = opcoes[Math.min(i, opcoes.length - 1)];
+      if (opcoes.length <= i) exata = false;
+      // O mesmo item costuma aparecer como opção de dois slots (ex.: Item 5 e Item 6).
+      // Se já foi escolhido nesta build, cai para a melhor opção ainda livre do slot;
+      // se o slot inteiro já foi consumido, o slot SOME — ninguém compra o mesmo item
+      // duas vezes, então uma finalização mais curta é mais honesta que repetir.
+      if (!usados.has(preferida.id)) {
+        usados.add(preferida.id);
+        return preferida;
+      }
+      exata = false;
+      const livre = opcoes.find((o) => !usados.has(o.id));
+      if (livre) usados.add(livre.id);
+      return livre || null;
+    }).filter(Boolean);
+
+    // Duas posições podem convergir para a mesma build depois do desempate — mostra uma só.
+    const assinatura = items.map((o) => o.id).join('-');
+    if (variantes.some((v) => v.items.map((o) => o.id).join('-') === assinatura)) continue;
+    variantes.push({ index: variantes.length, exata, items });
+  }
+  return variantes;
+}
+
+/**
  * Counters por rota onde há dado: [{ role, strongAgainst: [ids], counteredBy: [ids] }].
  * IDs são do Data Dragon (ex.: "TahmKench"); o consumidor resolve para o campeão.
  * Vazio quando o campeão não tem counters no meta-builds atual.
@@ -275,22 +354,37 @@ export function countersEntriesOf(champName) {
  * Tier list de uma rota: { S: [...], A: [...], ... } onde cada item é
  * { name, winrate?, pickrate?, banrate? }. Ordenado por nome dentro de cada tier.
  */
+// `role` = 'TOP'|'JUNGLE'|'MID'|'ADC'|'SUP' ou 'ALL' (todas as rotas juntas).
+// Em 'ALL' cada campeão aparece UMA vez, no seu MELHOR tier entre as rotas que joga
+// (empate = maior winrate) — senão o mesmo campeão apareceria em vários tiers.
 export function metaTiersByRole(role) {
   const wanted = String(role || '').toUpperCase();
+  const todas = wanted === 'ALL';
   const grouped = {};
   for (const tier of TIER_ORDER) grouped[tier] = [];
+  const melhorPorCampeao = {};
+
   for (const [key, entry] of Object.entries(META_DATA?.table || {})) {
     const sep = key.lastIndexOf('|');
-    if (key.slice(sep + 1) !== wanted) continue;
-    if (grouped[entry.tier]) {
-      grouped[entry.tier].push({
-        name: key.slice(0, sep),
-        winrate: entry.winrate,
-        pickrate: entry.pickrate,
-        banrate: entry.banrate
-      });
+    const roleKey = key.slice(sep + 1);
+    const name = key.slice(0, sep);
+    if (!todas && roleKey !== wanted) continue;
+    if (!grouped[entry.tier]) continue;
+
+    const registro = { name, winrate: entry.winrate, pickrate: entry.pickrate, banrate: entry.banrate };
+    if (!todas) {
+      grouped[entry.tier].push(registro);
+      continue;
+    }
+    const atual = melhorPorCampeao[name];
+    const novoIdx = TIER_ORDER.indexOf(entry.tier);
+    const atualIdx = atual ? TIER_ORDER.indexOf(atual.tier) : Infinity;
+    if (novoIdx < atualIdx || (novoIdx === atualIdx && (entry.winrate || 0) > (atual.winrate || 0))) {
+      melhorPorCampeao[name] = { ...registro, tier: entry.tier };
     }
   }
+
+  if (todas) for (const c of Object.values(melhorPorCampeao)) grouped[c.tier].push(c);
   for (const tier of TIER_ORDER) grouped[tier].sort((a, b) => a.name.localeCompare(b.name));
   return grouped;
 }

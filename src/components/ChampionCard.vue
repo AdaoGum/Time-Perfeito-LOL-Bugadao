@@ -43,6 +43,19 @@
         class="absolute right-1 top-1 rounded bg-slate-950/85 px-1 py-0.5 text-[10px] font-black"
         :class="winrate >= 50 ? 'text-emerald-300' : 'text-slate-300'"
       >{{ winrate }}%</span>
+      <!-- Rotas que o campeão joga — no TOPO, centralizadas entre os cantos, que ficam
+           livres para os distintivos de cada tela (WR no meta, posição/nível na
+           maestria, rota da partida no histórico). -->
+      <div v-if="roles.length" class="pointer-events-none absolute left-1/2 top-1 flex -translate-x-1/2 gap-0.5">
+        <img
+          v-for="r in roles"
+          :key="r"
+          :src="roleIconImage(r)"
+          :alt="roleLabel(r)"
+          :title="roleLabel(r)"
+          class="h-4 w-4 rounded bg-slate-950/70 p-px brightness-150"
+        />
+      </div>
       <slot name="overlay" />
       <span class="pointer-events-none absolute inset-x-0 bottom-0 truncate px-1.5 pb-1.5 pt-5 text-center text-[11px] font-black text-white drop-shadow">{{ champ.name }}</span>
     </div>
@@ -119,7 +132,7 @@ import {
   championImage, championLoadingImage, championSplashImage,
   championSpellImage, championPassiveImage, roleIconImage, fetchChampionDetail
 } from '../utils.js';
-import { TAG_LABELS, DAMAGE_LABELS, TIER_STYLES, ROLES, rolesOf, metaEntriesOf, sanitizeDDragonText } from '../utils/championCatalog.js';
+import { TAG_LABELS, DAMAGE_LABELS, TIER_STYLES, ROLES, rolesWithMeta, metaEntriesOf, sanitizeDDragonText } from '../utils/championCatalog.js';
 import { getChampionMetrics } from '../utils/sinergiaMotor.js';
 
 const props = defineProps({
@@ -138,7 +151,7 @@ const iconSrc = computed(() => championImage(props.champ.name));
 
 const metrics = computed(() => getChampionMetrics(props.champ?.name, props.champ?.tags || []));
 const damageLabel = computed(() => DAMAGE_LABELS[metrics.value?.damageType] || DAMAGE_LABELS.AD);
-const roles = computed(() => rolesOf(props.champ));
+const roles = computed(() => rolesWithMeta(props.champ));
 const metaEntries = computed(() => metaEntriesOf(props.champ?.name));
 function roleLabel(r) { return ROLES.find((x) => x.key === r)?.label || r; }
 

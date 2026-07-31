@@ -32,20 +32,28 @@ sobre o Data Dragon + arquivos estáticos do repo — sem tocar no Worker nem ga
   com alternador no canto; um banner mostra quantos jogos ainda não foram buscados e um
   botão baixa os **últimos 10**. Jogadores **premium** chegam "tudo montado" (sincronizados
   de madrugada); os demais trabalham sob demanda com o que há no banco + 10 jogos por clique.
-- **Maestrias ("Caverna dos Monos"):** Top campeões em lista progressiva + grade densa interativa.
+- **Maestrias ("Caverna dos Monos"):** pódio dos 5 mais dominados com molduras de metal
+  (ouro, prata, bronze, ferro, madeira), depois #6–#20 e o resto — todos no mesmo card de
+  campeão do Panteão/Meta, com nível e pontos. A busca aqui usa o perfil **leve**
+  (`profile_brief`): sem histórico, sem proficiência, sem companheiros — só identidade +
+  maestrias, que é tudo que a tela precisa.
 - **Ancestralidade:** painel de consulta avançada ao D1 (admin, exige senha no Worker).
 
 ### 🐉 Campeões
 - **Panteão ("/champions"):** catálogo de todos os campeões com filtro por rota; ficha
-  (modal) com habilidades, **radar tático 8D**, **até 3 builds** (runas + itens em
-  mini-abas), meta por rota (tier + WR/PR/BR) e **lore**. A ficha tem um botão
-  **Expandir** que a leva a ocupar a área entre a sidebar e a topbar, exibindo a
-  **galeria de skins** (splash em destaque + carrossel).
+  (modal) com habilidades, **radar tático 8D**, **build do meta** (iniciais → núcleo →
+  finalização, em **até 3 caminhos** com winrate e amostra por item), runas, ordem de
+  skills, counters, meta por rota (tier + WR/PR/BR) e **lore**. A ficha tem um botão
+  **Expandir** que a leva a ocupar a área entre a sidebar e a topbar, com a arte da skin
+  ao fundo (duplo clique abre inteira), um card do campeão à direita com navegação de
+  skins e link para o **modelo 3D** (Khada), e a **galeria de skins**.
 - **Relíquias ("/items"):** arsenal de itens do Rift com busca, filtro por categoria,
   descrição/atributos, ouro (receita/venda), componentes/evoluções navegáveis e
   **sinergia inversa** (campeões que constroem o item).
-- **Meta & Tier List ("/meta"):** matriz S/A/B/C/D por rota (seletor com ícones oficiais),
-  com WR por campeão; clique num campeão abre a ficha no Panteão.
+- **Meta & Tier List ("/meta"):** quadro com os ranks **lado a lado** — S, A e B abertos,
+  C e D minimizados em espinhas (clicar abre e fecha o aberto mais distante). Seletor de
+  rota com ícones oficiais e a opção **Todas** (cada campeão no seu melhor tier). Clique
+  num campeão abre a ficha ali mesmo.
 
 ### 🐢 Equipes
 - **Tribo Perfeita ("/synergy"):** simulador de composições (Solo/Duo ou Flex) que trava
@@ -318,9 +326,34 @@ Use o slash command **`/atualizar-meta`** (definido em
 
 Se o CSV passar de 30 dias, a UI avisa "meta desatualizado" e o peso do meta cai pela metade.
 
-> ⚠️ **WR/PR/BR e builds não vêm da API da Riot** (ela não expõe estatística agregada de
-> campeão). WR/PR/BR só existem se preenchidos no CSV via `/atualizar-meta` (fonte externa).
-> As builds de `builds-champs.json` são **curadas/heurísticas**, não winrate ao vivo.
+> ⚠️ **Os dois rótulos de patch são diferentes e ambos estão certos.** O Data Dragon usa
+> a numeração dele (`16.14.1`); o patch do **jogo** é `26.14` (defasagem de 10). Por isso
+> `meta-tiers.csv` diz `26.14` e `meta-builds.json._meta.patch` diz `16.14`. Não "corrija"
+> um pelo outro.
+
+### Atualizar as builds do meta (itens reais + WR + skill order)
+
+Use o slash command **`/atualizar-builds`**. Ele roda o pipeline **local** em
+`local/scrape/` (gitignored) — só `fetch()` em Node, sem navegador, sem IA, ~6 min para
+os 273 combos campeão×rota:
+
+1. `gen-targets.mjs` — monta os alvos a partir do `meta-tiers.csv`.
+2. `fetch-builds.mjs` — raspa o lolalytics e escreve `src/data/meta-builds.json`.
+3. `verify.mjs` — confere cobertura, IDs de Arena, campos vazios e quantas entradas
+   renderam 1, 2 ou 3 caminhos de finalização.
+
+O JSON guarda, por chave `Campeão|ROTA`: `buildWr`, `start`, `core`, `boots`, **`slots`**,
+`situational`, `skillMax`, `skillLevels` e `counters`. O campo **`slots`** é o Item 4/5/6
+**agrupado**, com até 3 opções por slot (id + winrate + amostra) — é dele que
+`metaBuildVariants()` monta as **até 3 builds** da ficha: a Build 1 pega a opção mais
+jogada de cada slot, a Build 2 a seguinte, e assim por diante.
+
+> ⚠️ **Nada disso vem da API da Riot** (ela não expõe estatística agregada de campeão).
+> Tier/WR/PR/BR vêm do mobatrainer via `/atualizar-meta`; itens, skill order e counters
+> vêm do lolalytics via `/atualizar-builds`. As **runas** continuam saindo do
+> `builds-champs.json` (curadas) — o scrape não captura runa, então o vínculo
+> "runa ↔ build" é heurístico. O `buildWr` é a aba "Highest Win Build" e **infla em
+> amostra baixa**: sempre mostre a amostra junto do winrate.
 
 ---
 

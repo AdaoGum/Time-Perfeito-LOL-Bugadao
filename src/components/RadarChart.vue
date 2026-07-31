@@ -1,5 +1,5 @@
 <template>
-  <svg :viewBox="viewBox" class="h-auto w-full select-none">
+  <svg :viewBox="viewBox" :style="{ maxWidth: `${svgWidth}px` }" class="mx-auto h-auto w-full select-none">
     <!-- Anéis de referência (grade) -->
     <polygon
       v-for="(ring, r) in rings"
@@ -61,14 +61,17 @@ const props = defineProps({
   color: { type: String, default: '#f59e0b' }
 });
 
-// Padding fora da área do gráfico para os rótulos não serem cortados.
-// O viewBox é expandido lateral/verticalmente; o SVG escala junto (w-full).
-const PAD_X = 60;
-const PAD_Y = 24;
+// Padding fora da área do gráfico para os rótulos não serem cortados. É PROPORCIONAL
+// ao `size` para que o viewBox seja renderizado 1:1 (`svgWidth`): assim `size` controla
+// de verdade o tamanho na tela e o texto dos rótulos não encolhe junto.
+// Sem o teto de largura o SVG é `w-full` e estica até a largura da coluna inteira.
+const padX = computed(() => Math.round(props.size * 0.34));
+const padY = computed(() => Math.round(props.size * 0.12));
 
 const center = computed(() => props.size / 2);
 const radius = computed(() => props.size / 2 - 8); // gráfico ocupa quase todo o size; rótulos ficam no padding
-const viewBox = computed(() => `${-PAD_X} ${-PAD_Y} ${props.size + PAD_X * 2} ${props.size + PAD_Y * 2}`);
+const viewBox = computed(() => `${-padX.value} ${-padY.value} ${props.size + padX.value * 2} ${props.size + padY.value * 2}`);
+const svgWidth = computed(() => props.size + padX.value * 2);
 
 const angleFor = (i) => -Math.PI / 2 + (i * 2 * Math.PI) / Math.max(1, props.axes.length);
 
