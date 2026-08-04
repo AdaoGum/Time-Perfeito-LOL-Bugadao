@@ -49,6 +49,10 @@ const routes = [
   { path: '/items/:itemId?', component: Items },
   // META & Tier List do patch atual (S/A/B/C/D por rota).
   { path: '/meta', component: MetaTierList },
+  // Ficha do campeão em TELA CHEIA: substitui a tela de onde veio (Panteão, Meta,
+  // Caverna, Histórico…) e volta para ela pelo botão "Voltar". Carregada sob demanda
+  // — é a maior tela do sistema e não precisa pesar no bundle inicial.
+  { path: '/ficha/:championId', component: () => import('./components/ChampionPage.vue') },
 ];
 
 const router = createRouter({

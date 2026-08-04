@@ -100,7 +100,7 @@
               :style="{ gridTemplateColumns: `repeat(${colsOf(tier)}, minmax(0, 1fr))` }"
             >
               <div v-for="champ in tiers[tier]" :key="champ.name" class="w-full max-w-[9rem]">
-                <ChampionCard :champ="resolveChamp(champ.name)" :winrate="champ.winrate" @open="selected = $event" />
+                <ChampionCard :champ="resolveChamp(champ.name)" :winrate="champ.winrate" @open="abrirFicha" />
               </div>
             </div>
             <p v-else class="py-3 text-center text-[11px] italic text-slate-500">Nenhum campeão neste tier para {{ roleLabel(activeRole) }}.</p>
@@ -114,26 +114,19 @@
       <button type="button" class="font-bold text-cyan-400 hover:underline" @click="router.push('/champions')">Panteão</button>.
     </p>
 
-    <!-- Ficha (modal) — abre SOBRE a tela do meta, sem trocar de rota -->
-    <ChampionSheet
-      v-if="selected"
-      :champ="selected"
-      @close="selected = null"
-      @open-item="goToItem"
-      @open-champion="selected = $event"
-    />
+    <!-- A ficha abre SOBRE a tela do meta, sem trocar de rota — quem a monta é o host
+         único do App.vue (uma instância para o sistema inteiro). -->
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { state } from '../store.js';
+import { state, abrirFicha } from '../store.js';
 import { roleIconImage } from '../utils.js';
 import { metaIsStale } from '../utils/sinergiaMotor.js';
 import { ROLES, TIER_ORDER, TIER_STYLES, championByName, metaInfo, metaTiersByRole } from '../utils/championCatalog.js';
 import ChampionCard from './ChampionCard.vue';
-import ChampionSheet from './ChampionSheet.vue';
 
 const router = useRouter();
 const store = state;
@@ -141,7 +134,6 @@ const store = state;
 // 'Todas' (ALL) abre o quadro com todas as rotas juntas — cada campeão no seu melhor tier.
 const ROTAS = [{ key: 'ALL', label: 'Todas' }, ...ROLES];
 const activeRole = ref('ALL');
-const selected = ref(null);
 const info = metaInfo();
 const stale = metaIsStale();
 
@@ -213,9 +205,5 @@ function roleLabel(role) {
 // Resolve nome (do CSV do meta) → objeto do campeão do DDragon (pro card/ficha).
 function resolveChamp(name) {
   return championByName(store.staticData.championList, name);
-}
-
-function goToItem(itemId) {
-  router.push(`/items/${itemId}`);
 }
 </script>

@@ -2,7 +2,8 @@
 
 > Documento de referência para humanos **e IAs** entenderem o sistema **como um
 > todo**: peças, fluxo de dados, responsabilidades e onde cada coisa mora.
-> Para o schema do banco em detalhe, veja [DATABASE.md](./DATABASE.md).
+> Para o schema do banco em detalhe, veja [DATABASE.md](./DATABASE.md); para os pesos
+> do motor de sinergia e o contrato do `meta-tiers.csv`, [SINERGIA-E-META.md](./SINERGIA-E-META.md).
 
 ---
 
@@ -144,20 +145,20 @@ explícito (vetor vazio / sem `PUUIDS`) processa SÓ premium** — paridade com 
 | Arquivo | Papel |
 |---|---|
 | `main.js` | Inicializa o app Vue, monta o router e estilos globais. |
-| `App.vue` | Layout global: topbar (com prévias por aba), **sidebar em seções** (Jogadores/Campeões/Equipes, com **títulos clicáveis → hubs**), botão especial **Ancestralidade** no rodapé, **Monitor da API** minimizável (`ui.telemetryLevel`), overlay de busca, tooltip. Carrega o Data Dragon no boot (champion/item/summoner/runes). |
-| `Router.js` | Rotas: `/`, `/jogadores`, `/campeoes` (hubs), `/historico`, `/analise`, `/profile[/:g/:t/:view?]`, `/mastery[/:g/:t]`, `/synergy`, `/saguaoCustom`, `/ancestralidade`, `/meta`, `/champions/:championId?`, `/items/:itemId?`. `scrollBehavior` não rola quando só muda o param da mesma rota (abrir/fechar modal). |
-| `store.js` | Estado global reativo: `searchProfile` (+ `brief` = veio do `profile_brief`, sem histórico), `masteryDashboard` (+ `loading`/`puuid`), `telemetry`, `ui` (sidebarCollapsed, `telemetryLevel`), **`staticData`** (`championList`, `items`, `runes`, `summonerSpells`, `championDetails`). |
+| `App.vue` | Layout global: topbar (com prévias por aba), **sidebar em seções** (Jogadores/Campeões/Equipes, com **títulos clicáveis → hubs**), botão especial **Ancestralidade** no rodapé, **Monitor da API** minimizável (`ui.telemetryLevel`), overlay de busca, tooltip. Hospeda a **instância ÚNICA do `ChampionSheet`** (async; fecha ao trocar de tela; `expand` → `/ficha/:championId`). Carrega o Data Dragon no boot (champion/item/summoner/runes), passando o `champion.json` pelo `canonicalChampionList`. |
+| `Router.js` | Rotas: `/`, `/jogadores`, `/campeoes` (hubs), `/historico`, `/analise`, `/profile[/:g/:t/:view?]`, `/mastery[/:g/:t]`, `/synergy`, `/saguaoCustom`, `/ancestralidade`, `/meta`, `/champions/:championId?`, `/items/:itemId?`, **`/ficha/:championId`** (ficha em tela cheia, componente carregado sob demanda). `scrollBehavior` não rola quando só muda o param da mesma rota (abrir/fechar modal). |
+| `store.js` | Estado global reativo: `searchProfile` (+ `brief` = veio do `profile_brief`, sem histórico), `masteryDashboard` (+ `loading`/`puuid`), `telemetry`, `ui` (sidebarCollapsed, `telemetryLevel`), **`championSheet`** (`champ` = ficha aberta, `origem` = tela para onde o Voltar da tela cheia leva) com os helpers **`abrirFicha`/`fecharFicha`**, **`staticData`** (`championList`, `items`, `runes`, `summonerSpells`, `championDetails`). |
 | `api.js` | Cliente do worker (`workerRequest`), normalização de perfil, telemetria de rate limit, `fetchPlayerSuggestions`. |
-| `utils.js` | `WORKER_URL`, versão do Data Dragon, helpers de imagem (campeão/ícone/item/**splash**/**loading**/**runa**), `roleIconImage` (ícones **oficiais** de rota), `fetchChampionDetail` (ficha sob demanda, com cache). |
+| `utils.js` | `WORKER_URL`, versão do Data Dragon, helpers de imagem (campeão/ícone/item/**splash**/**loading**/**runa**), `getChampionIdFromName` (nome→id do DDragon, com overrides — inclui os rótulos pt_BR divergentes Bardo/Nunu e Willump/Renata Glasc), **`canonicalChampionList`** (tira as cópias `Jade_*` que o patch 16.15 publica), `roleIconImage` (ícones **oficiais** de rota), `fetchChampionDetail` (ficha sob demanda, com cache). |
 | `utils/championCatalog.js` | **Motor do módulo Campeões:** `rolesOf` (identidade — alimenta a escolha de preset) vs **`rolesWithMeta`** (identidade + rotas do meta — é o que a UI mostra), `championByName` (nome→campeão, memoizado), `buildsFor` (presets com runas+itens), **`metaBuildVariants`** (até 3 builds reais a partir de `meta-builds.json.slots`), `championsForItem`, `metaTiersByRole` (aceita `ALL`), `metaEntriesOf`, `countersEntriesOf`, `TIER_STYLES`, `ROLES`, `sanitizeDDragonText`. |
 | `utils/proficiencia.js` | Proficiência real do jogador no campeão (winrate bayesiano, recência, maestria, KDA/CS). |
-| `utils/tilt3d.js` | `useTilt3d()`: inclinação 3D no hover seguindo o cursor (substitui o `hover-3d` do daisyUI, que exige zonas sobrepostas e proíbe conteúdo clicável). |
+| `utils/tilt3d.js` | `useTilt3d({ gesto })`: inclinação 3D seguindo o ponteiro, no **hover** ou por **arrasto** (gira só pressionado; `arrastou` separa giro de clique). Substitui o `hover-3d` do daisyUI, que exige zonas sobrepostas e proíbe conteúdo clicável. |
 | `utils/sinergiaMotor.js` | Motor de sinergia v2 (score de time, arquétipos, pares) + `parseMetaCsv` (lê o meta com colunas opcionais `winrate,pickrate,banrate`). |
 | `data/meta-tiers.csv` | Tier list manual: `champion,role,tier` + `winrate,pickrate,banrate` (opcionais). Pondera o meta e alimenta a Tier List/ficha. |
 | `data/sinergia-champs.csv` | Vetores táticos por campeão (8 dimensões + cc/scaling/mechTags/roles). |
 | `data/builds-champs.json` | Builds CURADAS do módulo Campeões: `presets` (itens+runas por estilo), `runePages` (IDs de perk), `champions` (itens da build principal). **Única fonte de runas.** |
 | `data/meta-builds.json` | Builds REAIS por `Campeão|ROTA` raspadas do lolalytics (`/atualizar-builds`): `buildWr`, `start`, `core`, `boots`, **`slots`** (Item 4/5/6 com até 3 opções, cada uma com WR e amostra), `situational`, `skillMax`, `skillLevels`, `counters`. |
-| `components/` (Campeões) | **`ChampionCard`** (card ÚNICO de campeão — Panteão, Meta, Caverna e cards de partida; `w-full` 308×560, quem usa define a largura; props `winrate`/`frameClass` e slots `overlay`/`footer`), `Champions` + `ChampionSheet` (ficha com modal expansível, galeria de skins, build do meta e link 3D do Khada), `Items` + `ItemDetail`, `MetaTierList` (quadro de ranks lado a lado), `ModuleHub` (hubs). |
+| `components/` (Campeões) | **`ChampionCard`** (card ÚNICO de campeão — Panteão, Meta, Caverna, cards de partida e o card de skin da ficha; `w-full` 308×560, quem usa define a largura; props `winrate`/`frameClass`/`skinNum`/`label`/`tilt`/`showRoles`/`popover` e slots `overlay`/`footer`), **`ChampionSheet`** (ficha ÚNICA do sistema, `mode='modal'` no host do App.vue ou `mode='pagina'` na tela cheia; galeria de skins, build do meta e link 3D do Khada) + `ChampionPage` (rota `/ficha/:championId`, com o botão Voltar para a tela de origem), `Champions`, `Items` + `ItemDetail`, `MetaTierList` (quadro de ranks lado a lado), `ModuleHub` (hubs). |
 | `components/` (Jogador/Tribo) | `Home`, `Profile`, `Mastery`, `Tribo`, `saguaoCustom`, `Ancestralidade`, e auxiliares (`SearchBar` com busca híbrida, `SearchGate`, `RadarChart`, `PlayerAnalysis`, `KpiCard`, `CustomSlotCard`, `FilaSelecao`, `AsyncState`). |
 
 ### Back-end e coleta
@@ -171,7 +172,7 @@ explícito (vetor vazio / sem `PUUIDS`) processa SÓ premium** — paridade com 
 | `shared/match-extract.js` | Lógica **única** de SQL/extração de partidas — importada pelo worker E pelo coletor (sem duplicação). |
 | `cron/lib/d1.js` | Cliente **único** do D1 (REST) p/ os jobs Node: `queryD1` (com retry/backoff), `queryD1Rows`, `registrarUsoGlobal`. |
 | `cron/lib/riot.js` | Cliente **único** da Riot p/ os jobs Node: `fetchFromRiotHost` (429/5xx/backoff) + `respeitarRateLimit` (contador da janela). |
-| `cron/lib/relatorio-engine.js` | Motor de NLG "IA sem IA" do relatório (JS puro). |
+| `cron/lib/relatorio-engine.js` | Motor de NLG "IA sem IA" do relatório (JS puro). Analisa cada fila (Solo/Duo e Flex) em separado e monta **uma mensagem por jogador**, com um embed por fila. |
 | `migrations/*.sql` | Migrations do D1 (analíticas, `api_usage`, cache de perfil, `has_premium`). |
 | `local/.env` | Segredos locais do coletor (fora do git). |
 

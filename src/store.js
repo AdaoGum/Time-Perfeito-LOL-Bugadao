@@ -47,6 +47,17 @@ export const state = reactive({
     error: null
   },
 
+  // Ficha de campeão ÚNICA do sistema. Nenhuma tela monta o ChampionSheet: todas
+  // apontam o campeão aqui (abrirFicha) e o host global do App.vue renderiza a
+  // ficha — um só bloco de HTML na página, não um por tela.
+  championSheet: {
+    // Objeto do campeão (Data Dragon). null = ficha fechada.
+    champ: null,
+    // Rota de onde a TELA CHEIA (/ficha/:championId) foi aberta — alimenta o botão
+    // "Voltar". Vazio = caiu direto no link (volta para o Panteão).
+    origem: ''
+  },
+
   ui: {
     sidebarCollapsed: false,
     sidebarMobileOpen: false,
@@ -90,3 +101,15 @@ export const state = reactive({
     runes: {}
   }
 });
+
+// ---- Ficha de campeão (host único no App.vue) ----
+// Qualquer card, de qualquer tela, abre a ficha por aqui: `@open="abrirFicha"`.
+// Trocar de campeão com a ficha aberta (counters, sugestões) é a MESMA chamada —
+// o ChampionSheet recarrega os dados do novo campeão sem remontar.
+export function abrirFicha(champ) {
+  if (champ) state.championSheet.champ = champ;
+}
+
+export function fecharFicha() {
+  state.championSheet.champ = null;
+}

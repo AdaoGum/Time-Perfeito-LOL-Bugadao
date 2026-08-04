@@ -2,9 +2,10 @@
 
 > Onboarding rápido para agentes/IAs entenderem o **bUGAdão Analytics (Time Perfeito
 > LoL)** de ponta a ponta. É o mapa mental; os detalhes profundos ficam em
-> [`README.md`](README.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) e
-> [`docs/DATABASE.md`](docs/DATABASE.md). Se algo aqui divergir do código, **o código
-> vence** — verifique antes de recomendar.
+> [`README.md`](README.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md),
+> [`docs/DATABASE.md`](docs/DATABASE.md) e [`docs/SINERGIA-E-META.md`](docs/SINERGIA-E-META.md)
+> (pesos do motor de sinergia + contrato do `meta-tiers.csv`). Se algo aqui divergir do
+> código, **o código vence** — verifique antes de recomendar.
 
 ## O que é
 
@@ -34,12 +35,18 @@ Front hospedado no **GitHub Pages** (SPA: `postbuild` copia `index.html`→`404.
 ```bash
 npm run dev        # dev server (Vite)
 npm run build      # build de produção (valida imports; roda antes de finalizar)
-npm test           # node --test em src/utils/__tests__/*.test.js (27 testes)
+npm test           # node --test em src/utils/__tests__/*.test.js (43 testes)
 npm run meta:archive   # arquiva o meta-tiers.csv atual em src/data/meta-history/
 ```
 Slash commands: **`/atualizar-meta`** (tier list) e **`/atualizar-builds`** (builds do
-lolalytics — roda `local/scrape/`, gitignored, ~6 min de rede local, zero IA).
+lolalytics — roda `local/scrape/`, ~6 min de rede local, zero IA).
 Sempre rode `npm run build` **e** `npm test` antes de dar por concluída uma mudança.
+
+O usuário tem um **`Atualizar-Meta.exe`** na raiz (fonte em `local/atualizador/`, tudo
+gitignored) que roda sozinho os passos MECÂNICOS: `archive-meta` → `gen-targets` →
+`fetch-builds` → `verify`. Quando ele disser "rodei o Atualizar-Meta", os passos 1–3 do
+`/atualizar-builds` **já estão feitos** — comece pela verificação/relatório (leia
+`local/scrape/out/run.log` e rode `verify.mjs` se precisar), sem re-raspar.
 
 ## Mapa de rotas (front)
 
@@ -56,7 +63,8 @@ Sempre rode `npm run build` **e** `npm test` antes de dar por concluída uma mud
 | `/saguaoCustom` | saguaoCustom | "Customizada 5x5" (lobby custom) |
 | `/ancestralidade` | Ancestralidade | Painel D1 (admin, exige senha no Worker) |
 | `/meta` | MetaTierList | Tier list S/A/B/C/D por rota + WR |
-| `/champions/:championId?` | Champions | Panteão; param opcional = deep-link da ficha |
+| `/champions/:championId?` | Champions | Panteão; param opcional = deep-link da ficha (modal) |
+| `/ficha/:championId` | ChampionPage | Ficha em TELA CHEIA; substitui a tela anterior (botão Voltar) |
 | `/items/:itemId?` | Items | Relíquias; param opcional = deep-link do detalhe |
 
 `Router.js` tem um `scrollBehavior` que **não rola** quando só muda o param da mesma
@@ -70,9 +78,11 @@ rota (abrir/fechar modal de ficha/item) — evita o "pulo" da tela de fundo.
   (`ui.telemetryLevel` = tiny|mini|full). Z-index: sidebar/topbar acima do conteúdo;
   overlay de busca e fichas de detalhe acima da sidebar.
 - **`store.js`** — estado reativo: `searchProfile`, `masteryDashboard`, `telemetry`,
-  `ui` (sidebarCollapsed, telemetryLevel), e **`staticData`** (`championList`, `items`,
-  `runes`, `summonerSpells`, `championDetails` — cache das fichas). O Data Dragon é
-  carregado no boot em `App.vue`.
+  `ui` (sidebarCollapsed, telemetryLevel), **`championSheet`** (`champ` = ficha aberta;
+  `origem` = para onde o Voltar da tela cheia leva) com os helpers **`abrirFicha(champ)`
+  / `fecharFicha()`**, e **`staticData`** (`championList`, `items`, `runes`,
+  `summonerSpells`, `championDetails` — cache das fichas). O Data Dragon é carregado no
+  boot em `App.vue`.
   - `searchProfile.brief` = o perfil veio do `profile_brief` (leve, **sem** partidas /
     proficiência / companheiros). O `Profile.vue` vê essa flag e recarrega o overview
     completo — senão mostraria histórico vazio.
@@ -85,7 +95,10 @@ rota (abrir/fechar modal de ficha/item) — evita o "pulo" da tela de fundo.
   helpers de imagem: `championImage`, `itemImage`, `runeImage`, `championSplashImage`,
   `championLoadingImage`, `championSpellImage`, `championPassiveImage`,
   **`roleIconImage`** (ícones OFICIAIS de rota via Community Dragon — não FontAwesome),
-  `fetchChampionDetail` (ficha do campeão sob demanda, com cache).
+  `fetchChampionDetail` (ficha do campeão sob demanda, com cache), e
+  **`canonicalChampionList`** (o `champion.json` do patch 16.15 traz 60 CÓPIAS dos
+  campeões — ids `Jade_*`, `key` = 60000 + a original; sem o filtro o Panteão duplica
+  card, `championByName` pode cair na cópia e o link 3D do Khada quebra).
 - **`utils/championCatalog.js`** — motor do módulo Campeões: `rolesOf`, **`rolesWithMeta`**,
   `championByName`, `buildsFor` (até 3 presets por campeão, com runas+itens),
   **`metaBuildVariants`**, `championsForItem` (sinergia inversa), `metaTiersByRole`,
@@ -93,15 +106,18 @@ rota (abrir/fechar modal de ficha/item) — evita o "pulo" da tela de fundo.
 - **`utils/sinergiaMotor.js`** — motor de sinergia v2 + `parseMetaCsv` (lê o meta com
   colunas opcionais `winrate,pickrate,banrate`).
 - **`utils/proficiencia.js`** — proficiência real do jogador no campeão.
-- **`utils/tilt3d.js`** — `useTilt3d()`: inclinação 3D no hover seguindo o cursor
-  (equivalente ao `hover-3d` do daisyUI, sem a dependência — ver Convenções).
+- **`utils/tilt3d.js`** — `useTilt3d({ gesto })`: inclinação 3D seguindo o ponteiro, no
+  **hover** (default, usado no card de skin da ficha) ou por **arrasto** (só gira com o
+  ponteiro pressionado, "segurando" — usado na arte ampliada e no pódio da Caverna).
+  Equivalente ao `hover-3d` do daisyUI, sem a dependência — ver Convenções.
 - **`data/`** — `meta-tiers.csv` (tier + WR/PR/BR), `sinergia-champs.csv` (vetores 8D),
   **`builds-champs.json`** (presets de build + páginas de runas + overrides por campeão),
   **`meta-builds.json`** (build REAL por campeão×rota, do lolalytics),
   `meta-history/` (arquivos versionados do meta).
-- **Componentes de Campeões:** `Champions.vue` + `ChampionSheet.vue` (ficha com modal
-  **expansível** e **galeria de skins**), `Items.vue` + `ItemDetail.vue`,
-  `MetaTierList.vue`, `ModuleHub.vue` (hubs), e o **`ChampionCard.vue`**.
+- **Componentes de Campeões:** `Champions.vue`, **`ChampionSheet.vue`** (ficha ÚNICA,
+  `mode='modal'` ou `'pagina'`, com **galeria de skins**), `ChampionPage.vue` (tela cheia
+  `/ficha/:championId`), `Items.vue` + `ItemDetail.vue`, `MetaTierList.vue`,
+  `ModuleHub.vue` (hubs), e o **`ChampionCard.vue`**.
 - **Componentes de Jogador/Tribo:** `Home`, `Profile`, `Mastery`, `Tribo`, `saguaoCustom`,
   `Ancestralidade`, `SearchBar`, `SearchGate`, `PlayerAnalysis`, `RadarChart`, `KpiCard`,
   `CustomSlotCard`, `FilaSelecao`, `AsyncState`.
@@ -114,28 +130,48 @@ rota (abrir/fechar modal de ficha/item) — evita o "pulo" da tela de fundo.
   Nome → objeto do campeão é **sempre** `championByName(store.staticData.championList, nome)`
   (índice memoizado, com fallback `{ name }`). Dois nomes dos nossos CSVs divergem do
   rótulo pt_BR e têm apelido lá dentro: `Bard`→`Bardo`, `Nunu & Willump`→`Nunu e Willump`.
+  As URLs de ARTE são montadas a partir do nome, então rótulo pt_BR que não vira o id só
+  tirando espaço/pontuação precisa entrar em `CHAMPION_KEY_OVERRIDES` (`Bardo`→`Bard`,
+  `Nunu e Willump`→`Nunu`, `Renata Glasc`→`Renata`) — senão a arte dá 404 em toda tela.
 - **Numeração de patch: são DOIS sistemas, e nenhum está errado.** O Data Dragon usa a
-  versão dele (`16.14.1`); o patch do JOGO é `26.14` (defasagem de 10). Por isso
-  `meta-tiers.csv` diz `26.14` e `meta-builds.json._meta.patch` (gerado do DDragon) diz
-  `16.14`. **Não "corrija" um pelo outro.**
+  versão dele (`16.15.1`); o patch do JOGO é `26.15` (defasagem de 10). Por isso
+  `meta-tiers.csv` diz `26.15` e `meta-builds.json._meta.patch` (gerado do DDragon) diz
+  `16.15`. **Não "corrija" um pelo outro.**
 - **`rolesOf` vs `rolesWithMeta`** — não são intercambiáveis:
   - `rolesOf(champ)` = **identidade** do campeão (planilha de sinergia → tags DDragon).
     É o que alimenta `classPresetChain` (escolha do preset de build por classe). Somar
     rota de nicho aqui troca a build padrão do campeão.
   - `rolesWithMeta(champ)` = identidade **+ rotas onde ele aparece no meta do patch**.
-    É o que a UI usa (ícones do card, chips da ficha, rotas com build). 43 das 273
-    entradas do meta estão numa rota fora da planilha (Riven MID, Naafiri JUNGLE…);
+    É o que a UI usa (ícones do card, chips da ficha, rotas com build). 42 das 273
+    entradas do meta estão numa rota fora da planilha (Anivia TOP, Nasus JUNGLE…);
     sem a união o campeão aparece na coluna do meio com o ícone de topo e a build
     daquela rota fica inalcançável.
-- **`ChampionCard.vue` é o ÚNICO card de campeão** (Panteão, Meta, Caverna dos Monos e
-  cards de partida do Histórico). Ele é `w-full` com proporção fixa 308×560 — **quem usa
-  define a largura**. Tamanho compacto canônico: `w-28 sm:w-32`. Encaixes por tela sem
-  duplicar o componente: prop `winrate`, prop `frameClass` (troca a moldura) e slots
-  `overlay` (sobre a arte) e `footer` (abaixo dela).
+- **`ChampionCard.vue` é o ÚNICO card de campeão** (Panteão, Meta, Caverna dos Monos,
+  cards de partida do Histórico e o card de skin da ficha). Ele é `w-full` com proporção
+  fixa 308×560 — **quem usa define a largura**. Tamanho compacto canônico: `w-28 sm:w-32`.
+  Encaixes por tela sem duplicar o componente: props `winrate`, `frameClass` (troca a
+  moldura), `skinNum` (arte de outra skin), `label` (nome exibido), `tilt`
+  (`'hover'`|`'arrasto'` — giro 3D), `showRoles`, `popover`, e slots `overlay` (sobre a
+  arte) e `footer` (abaixo dela). A arte é `draggable="false"`: sem isso o drag nativo da
+  imagem CANCELA o ponteiro e o `tilt="arrasto"` simplesmente não gira.
+- **A ficha de campeão é UMA só no sistema.** Nenhuma tela monta `ChampionSheet`: o card
+  emite `open` → **`abrirFicha(champ)`** (store) e o host único do `App.vue` renderiza a
+  ficha (carregada sob demanda, chunk à parte). Trocar de tela fecha a ficha (watcher do
+  `route.matched[0].path`, que ignora o deep-link `/champions/:id` por ser o mesmo
+  registro de rota). **Não volte a instanciar a ficha por tela** — era 4 cópias do mesmo
+  bloco de HTML/render function.
+- **Expandir a ficha é NAVEGAR, não crescer.** O botão de expandir do modal grava a tela
+  atual em `championSheet.origem` e vai para **`/ficha/:championId`** (`ChampionPage` →
+  `ChampionSheet mode="pagina"`), que SUBSTITUI a tela anterior e volta para ela pelo
+  botão "Voltar para …". Nada de `position: fixed` calculando a largura da sidebar.
 - **Nada de daisyUI.** O `hover-3d` dele exige 8 divs de zona sobre o conteúdo e a doc
   proíbe conteúdo clicável dentro — nossos cards são `<button>` com clique e popover.
-  Use `useTilt3d()` (`utils/tilt3d.js`), que faz o mesmo com `mousemove`, é contínuo em
-  vez de quantizado em 8 direções e respeita `prefers-reduced-motion`.
+  Use `useTilt3d()` (`utils/tilt3d.js`), que faz o mesmo com eventos de ponteiro, é
+  contínuo em vez de quantizado em 8 direções e respeita `prefers-reduced-motion`.
+  O card de skin da ficha usa o hover (gira sozinho); a **arte ampliada** e o **pódio da
+  Caverna** usam **`gesto: 'arrasto'`** (gira só com o ponteiro pressionado). Elemento com
+  `'arrasto'` que também tem clique precisa checar `arrastou` antes de agir — senão girar
+  dispara o clique ao soltar (o `ChampionCard` já faz isso).
 - **Degradação graciosa é regra:** dado ausente (campeão novo, item fora do patch, meta
   sem WR) vira fallback neutro/"—", **nunca** crash. IDs de item mortos são filtrados em
   runtime contra o `item.json` do patch.

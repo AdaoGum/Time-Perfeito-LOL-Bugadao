@@ -4,6 +4,15 @@ dist
 *.local
 .github/prompts/*
 repomix-output.xml
-local
+# Pasta de trabalho local (.env, anotações, planners, o Atualizar-Meta.exe e a saída
+# do scrape). ATENÇÃO ao padrão: é `local/*`, não `local` — excluir o diretório inteiro
+# impediria o git de reincluir qualquer coisa lá dentro.
+local/*
+# EXCEÇÃO: o pipeline que gera src/data/meta-builds.json é versionado, senão um clone
+# novo não consegue regenerar o dado. Só os scripts — a saída de execução fica de fora.
+!local/scrape/
+local/scrape/out/
 logs
 .wrangler
+# Executável local da atualização do meta (fonte em local/atualizador/, também ignorado)
+Atualizar-Meta.exe

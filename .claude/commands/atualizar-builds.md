@@ -8,8 +8,12 @@ Atualize `src/data/meta-builds.json` (build + WR + situacionais + skill order po
 campeão×rota) rodando o pipeline LOCAL de scrape. O fetch roda no PC do usuário via Node
 (NÃO use WebFetch — isso gasta o diário à toa). Você só orquestra, lê o resumo e verifica.
 
-Contexto: os scripts vivem em `local/scrape/` (gitignored). Detalhes em
+Contexto: os scripts vivem em `local/scrape/` (versionados; a saída em `out/` não). Detalhes em
 `local/scrape/README.md`. A fonte é o lolalytics (SSR; ID do item vem na URL da imagem).
+
+**Se o usuário disse que rodou o `Atualizar-Meta.exe`**, os passos 1 e 2 já foram feitos
+por ele: NÃO re-raspe. Leia `tail -n 8 local/scrape/out/run.log`, rode o passo 3
+(`verify.mjs`) e vá direto para o relatório do passo 4.
 
 ## Passo 1 — Gerar alvos
 Rode `node local/scrape/gen-targets.mjs $ARGUMENTS`.

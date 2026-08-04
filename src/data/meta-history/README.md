@@ -16,7 +16,7 @@ os importa.
 npm run meta:archive
 
 # 2. sobrescreva src/data/meta-tiers.csv com o CSV do patch novo
-#    (ver local/othersprompts/PROMPT-busca-meta.md e LOGICA-sinergia-e-meta.md)
+#    (o /atualizar-meta faz isso; o contrato do arquivo está em docs/SINERGIA-E-META.md)
 
 # 3. commit + deploy
 ```

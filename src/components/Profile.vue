@@ -398,7 +398,7 @@
                 :frame-class="match.win
                   ? 'border-blue-600/70 shadow-[0_0_16px_rgba(37,99,235,0.3)]'
                   : 'border-red-700/70 shadow-[0_0_16px_rgba(220,38,38,0.25)]'"
-                @open="selectedChamp = $event"
+                @open="abrirFicha"
               >
                 <template #overlay>
                   <img
@@ -535,14 +535,8 @@
         </div>
       </section>
 
-      <!-- Ficha do campeão de uma partida (modal) — mesma do Meta/Panteão/Caverna -->
-      <ChampionSheet
-        v-if="selectedChamp"
-        :champ="selectedChamp"
-        @close="selectedChamp = null"
-        @open-item="goToItem"
-        @open-champion="selectedChamp = $event"
-      />
+      <!-- A ficha do campeão da partida é a MESMA do Meta/Panteão/Caverna: instância
+           única, montada pelo App.vue e aberta aqui por store.abrirFicha(). -->
     </template>
   </div>
 </template>
@@ -550,14 +544,13 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { state } from '../store.js';
+import { state, abrirFicha } from '../store.js';
 import { championImage, profileIconImage, itemImage, calculateKdaRatio, formatDuration, summonerSpellImage, runeImage } from '../utils.js';
 import { championByName } from '../utils/championCatalog.js';
 import { loadProfileIntoStore, fetchRecentMatches } from '../api.js';
 import SearchGate from './SearchGate.vue';
 import PlayerAnalysis from './PlayerAnalysis.vue';
 import ChampionCard from './ChampionCard.vue';
-import ChampionSheet from './ChampionSheet.vue';
 
 const store = state;
 
@@ -593,11 +586,6 @@ function goView(v) {
   else router.push(`/profile/${enc(gn)}/${enc(tl)}`); // seletor
 }
 
-// Ficha aberta pelo card de campeão de uma partida (modal, sem trocar de rota).
-const selectedChamp = ref(null);
-function goToItem(itemId) {
-  router.push(`/items/${itemId}`);
-}
 
 // ---- Botão "buscar últimos 10 jogos" (banner de pendências + hiato) ----
 const fetchError = ref(null);

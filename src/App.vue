@@ -462,6 +462,18 @@
     </div>
   </main>
 
+  <!-- FICHA DE CAMPEÃO — instância ÚNICA do sistema. Nenhuma tela monta a sua: todas
+       chamam store.abrirFicha(champ) e a ficha aparece aqui, uma vez só. Carregada
+       sob demanda (só baixa o chunk quando o primeiro card é clicado). -->
+  <ChampionSheet
+    v-if="store.championSheet.champ"
+    :champ="store.championSheet.champ"
+    @close="fecharFicha"
+    @expand="expandirFicha"
+    @open-item="abrirItem"
+    @open-champion="abrirFicha"
+  />
+
   <!-- Mastery Tooltip -->
   <div
     ref="tooltipEl"
@@ -470,12 +482,19 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, defineAsyncComponent, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { state } from './store.js';
+import { state, abrirFicha, fecharFicha } from './store.js';
 import { fetchRateStatus } from './api.js';
-import { profileIconImage, DDRAGON_VERSION, resolveDDragonVersion, flipMorph } from './utils.js';
+import {
+  profileIconImage, DDRAGON_VERSION, resolveDDragonVersion, flipMorph,
+  getChampionIdFromName, canonicalChampionList
+} from './utils.js';
 import SearchBar from './components/SearchBar.vue';
+
+// Ficha do campeão: componente pesado e nem toda sessão abre uma — chunk à parte,
+// baixado no primeiro clique (o mesmo chunk que a tela cheia /ficha/:id usa).
+const ChampionSheet = defineAsyncComponent(() => import('./components/ChampionSheet.vue'));
 
 const store = state;
 const route = useRoute();
@@ -607,6 +626,28 @@ function goToTab(path) {
   store.ui.sidebarMobileOpen = false;
   router.push(path);
 }
+
+// ---- Ficha de campeão (host único) ----
+// Expandir = virar TELA: guarda de onde veio (para o botão Voltar), fecha o modal e
+// navega. O deep-link do Panteão (/champions/:id) volta como /champions — a ficha já
+// vai estar aberta em tela cheia, reabrir o modal por baixo seria redundante.
+function expandirFicha() {
+  const champ = store.championSheet.champ;
+  if (!champ) return;
+  store.championSheet.origem = route.path.startsWith('/champions/') ? '/champions' : route.fullPath;
+  // Quem fecha o modal é o watcher de rota abaixo, depois que a navegação confirma —
+  // fechar antes faria o Panteão limpar o :championId e atropelar este push.
+  router.push(`/ficha/${champ.id || getChampionIdFromName(champ.name)}`);
+}
+
+function abrirItem(itemId) {
+  fecharFicha();
+  router.push(`/items/${itemId}`);
+}
+
+// Trocar de TELA fecha o modal. O deep-link /champions/:id é o MESMO registro de rota
+// do Panteão, então abrir a ficha por lá não se fecha sozinho.
+watch(() => route.matched[0]?.path, () => fecharFicha());
 
 function toggleSidebarCollapse() {
   store.ui.sidebarCollapsed = !store.ui.sidebarCollapsed;
@@ -842,7 +883,9 @@ onMounted(async () => {
   try {
     const res = await fetch(`https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/data/pt_BR/champion.json`);
     const json = await res.json();
-    store.staticData.championList = Object.values(json.data || {});
+    // Passa pelo filtro canônico: o champion.json traz cópias do mesmo campeão
+    // (ids Jade_*) que virariam cards repetidos no Panteão e URLs de ficha erradas.
+    store.staticData.championList = canonicalChampionList(Object.values(json.data || {}));
   } catch (e) {
     console.error('Erro ao carregar dados do Data Dragon:', e);
   }

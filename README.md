@@ -15,7 +15,8 @@ dados históricos, sem estourar o rate limit da API da Riot.
 > 📚 **Documentação para IAs e devs:**
 > [`CLAUDE.md`](CLAUDE.md) (resumo do sistema p/ IAs) ·
 > [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (sistema como um todo) ·
-> [`docs/DATABASE.md`](docs/DATABASE.md) (schema do banco).
+> [`docs/DATABASE.md`](docs/DATABASE.md) (schema do banco) ·
+> [`docs/SINERGIA-E-META.md`](docs/SINERGIA-E-META.md) (motor de sinergia + contrato do `meta-tiers.csv`).
 
 O app tem **dois grandes mundos**: **Jogadores** (perfil/histórico/maestrias/tribo,
 que dependem do Worker+D1) e **Campeões** (Panteão/Relíquias/Meta, **100% client-side**
@@ -33,8 +34,9 @@ sobre o Data Dragon + arquivos estáticos do repo — sem tocar no Worker nem ga
   botão baixa os **últimos 10**. Jogadores **premium** chegam "tudo montado" (sincronizados
   de madrugada); os demais trabalham sob demanda com o que há no banco + 10 jogos por clique.
 - **Maestrias ("Caverna dos Monos"):** pódio dos 5 mais dominados com molduras de metal
-  (ouro, prata, bronze, ferro, madeira), depois #6–#20 e o resto — todos no mesmo card de
-  campeão do Panteão/Meta, com nível e pontos. A busca aqui usa o perfil **leve**
+  (ouro, prata, bronze, ferro, madeira) no card GRANDE com **giro 3D** (segure e arraste
+  para girar; clique abre a ficha), depois #6–#20 e o resto no card compacto — todos o
+  mesmo `ChampionCard` do Panteão/Meta, com nível e pontos. A busca aqui usa o perfil **leve**
   (`profile_brief`): sem histórico, sem proficiência, sem companheiros — só identidade +
   maestrias, que é tudo que a tela precisa.
 - **Ancestralidade:** painel de consulta avançada ao D1 (admin, exige senha no Worker).
@@ -43,10 +45,14 @@ sobre o Data Dragon + arquivos estáticos do repo — sem tocar no Worker nem ga
 - **Panteão ("/champions"):** catálogo de todos os campeões com filtro por rota; ficha
   (modal) com habilidades, **radar tático 8D**, **build do meta** (iniciais → núcleo →
   finalização, em **até 3 caminhos** com winrate e amostra por item), runas, ordem de
-  skills, counters, meta por rota (tier + WR/PR/BR) e **lore**. A ficha tem um botão
-  **Expandir** que a leva a ocupar a área entre a sidebar e a topbar, com a arte da skin
-  ao fundo (duplo clique abre inteira), um card do campeão à direita com navegação de
-  skins e link para o **modelo 3D** (Khada), e a **galeria de skins**.
+  skills, counters, meta por rota (tier + WR/PR/BR) e **lore**. A ficha é **uma só no
+  sistema inteiro**: qualquer card de campeão (Panteão, Meta, Caverna, Histórico) abre a
+  MESMA instância, montada no `App.vue` e carregada sob demanda.
+- **Ficha em tela cheia ("/ficha/:championId"):** o botão **Expandir** da ficha troca o
+  modal por uma TELA, que substitui a anterior e volta para ela pelo botão **Voltar para
+  o Meta / o Panteão / a Caverna…**. Nela entram a arte da skin ao fundo (duplo clique
+  abre inteira), o card do campeão à direita com giro 3D, navegação de skins e link para
+  o **modelo 3D** (Khada), e a **galeria de skins**.
 - **Relíquias ("/items"):** arsenal de itens do Rift com busca, filtro por categoria,
   descrição/atributos, ouro (receita/venda), componentes/evoluções navegáveis e
   **sinergia inversa** (campeões que constroem o item).
@@ -240,9 +246,11 @@ Job que lê o D1 e posta um relatório analítico por jogador (pontos fortes/fra
 evolução vs. período anterior, recomendações de champ/rota cruzadas com o meta) num
 canal do Discord via **webhook**. Texto gerado por regras (NLG "IA sem IA"), sem LLM.
 
-**Dois relatórios separados:** por padrão o job gera **um relatório para Ranked
-Solo/Duo e outro para Flex** — cada um com seu cabeçalho, cor e prosa própria (o mesmo
-jogador ganha texto diferente em cada fila, porque a semente da prosa inclui a fila).
+**Uma mensagem por jogador:** o job posta um cabeçalho e, em seguida, **uma mensagem
+para cada jogador**. Dentro dela vão um embed de resumo (cruzando as filas) e **um embed
+por fila — Solo/Duo e Flex —, cada um com prosa, números, top 5 de campeões e datas
+próprios** (o mesmo jogador lê textos diferentes nas duas filas, porque a semente da
+prosa inclui a fila, o período e o dia).
 
 Cobre **só jogadores premium** (`has_premium = 1`), igual ao sync/backfill. Uma lista
 explícita de `PUUIDS` (run manual) é escape hatch e ignora o filtro premium.
@@ -256,16 +264,24 @@ explícita de `PUUIDS` (run manual) é escape hatch e ignora o filtro premium.
   · `50` = últimas 50 partidas por jogador · `todos` = todo o histórico. (`50`/`todos` não
   têm tendência, por não serem recorte de tempo.) Os nomes antigos (`dia`/`semana`/`mes`/`geral`)
   ainda funcionam como aliases.
-- **Fila (`FILA`):** `ambas` (default) reporta Solo/Duo **e** Flex no **mesmo card** de cada
-  jogador · `solo` = só Ranked Solo/Duo · `flex` = só Ranked Flex.
+- **Fila (`FILA`):** `ambas` (default) reporta Solo/Duo **e** Flex na **mesma mensagem** de
+  cada jogador, cada uma com sua análise · `solo` = só Ranked Solo/Duo · `flex` = só Ranked Flex.
 - **Seletor (`PUUIDS`):** vazio = **só premium** · lista de puuids = exatamente esses ·
   **`Nome#Tag`** (ex.: `UGA Fulano#2109`) = match **exato** por nome+tag (imune a nick
   duplicado) · **prefixo de nick** (ex.: `UGA`) = todos cujo game_name começa com isso.
   Tudo ignora o filtro premium; dá para misturar `Nome#Tag` e prefixos na mesma lista.
-- **Cabeçalho** (repetido no topo de cada mensagem): período, filas cobertas, **nº de partidas
-  avaliadas por fila** e a **data da primeira/última partida** da amostra.
-- Cada card traz a prosa (da fila mais jogada) + um bloco por fila com **Top 3 WR**, **mais
-  jogados** e **WR por rota**.
+- **Cabeçalho** (1ª mensagem): período, filas cobertas, **nº de partidas avaliadas por fila**
+  (e total) e a **data da primeira/última partida** da amostra.
+- **Mensagem do jogador:** embed de resumo (elo por fila, total de jogos/WR somados, janela de
+  datas, tempo em jogo, prosa cruzando Solo/Duo × Flex) + **um embed por fila** com prosa
+  própria, **placar** (jogos, V-D, WR, KDA médio, CS/min, visão/min, KP, ouro/min, dano),
+  **Top 5 campeões com taxa de vitória e KDA**, **WR por rota**, **quando foram os jogos**
+  (primeira e última partida com hora, dias ativos, tempo total e duração média) e
+  **destaques** (maior sequência de vitórias/derrotas, sequência final, tamanho do pool,
+  dia/horário em que mais joga).
+- Se um jogador muito ativo estourar o limite de 6000 caracteres do Discord, o card enxuga
+  os quadros acessórios (rotas → destaques) para continuar cabendo em **uma** mensagem;
+  só se ainda assim não couber é que vira uma segunda.
   Disparo manual: GitHub → Actions → "Relatorio Tribo Discord" → Run workflow.
 
 ```bash
@@ -327,14 +343,14 @@ Use o slash command **`/atualizar-meta`** (definido em
 Se o CSV passar de 30 dias, a UI avisa "meta desatualizado" e o peso do meta cai pela metade.
 
 > ⚠️ **Os dois rótulos de patch são diferentes e ambos estão certos.** O Data Dragon usa
-> a numeração dele (`16.14.1`); o patch do **jogo** é `26.14` (defasagem de 10). Por isso
-> `meta-tiers.csv` diz `26.14` e `meta-builds.json._meta.patch` diz `16.14`. Não "corrija"
+> a numeração dele (`16.15.1`); o patch do **jogo** é `26.15` (defasagem de 10). Por isso
+> `meta-tiers.csv` diz `26.15` e `meta-builds.json._meta.patch` diz `16.15`. Não "corrija"
 > um pelo outro.
 
 ### Atualizar as builds do meta (itens reais + WR + skill order)
 
 Use o slash command **`/atualizar-builds`**. Ele roda o pipeline **local** em
-`local/scrape/` (gitignored) — só `fetch()` em Node, sem navegador, sem IA, ~6 min para
+`local/scrape/` — só `fetch()` em Node, sem navegador, sem IA, ~6 min para
 os 273 combos campeão×rota:
 
 1. `gen-targets.mjs` — monta os alvos a partir do `meta-tiers.csv`.
@@ -405,8 +421,9 @@ public/ dist/        Assets estáticos e build
 ```
 
 **Componentes (`src/components/`):**
-- **Campeões:** `Champions.vue` + `ChampionSheet.vue` (ficha com modal expansível +
-  galeria de skins), `Items.vue` + `ItemDetail.vue`, `MetaTierList.vue`, `ModuleHub.vue` (hubs).
+- **Campeões:** `Champions.vue`, `ChampionSheet.vue` (ficha ÚNICA, em modo `modal` ou
+  `pagina`) + `ChampionPage.vue` (tela cheia `/ficha/:championId`), `Items.vue` +
+  `ItemDetail.vue`, `MetaTierList.vue`, `ModuleHub.vue` (hubs).
 - **Jogador/Tribo:** `Home.vue`, `Profile.vue`, `Mastery.vue`, `Tribo.vue`,
   `saguaoCustom.vue`, `Ancestralidade.vue`.
 - **Auxiliares:** `SearchBar.vue` (busca híbrida), `SearchGate.vue`, `PlayerAnalysis.vue`,

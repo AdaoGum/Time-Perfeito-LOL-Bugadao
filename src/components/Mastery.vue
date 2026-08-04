@@ -1,8 +1,9 @@
 <!--
-  Mastery.vue — Caverna dos Monos. Usa o MESMO ChampionCard do Panteão/Meta (tamanho
-  compacto `w-28 sm:w-32`, igual ao do Meta), acrescentando por slot o que é próprio
-  da maestria: posição no ranking, nível (M) e pontos. O top 5 ganha as molduras de
-  metal — ouro, prata, bronze, ferro e madeira.
+  Mastery.vue — Caverna dos Monos. Usa o MESMO ChampionCard do Panteão/Meta,
+  acrescentando por slot o que é próprio da maestria: posição no ranking, nível (M) e
+  pontos. O PÓDIO (top 5) usa o card grande com giro 3D — o mesmo card da ficha em
+  tela cheia — e as molduras de metal (ouro, prata, bronze, ferro, madeira); do #6 em
+  diante o card é o compacto `w-28 sm:w-32`, igual ao do Meta.
 -->
 <template>
   <div class="relative min-h-[74vh] space-y-6">
@@ -40,12 +41,17 @@
           :class="gi ? 'mt-6 border-t border-slate-800 pt-4' : ''"
         >
           <h3 class="mb-3 text-sm font-black uppercase tracking-wider text-slate-300" :class="grupo.titleCls">{{ grupo.title }}</h3>
+          <p v-if="grupo.tilt" class="mb-3 text-center text-[10px] font-bold uppercase tracking-wider text-amber-300/70">
+            <i class="fa-solid fa-hand-pointer"></i> Segure e arraste o card para girar · clique para abrir a ficha
+          </p>
           <div class="flex flex-wrap gap-2.5" :class="grupo.rowCls">
             <div v-for="item in grupo.entries" :key="item.entry.championName" :class="grupo.cardCls">
               <ChampionCard
                 :champ="resolveChamp(item.entry.championName)"
                 :frame-class="item.metal ? item.metal.frame : ''"
-                @open="selected = $event"
+                :tilt="grupo.tilt"
+                :popover="grupo.popover"
+                @open="abrirFicha"
               >
                 <!-- Posição no ranking + nível de maestria, sobre a arte -->
                 <template #overlay>
@@ -81,14 +87,8 @@
         </div>
       </section>
 
-      <!-- Ficha (modal) — abre SOBRE a caverna, sem trocar de rota (igual ao Meta) -->
-      <ChampionSheet
-        v-if="selected"
-        :champ="selected"
-        @close="selected = null"
-        @open-item="goToItem"
-        @open-champion="selected = $event"
-      />
+      <!-- A ficha abre SOBRE a caverna, sem trocar de rota (igual ao Meta) — montada
+           uma única vez no App.vue. -->
     </template>
 
     <!-- Empty state (no data). O esqueleto completo é MAIS ALTO que a tela, o que
@@ -114,20 +114,16 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { state } from '../store.js';
+import { computed, onMounted, watch } from 'vue';
+import { useRoute } from 'vue-router';
+import { state, abrirFicha } from '../store.js';
 import { championByName } from '../utils/championCatalog.js';
 import { loadProfileIntoStore, loadMasteriesInBackground } from '../api.js';
 import SearchGate from './SearchGate.vue';
 import ChampionCard from './ChampionCard.vue';
-import ChampionSheet from './ChampionSheet.vue';
 
 const store = state;
 const route = useRoute();
-const router = useRouter();
-
-const selected = ref(null);
 
 // A busca aqui é leve (profile_brief) + maestrias: as duas etapas contam como "buscando".
 const carregando = computed(() => store.searchProfile.loading || store.masteryDashboard.loading);
@@ -153,17 +149,20 @@ const grupos = computed(() => {
     metal: METALS[base + i - 1] || null
   }));
 
-  // O pódio fica CENTRALIZADO e com o card do MESMO tamanho do Panteão. O card do
-  // Panteão é fluido (1/N da largura disponível, N = 4/5/6/8/10 por faixa), então
-  // largura fixa não serve: a linha do pódio é uma grade de 5 colunas cuja LARGURA é
-  // a fração equivalente a 5 colunas do Panteão (+ a folga do p-5 desta seção).
-  // Abaixo de sm o Panteão tem 4 colunas e 5 cards não cabem — aí volta pro flex-wrap.
+  // O pódio fica CENTRALIZADO e usa o card GRANDE com giro 3D — o mesmo card da ficha
+  // em tela cheia (`tilt`), que gira enquanto o ponteiro está pressionado. Por isso a
+  // linha do pódio é bem mais larga que a das listas: a arte é o ponto da tela.
+  // Abaixo de sm o pódio de 5 não cabe lado a lado — aí volta pro flex-wrap.
+  // Sem popover no pódio: o card é grande e o resumo flutuante cobriria os vizinhos
+  // (e apareceria no meio do giro). Quem quer detalhe clica e abre a ficha.
   const PODIO = {
-    rowCls: 'justify-center sm:mx-auto sm:grid sm:w-full sm:grid-cols-5 md:w-[88%] lg:w-[65%] xl:w-[51%]',
+    rowCls: 'justify-center sm:mx-auto sm:grid sm:w-full sm:grid-cols-5 lg:w-[92%] xl:w-[78%]',
     titleCls: 'text-center',
-    cardCls: 'w-32 sm:w-auto'
+    cardCls: 'w-32 sm:w-auto',
+    tilt: 'arrasto',
+    popover: false
   };
-  const LISTA = { rowCls: '', titleCls: '', cardCls: 'w-28 sm:w-32' };
+  const LISTA = { rowCls: '', titleCls: '', cardCls: 'w-28 sm:w-32', tilt: '', popover: true };
 
   const out = [];
   if (all.length) out.push({ key: 'podio', title: 'Pódio dos Monos (#1 ao #5)', entries: marcar(all.slice(0, 5), 1), ...PODIO });
@@ -191,10 +190,6 @@ function levelTone(level) {
   if (level >= 6) return 'border-orange-600/60 bg-orange-950/85 text-orange-300';
   if (level >= 4) return 'border-sky-600/60 bg-sky-950/85 text-sky-300';
   return 'border-slate-600/60 bg-slate-950/85 text-slate-300';
-}
-
-function goToItem(itemId) {
-  router.push(`/items/${itemId}`);
 }
 
 defineEmits(['show-overlay', 'hide-overlay', 'show-udyr']);

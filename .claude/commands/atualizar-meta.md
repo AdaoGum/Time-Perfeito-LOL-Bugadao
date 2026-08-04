@@ -11,7 +11,7 @@ não conseguiu abrir na web.
 Contexto: o motor de sinergia (`src/utils/sinergiaMotor.js`) importa `meta-tiers.csv`
 estaticamente e converte tier→score (S=1.0 A=0.8 B=0.6 C=0.4 D=0.25; ausência = 0.5
 neutro). Meta com +30 dias decai a confiança. Detalhes em
-`local/othersprompts/LOGICA-sinergia-e-meta.md`.
+[`docs/SINERGIA-E-META.md`](../../docs/SINERGIA-E-META.md).
 
 ## Passo 1 — Arquivar o meta atual (versionamento)
 Rode `npm run meta:archive`. Isso congela o `meta-tiers.csv` vigente em

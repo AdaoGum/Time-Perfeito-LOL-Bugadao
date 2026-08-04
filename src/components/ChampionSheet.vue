@@ -1,32 +1,40 @@
 <!--
-  ChampionSheet — Ficha completa de um campeão (Panteão).
-  Dois modos: MODAL (card central) e EXPANDIDO (ocupa a área útil entre a sidebar
-  e a topbar). No modo expandido, mostra o splash da skin selecionada em destaque
-  e um carrossel com todas as skins do campeão (Data Dragon). Emite `close`/`open-item`.
+  ChampionSheet — Ficha completa de um campeão. Componente ÚNICO do sistema: existe
+  em UMA instância por vez, nunca uma cópia por tela.
+
+  Dois modos (`mode`):
+    • 'modal'  — card central sobre a tela atual. É o host global do App.vue, aberto
+                 por store.abrirFicha() a partir de qualquer card de campeão.
+    • 'pagina' — TELA CHEIA (rota /ficha/:championId, ChampionPage.vue): substitui a
+                 tela anterior e volta para ela pelo botão "Voltar". Aqui entram o
+                 splash da skin ao fundo, a coluna do card 3D e o carrossel de skins.
+
+  Emite `close` (fechar no modal / voltar na página), `expand` (só no modal → abre a
+  tela cheia), `open-item(id)` e `open-champion(champ)`.
 -->
 <template>
   <div
-    :class="isExpanded
-      ? 'fixed z-[55]'
+    :class="isPagina
+      ? 'relative'
       : 'fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/80 p-3 backdrop-blur-sm sm:p-6'"
-    :style="isExpanded ? expandedStyle : null"
-    @click.self="!isExpanded && $emit('close')"
+    @click.self="!isPagina && $emit('close')"
   >
     <div
-      :class="isExpanded
-        ? 'relative flex h-full w-full flex-col overflow-hidden border-l-2 border-cyan-500/30 bg-slate-950'
+      :class="isPagina
+        ? 'relative overflow-hidden rounded-3xl border border-cyan-500/25 bg-slate-950'
         : 'relative w-full max-w-4xl overflow-hidden rounded-3xl border-2 border-cyan-500/40 bg-slate-950 shadow-[0_0_60px_rgba(6,182,212,0.25)]'"
     >
-      <!-- Controles (expandir/minimizar + fechar) — canto superior direito -->
-      <div class="absolute right-3 top-3 z-20 flex items-center gap-2">
+      <!-- Controles do MODAL (expandir + fechar) — canto superior direito. Na página
+           quem manda voltar é o botão do cabeçalho, não um X flutuante. -->
+      <div v-if="!isPagina" class="absolute right-3 top-3 z-20 flex items-center gap-2">
         <button
           type="button"
           class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-600 bg-slate-950/80 text-slate-300 transition hover:text-white"
-          @click="toggleExpand"
-          :title="isExpanded ? 'Minimizar' : 'Expandir'"
-          :aria-label="isExpanded ? 'Minimizar ficha' : 'Expandir ficha'"
+          @click="$emit('expand')"
+          title="Abrir em tela cheia"
+          aria-label="Abrir a ficha em tela cheia"
         >
-          <i class="fa-solid" :class="isExpanded ? 'fa-compress' : 'fa-expand'"></i>
+          <i class="fa-solid fa-expand"></i>
         </button>
         <button
           type="button"
@@ -38,19 +46,51 @@
         </button>
       </div>
 
-      <!-- CABEÇALHO: strip com splash (modal) / barra compacta (expandido) -->
-      <div v-if="!isExpanded" class="relative h-40 shrink-0 overflow-hidden rounded-t-3xl sm:h-52">
-        <img :src="championSplashImage(champ.name)" :alt="champ.name" class="absolute inset-0 h-full w-full object-cover object-top opacity-60" @error="(e) => e.target.style.display = 'none'" />
-        <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/50 to-transparent"></div>
-        <div class="absolute bottom-0 left-0 flex items-end gap-3 p-4 sm:gap-4 sm:p-5">
-          <img :src="championImage(champ.name)" :alt="champ.name" class="h-16 w-16 shrink-0 rounded-xl border-2 border-cyan-500/60 shadow-lg sm:h-20 sm:w-20" />
+      <!-- CABEÇALHO: strip com splash (modal) ou barra compacta com "Voltar" (página).
+           Os selos (classe, tipo de dano, rotas) são os mesmos nos dois — só mudam de
+           tamanho, então o bloco é um só. -->
+      <div
+        class="shrink-0"
+        :class="isPagina
+          ? 'flex items-center gap-3 border-b border-slate-800 bg-slate-950/95 p-3'
+          : 'relative h-40 overflow-hidden rounded-t-3xl sm:h-52'"
+      >
+        <template v-if="!isPagina">
+          <img :src="championSplashImage(champ.name)" :alt="champ.name" class="absolute inset-0 h-full w-full object-cover object-top opacity-60" @error="(e) => e.target.style.display = 'none'" />
+          <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/50 to-transparent"></div>
+        </template>
+
+        <button
+          v-else
+          type="button"
+          class="inline-flex shrink-0 items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-black uppercase tracking-wide text-slate-300 transition hover:border-cyan-500 hover:text-white"
+          @click="$emit('close')"
+          :title="backLabel"
+        >
+          <i class="fa-solid fa-arrow-left"></i>
+          <span class="hidden sm:inline">{{ backLabel }}</span>
+        </button>
+
+        <div :class="isPagina ? 'flex min-w-0 items-center gap-3' : 'absolute bottom-0 left-0 flex items-end gap-3 p-4 sm:gap-4 sm:p-5'">
+          <img
+            :src="championImage(champ.name)"
+            :alt="champ.name"
+            class="shrink-0 border-2 border-cyan-500/60"
+            :class="isPagina ? 'h-11 w-11 rounded-lg' : 'h-16 w-16 rounded-xl shadow-lg sm:h-20 sm:w-20'"
+          />
           <div class="min-w-0">
-            <h2 class="truncate text-2xl font-black text-white drop-shadow sm:text-3xl">{{ champ.name }}</h2>
-            <p class="truncate text-xs font-semibold uppercase tracking-wider text-cyan-300 sm:text-sm">{{ champ.title }}</p>
-            <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
-              <span v-for="tag in champ.tags || []" :key="tag" class="rounded border border-slate-600 bg-slate-900/80 px-1.5 py-0.5 text-[10px] font-black uppercase text-slate-300">{{ TAG_LABELS[tag] || tag }}</span>
-              <span class="rounded border border-fuchsia-600/60 bg-fuchsia-950/40 px-1.5 py-0.5 text-[10px] font-black uppercase text-fuchsia-300">{{ damageLabel }}</span>
-              <span v-for="role in roles" :key="role" class="inline-flex items-center gap-1 rounded border border-cyan-700/50 bg-cyan-950/30 px-1.5 py-0.5 text-[10px] font-black uppercase text-cyan-300">
+            <h2
+              class="truncate font-black text-white"
+              :class="isPagina ? 'flex items-center gap-2 text-lg sm:text-xl' : 'text-2xl drop-shadow sm:text-3xl'"
+            >
+              {{ champ.name }}
+              <span v-if="isPagina" class="truncate text-xs font-semibold uppercase tracking-wider text-cyan-300">{{ champ.title }}</span>
+            </h2>
+            <p v-if="!isPagina" class="truncate text-xs font-semibold uppercase tracking-wider text-cyan-300 sm:text-sm">{{ champ.title }}</p>
+            <div class="flex flex-wrap items-center" :class="isPagina ? 'mt-0.5 gap-1' : 'mt-1.5 gap-1.5'">
+              <span class="rounded border border-slate-600 bg-slate-900/80 px-1.5 py-0.5 font-black uppercase text-slate-300" :class="selo" v-for="tag in champ.tags || []" :key="tag">{{ TAG_LABELS[tag] || tag }}</span>
+              <span class="rounded border border-fuchsia-600/60 bg-fuchsia-950/40 px-1.5 py-0.5 font-black uppercase text-fuchsia-300" :class="selo">{{ damageLabel }}</span>
+              <span v-for="role in roles" :key="role" class="inline-flex items-center gap-1 rounded border border-cyan-700/50 bg-cyan-950/30 px-1.5 py-0.5 font-black uppercase text-cyan-300" :class="selo">
                 <img :src="roleIconImage(role)" :alt="role" class="h-3 w-3" />{{ roleLabel(role) }}
               </span>
             </div>
@@ -58,42 +98,26 @@
         </div>
       </div>
 
-      <div v-else class="flex shrink-0 items-center gap-3 border-b border-slate-800 bg-slate-950/90 p-3 pr-24">
-        <img :src="championImage(champ.name)" :alt="champ.name" class="h-11 w-11 shrink-0 rounded-lg border-2 border-cyan-500/60" />
-        <div class="min-w-0">
-          <h2 class="flex items-center gap-2 truncate text-lg font-black text-white sm:text-xl">
-            {{ champ.name }}
-            <span class="truncate text-xs font-semibold uppercase tracking-wider text-cyan-300">{{ champ.title }}</span>
-          </h2>
-          <div class="mt-0.5 flex flex-wrap items-center gap-1">
-            <span v-for="tag in champ.tags || []" :key="tag" class="rounded border border-slate-600 bg-slate-900/80 px-1.5 py-0.5 text-[9px] font-black uppercase text-slate-300">{{ TAG_LABELS[tag] || tag }}</span>
-            <span class="rounded border border-fuchsia-600/60 bg-fuchsia-950/40 px-1.5 py-0.5 text-[9px] font-black uppercase text-fuchsia-300">{{ damageLabel }}</span>
-            <span v-for="role in roles" :key="role" class="inline-flex items-center gap-1 rounded border border-cyan-700/50 bg-cyan-950/30 px-1.5 py-0.5 text-[9px] font-black uppercase text-cyan-300">
-              <img :src="roleIconImage(role)" :alt="role" class="h-3 w-3" />{{ roleLabel(role) }}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <!-- CORPO: (expandido) splash em destaque + info + carrossel; (modal) só a info -->
-      <div class="flex min-h-0 flex-col" :class="isExpanded ? 'flex-1' : ''">
-        <div class="relative min-h-0" :class="isExpanded ? 'flex-1 overflow-hidden' : ''">
-          <!-- Splash da skin como FUNDO da tela inteira (modo expandido) -->
-          <template v-if="isExpanded">
+      <!-- CORPO: (página) splash da skin ao fundo + info + carrossel; (modal) só a info.
+           Na página o scroll é o da PRÓPRIA tela — nada de painel com rolagem interna. -->
+      <div class="flex flex-col">
+        <div class="relative">
+          <!-- Splash da skin como FUNDO da tela inteira (modo página) -->
+          <template v-if="isPagina">
             <img :key="selectedSkinSplash" :src="selectedSkinSplash" :alt="skinName(selectedSkin)" class="absolute inset-0 h-full w-full animate-[skinFade_0.4s_ease] object-cover object-center" @error="markSkinBroken(selectedSkin?.num)" />
             <!-- Véu bem mais leve que antes: a arte precisa aparecer. O gradiente ainda
                  escurece o lado esquerdo, onde fica o texto. -->
             <div class="pointer-events-none absolute inset-0 bg-gradient-to-br from-slate-950/80 via-slate-950/60 to-slate-950/35"></div>
           </template>
 
-          <!-- Bloco de informações (único; POR CIMA do fundo quando expandido) -->
-          <div class="relative" :class="isExpanded ? 'h-full min-h-0 overflow-y-auto' : ''">
+          <!-- Bloco de informações (único; POR CIMA do fundo na página) -->
+          <div class="relative">
             <!-- Duplo clique numa área vazia traz a arte da skin para a frente (.self =
                  só quando o clique cai na própria grade, não em cima de um card). -->
             <div
               class="grid gap-5 p-4 sm:p-6"
-              :class="isExpanded ? 'md:grid-cols-2 xl:grid-cols-[1.1fr_1.1fr_17rem] xl:gap-6 xl:p-6' : 'lg:grid-cols-2'"
-              @dblclick.self="isExpanded && (artFullscreen = true)"
+              :class="isPagina ? 'md:grid-cols-2 xl:grid-cols-[1.1fr_1.1fr_17rem] xl:gap-6 xl:p-6' : 'lg:grid-cols-2'"
+              @dblclick.self="isPagina && (artFullscreen = true)"
             >
               <!-- Coluna 1: meta + radar + lore -->
               <div class="space-y-5">
@@ -107,10 +131,14 @@
                     <div v-for="entry in metaEntries" :key="entry.role" class="flex items-center gap-2 rounded-lg border px-2.5 py-1.5" :class="TIER_STYLES[entry.tier].row">
                       <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border text-xs font-black" :class="TIER_STYLES[entry.tier].badge">{{ entry.tier }}</span>
                       <span class="inline-flex shrink-0 items-center gap-1 text-xs font-black text-slate-200"><img :src="roleIconImage(entry.role)" :alt="entry.role" class="h-4 w-4" />{{ roleLabel(entry.role) }}</span>
-                      <div class="ml-auto flex gap-1.5 text-[10px] font-bold">
-                        <span class="text-slate-400">WR <span class="text-slate-200">{{ formatPct(entry.winrate) }}</span></span>
-                        <span class="text-slate-400">PR <span class="text-slate-200">{{ formatPct(entry.pickrate) }}</span></span>
-                        <span class="text-slate-400">BR <span class="text-slate-200">{{ formatPct(entry.banrate) }}</span></span>
+                      <!-- `whitespace-nowrap` prende cada rótulo ao seu número: sem
+                           isso o bloco aperta e quebra no espaço do "WR 53.1%",
+                           jogando os valores para a linha de baixo. Faltando largura,
+                           quem quebra é o grupo inteiro (flex-wrap), nunca o par. -->
+                      <div class="ml-auto flex flex-wrap justify-end gap-x-1.5 gap-y-0.5 text-[10px] font-bold">
+                        <span class="whitespace-nowrap text-slate-400">WR <span class="text-slate-200">{{ formatPct(entry.winrate) }}</span></span>
+                        <span class="whitespace-nowrap text-slate-400">PR <span class="text-slate-200">{{ formatPct(entry.pickrate) }}</span></span>
+                        <span class="whitespace-nowrap text-slate-400">BR <span class="text-slate-200">{{ formatPct(entry.banrate) }}</span></span>
                       </div>
                     </div>
                   </div>
@@ -168,7 +196,7 @@
                   <h3 class="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-300">
                     <i class="fa-solid fa-book-open"></i> Lenda
                   </h3>
-                  <p class="overflow-y-auto rounded-lg border border-slate-800 bg-slate-900/40 p-3 text-xs leading-relaxed text-slate-400" :class="isExpanded ? 'max-h-56' : 'max-h-32'">{{ loreShort }}</p>
+                  <p class="overflow-y-auto rounded-lg border border-slate-800 bg-slate-900/40 p-3 text-xs leading-relaxed text-slate-400" :class="isPagina ? 'max-h-56' : 'max-h-32'">{{ loreShort }}</p>
                 </section>
               </div>
 
@@ -188,7 +216,7 @@
                         </div>
                         <div class="min-w-0">
                           <p class="text-xs font-black text-slate-100">{{ ability.name }}</p>
-                          <p class="mt-0.5 whitespace-pre-line text-[11px] leading-snug text-slate-400" :class="isExpanded ? '' : 'line-clamp-3'">{{ ability.desc }}</p>
+                          <p class="mt-0.5 whitespace-pre-line text-[11px] leading-snug text-slate-400" :class="isPagina ? '' : 'line-clamp-3'">{{ ability.desc }}</p>
                         </div>
                       </div>
                     </div>
@@ -445,51 +473,46 @@
                 </section>
               </div>
 
-              <!-- Coluna 3 (só expandido): o campeão com a skin escolhida -->
-              <div v-if="isExpanded" class="hidden xl:block">
-                <section class="sticky top-0">
+              <!-- Coluna 3 (só na página): o campeão com a skin escolhida, no MESMO
+                   card de campeão das outras telas (giro 3D no hover). -->
+              <div v-if="isPagina" class="hidden xl:block">
+                <!-- Sem `sticky`: o container da ficha é `overflow-hidden` (cantos
+                     arredondados), e dentro dele o sticky vira estático. -->
+                <section>
                   <h3 class="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-300">
                     <i class="fa-solid fa-user-astronaut"></i> {{ skinName(selectedSkin) }}
                   </h3>
-                  <div
-                    class="overflow-hidden rounded-2xl border border-amber-600/40 bg-slate-950/70 transition-transform duration-200 ease-out will-change-transform"
-                    :style="tiltStyle"
-                    @mousemove="onTiltMove"
-                    @mouseleave="onTiltLeave"
+                  <ChampionCard
+                    :champ="champ"
+                    :skin-num="selectedSkin?.num ?? 0"
+                    :label="skinName(selectedSkin)"
+                    tilt="hover"
+                    :show-roles="false"
+                    :popover="false"
+                    frame-class="border-amber-600/40 shadow-[0_0_20px_rgba(217,119,6,0.25)]"
+                    @open="artFullscreen = true"
+                    @img-error="markSkinBroken"
                   >
-                    <button type="button" class="group relative block w-full" :title="'Ver a arte inteira'" @click="artFullscreen = true">
-                      <img
-                        :key="`card-${selectedSkin?.num}`"
-                        :src="championLoadingImage(champ.name, selectedSkin?.num ?? 0)"
-                        :alt="skinName(selectedSkin)"
-                        class="w-full object-cover"
-                        style="aspect-ratio: 308 / 560;"
-                        @error="markSkinBroken(selectedSkin?.num)"
-                      />
-                      <span class="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent"></span>
-                      <!-- Brilho que segue o cursor (as vars vêm do useTilt3d) -->
-                      <span
-                        class="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                        style="background: radial-gradient(circle at var(--brilho-x, 50%) var(--brilho-y, 50%), rgba(255,255,255,0.22), transparent 55%)"
-                      ></span>
-                      <span class="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border border-slate-600 bg-slate-950/85 px-2.5 py-1 text-[10px] font-bold text-slate-300 opacity-0 transition group-hover:opacity-100">
+                    <template #overlay>
+                      <span class="pointer-events-none absolute bottom-7 left-1/2 -translate-x-1/2 rounded-full border border-slate-600 bg-slate-950/85 px-2.5 py-1 text-[10px] font-bold text-slate-300 opacity-0 transition group-hover:opacity-100">
                         <i class="fa-solid fa-expand"></i> Arte inteira
                       </span>
-                    </button>
+                    </template>
+                  </ChampionCard>
 
-                    <!-- 3D: o Khada não permite embed, então abre em outra aba -->
-                    <a
-                      v-if="skin3dUrl"
-                      :href="skin3dUrl"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="flex items-center justify-center gap-2 border-t border-amber-600/30 bg-amber-950/30 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-amber-300 transition hover:bg-amber-900/40 hover:text-amber-200"
-                      title="Abre o modelo 3D desta skin no Khada (site de fãs), com rotação, cromas e animações"
-                    >
-                      <i class="fa-solid fa-cube"></i> Ver modelo 3D
-                      <i class="fa-solid fa-arrow-up-right-from-square text-[9px] opacity-70"></i>
-                    </a>
-                  </div>
+                  <!-- 3D: o Khada não permite embed, então abre em outra aba. Fica FORA
+                       do card porque o card é um <button> (âncora dentro seria inválida). -->
+                  <a
+                    v-if="skin3dUrl"
+                    :href="skin3dUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="mt-1.5 flex items-center justify-center gap-2 rounded-lg border border-amber-600/30 bg-amber-950/30 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-amber-300 transition hover:bg-amber-900/40 hover:text-amber-200"
+                    title="Abre o modelo 3D desta skin no Khada (site de fãs), com rotação, cromas e animações"
+                  >
+                    <i class="fa-solid fa-cube"></i> Ver modelo 3D
+                    <i class="fa-solid fa-arrow-up-right-from-square text-[9px] opacity-70"></i>
+                  </a>
                   <!-- Navegador compacto: setas + anterior · atual · próxima, logo abaixo
                        do card da skin selecionada (substitui a tira larga no rodapé). -->
                   <div v-if="skins.length > 1" class="mt-2 flex items-center gap-1.5">
@@ -542,7 +565,7 @@
 
         <!-- CARROSSEL DE SKINS (expandido). Some a partir de xl, onde o navegador
              compacto do card da direita assume — senão ficariam dois controles. -->
-        <div v-if="isExpanded" class="shrink-0 border-t border-slate-800 bg-slate-950/95 p-3 xl:hidden">
+        <div v-if="isPagina" class="shrink-0 border-t border-slate-800 bg-slate-950/95 p-3 xl:hidden">
           <div class="mb-1.5 flex items-center justify-between">
             <p class="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-cyan-300">
               <i class="fa-solid fa-images"></i> Skins ({{ skins.length }})
@@ -580,29 +603,54 @@
       </div>
     </div>
 
-    <!-- Arte da skin em tela cheia: `object-contain` mostra a splash INTEIRA (o fundo
-         da ficha usa object-cover e corta as laterais). Fecha no X, no fundo ou no Esc. -->
+    <!-- Arte da skin ampliada: `object-contain` mostra a splash INTEIRA (o fundo da
+         ficha usa object-cover e corta as laterais). O fundo fica só velado — a ficha
+         continua visível atrás. Fecha no X, no fundo ou no Esc. -->
     <div
       v-if="artFullscreen"
-      class="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/95 p-4 backdrop-blur-sm"
+      class="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[3px] sm:p-8"
       @click.self="artFullscreen = false"
-      @mousemove="onArtTiltMove"
-      @mouseleave="onArtTiltLeave"
     >
-      <!-- O giro é medido contra a TELA inteira (o mousemove está no fundo), então a
-           arte acompanha o cursor em qualquer canto, não só em cima dela. -->
-      <img
-        :src="selectedSkinSplash"
-        :alt="skinName(selectedSkin)"
+      <!-- Moldura da arte. O giro é medido contra ELA e só acontece com o ponteiro
+           pressionado: segure e arraste para girar, solte para voltar ao lugar. -->
+      <figure
         :style="artTiltStyle"
-        class="pointer-events-none max-h-full max-w-full object-contain transition-transform duration-200 ease-out will-change-transform"
-      />
-      <span class="pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-slate-700 bg-slate-950/85 px-3 py-1 text-xs font-bold text-slate-300">
-        {{ skinName(selectedSkin) }}
-      </span>
+        class="group w-fit max-w-full touch-none cursor-grab overflow-hidden rounded-[1.75rem] border border-amber-500/40 bg-slate-950/80 shadow-[0_25px_70px_-15px_rgba(0,0,0,0.9)] ring-1 ring-inset ring-white/10 transition-transform duration-200 ease-out will-change-transform active:cursor-grabbing"
+        @pointerdown="onArtTiltDown"
+        @pointermove="onArtTiltMove"
+        @pointerup="onArtTiltUp"
+        @pointercancel="onArtTiltUp"
+      >
+        <!-- A altura máxima da arte já desconta o respiro da tela e a legenda abaixo,
+             então a moldura inteira cabe sem cortar nada. -->
+        <div class="relative">
+          <img
+            :src="selectedSkinSplash"
+            :alt="skinName(selectedSkin)"
+            class="block max-h-[calc(100vh_-_10rem)] w-auto max-w-full select-none object-contain"
+            draggable="false"
+          />
+          <!-- Brilho que segue o ponteiro enquanto a arte está sendo girada. -->
+          <span
+            class="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-active:opacity-100"
+            style="background: radial-gradient(circle at var(--brilho-x, 50%) var(--brilho-y, 50%), rgba(255,255,255,0.16), transparent 55%)"
+          ></span>
+          <!-- Vinheta: casa a arte com a moldura em vez de cortar seco na borda. -->
+          <span class="pointer-events-none absolute inset-0 shadow-[inset_0_0_5rem_rgba(2,6,23,0.7)]"></span>
+        </div>
+
+        <figcaption class="flex items-center gap-3 border-t border-amber-500/25 bg-gradient-to-r from-slate-950/95 via-slate-900/90 to-slate-950/95 px-4 py-2.5">
+          <i class="fa-solid fa-user-astronaut text-sm text-amber-400"></i>
+          <span class="min-w-0 flex-1 truncate text-sm font-black text-amber-100">{{ skinName(selectedSkin) }}</span>
+          <span class="hidden shrink-0 items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 sm:inline-flex">
+            <i class="fa-solid fa-hand-pointer"></i> Segure e arraste para girar
+          </span>
+        </figcaption>
+      </figure>
+
       <button
         type="button"
-        class="absolute right-5 top-5 inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-600 bg-slate-950/85 text-slate-300 transition hover:text-white"
+        class="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-600 bg-slate-950/85 text-slate-300 shadow-lg transition hover:border-amber-500 hover:text-white sm:right-6 sm:top-6"
         @click="artFullscreen = false"
         aria-label="Fechar arte"
       >
@@ -625,13 +673,22 @@ import {
 } from '../utils/championCatalog.js';
 import { getChampionMetrics } from '../utils/sinergiaMotor.js';
 import RadarChart from './RadarChart.vue';
+import ChampionCard from './ChampionCard.vue';
 import { useTilt3d } from '../utils/tilt3d.js';
 import AsyncState from './AsyncState.vue';
 
 const props = defineProps({
-  champ: { type: Object, required: true }
+  champ: { type: Object, required: true },
+  // 'modal' (host global do App.vue) | 'pagina' (tela cheia /ficha/:championId)
+  mode: { type: String, default: 'modal' },
+  // Rótulo do botão de voltar da página ("Voltar para o Meta", …)
+  backLabel: { type: String, default: 'Voltar' }
 });
-defineEmits(['close', 'open-item', 'open-champion']);
+const emit = defineEmits(['close', 'expand', 'open-item', 'open-champion']);
+
+const isPagina = computed(() => props.mode === 'pagina');
+// Selos (classe/dano/rota): mesmo bloco nos dois modos, só o corpo da letra muda.
+const selo = computed(() => (isPagina.value ? 'text-[9px]' : 'text-[10px]'));
 
 const store = state;
 const itemsMap = computed(() => store.staticData.items || {});
@@ -639,25 +696,6 @@ const itemsMap = computed(() => store.staticData.items || {});
 const detail = ref(null);
 const loadingDetail = ref(false);
 const detailError = ref(null);
-
-// ---- Modo expandido (ocupa a área entre a sidebar e a topbar) ----
-const isExpanded = ref(false);
-function toggleExpand() {
-  isExpanded.value = !isExpanded.value;
-}
-
-const viewportW = ref(typeof window !== 'undefined' ? window.innerWidth : 1440);
-function onResize() {
-  viewportW.value = window.innerWidth;
-}
-
-// Offsets do modo expandido: reserva a largura da sidebar (80/288 no desktop; 0 no
-// mobile) e a altura da topbar (64px = top-16, onde a sidebar começa).
-const expandedStyle = computed(() => {
-  const desktop = viewportW.value >= 1024;
-  const left = desktop ? (store.ui.sidebarCollapsed ? 80 : 288) : 0;
-  return { top: '64px', left: `${left}px`, right: '0px', bottom: '0px' };
-});
 
 const metrics = computed(() => getChampionMetrics(props.champ?.name, props.champ?.tags || []));
 const roles = computed(() => rolesWithMeta(props.champ));
@@ -698,16 +736,16 @@ function skinName(skin) {
   return !skin || skin.name === 'default' ? props.champ?.name : skin.name;
 }
 
-// Arte da skin em tela cheia (duplo clique no fundo ou botão do card da direita).
+// Arte da skin em tela cheia (duplo clique no fundo ou clique no card da direita).
+// O giro 3D do card da skin mora no próprio ChampionCard (`tilt="hover"`).
 const artFullscreen = ref(false);
 
-// Inclinação 3D do card da skin, seguindo o cursor (mesmo efeito do hover-3d do daisyUI).
-const { style: tiltStyle, onMove: onTiltMove, onLeave: onTiltLeave } = useTilt3d();
-
-// Mesma inclinação na arte em tela cheia, mais contida: a imagem já ocupa o máximo,
-// então ângulo menor e SEM escala (escalar cortaria a arte nas bordas).
-const { style: artTiltStyle, onMove: onArtTiltMove, onLeave: onArtTiltLeave } =
-  useTilt3d({ max: 6, scale: 1, brilho: false });
+// Na arte ABERTA o gesto é outro: gira só com o ponteiro pressionado, como se
+// estivesse segurando a imagem. Ângulo menor e sem escala — a arte já ocupa o
+// máximo da tela, e escalar cortaria as bordas.
+const {
+  style: artTiltStyle, onMove: onArtTiltMove, onDown: onArtTiltDown, onUp: onArtTiltUp
+} = useTilt3d({ max: 8, scale: 1, brilho: true, gesto: 'arrasto' });
 
 // Trio do navegador compacto (card da direita): anterior · atual · próxima, com volta
 // no fim da lista. Com 1 ou 2 skins mostra só o que existe, sem repetir.
@@ -848,22 +886,23 @@ async function loadDetail() {
   }
 }
 
-// Esc fecha a arte em tela cheia primeiro; só depois fecharia a ficha.
+// Esc fecha a arte em tela cheia primeiro; só depois fecha a ficha (no modal — na
+// página quem sai é o botão Voltar, para não perder a tela de baixo sem querer).
 function onKeydown(e) {
   if (e.key !== 'Escape') return;
   if (artFullscreen.value) {
     e.stopPropagation();
     artFullscreen.value = false;
+    return;
   }
+  if (!isPagina.value) emit('close');
 }
 
 onMounted(() => {
   loadDetail();
-  window.addEventListener('resize', onResize);
   window.addEventListener('keydown', onKeydown);
 });
 onUnmounted(() => {
-  window.removeEventListener('resize', onResize);
   window.removeEventListener('keydown', onKeydown);
 });
 

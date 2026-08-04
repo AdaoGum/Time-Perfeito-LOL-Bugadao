@@ -1,8 +1,9 @@
 <!--
   Champions.vue — Panteão dos Campeões.
-  Grade de todos os campeões (DDragon), busca + filtro por rota. Clique abre a
-  ficha (ChampionSheet). Deep-link /champions/:championId (id do DDragon) abre a
-  ficha direto e sobrevive ao refresh. Relíquias da ficha navegam para /items/:id.
+  Grade de todos os campeões (DDragon), busca + filtro por rota. Clique abre a ficha
+  no host único do App.vue (store.abrirFicha) — esta tela não monta ChampionSheet.
+  Deep-link /champions/:championId (id do DDragon) abre a ficha direto e sobrevive ao
+  refresh; o expandir da ficha leva para a tela cheia /ficha/:championId.
 -->
 <template>
   <div>
@@ -59,27 +60,18 @@
         Nenhum campeão encontrado para este filtro.
       </p>
     </AsyncState>
-
-    <!-- Ficha (modal) -->
-    <ChampionSheet
-      v-if="selected"
-      :champ="selected"
-      @close="closeChamp"
-      @open-item="goToItem"
-      @open-champion="openChamp"
-    />
+    <!-- A ficha NÃO é montada aqui: quem a exibe é o host único do App.vue. -->
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { state } from '../store.js';
+import { state, abrirFicha, fecharFicha } from '../store.js';
 import { getChampionIdFromName, roleIconImage } from '../utils.js';
 import { ROLES, rolesOf, normalizeSearch } from '../utils/championCatalog.js';
 import SearchBar from './SearchBar.vue';
 import ChampionCard from './ChampionCard.vue';
-import ChampionSheet from './ChampionSheet.vue';
 import AsyncState from './AsyncState.vue';
 
 const store = state;
@@ -87,7 +79,6 @@ const route = useRoute();
 const router = useRouter();
 
 const activeRole = ref('ALL');
-const selected = ref(null);
 
 const championList = computed(() =>
   [...(store.staticData.championList || [])].sort((a, b) => a.name.localeCompare(b.name))
@@ -98,9 +89,9 @@ const filtered = computed(() => {
   return championList.value.filter((champ) => rolesOf(champ).includes(activeRole.value));
 });
 
-// Abre a ficha e reflete o campeão na URL (deep-link/refresh).
+// Abre a ficha (no host global) e reflete o campeão na URL (deep-link/refresh).
 function openChamp(champ) {
-  selected.value = champ;
+  abrirFicha(champ);
   const id = champ.id || getChampionIdFromName(champ.name);
   if (route.params.championId !== id) {
     router.push(`/champions/${id}`);
@@ -115,20 +106,11 @@ function openChampById(id) {
   if (champ) openChamp(champ);
 }
 
-function closeChamp() {
-  selected.value = null;
-  if (route.params.championId) router.push('/champions');
-}
-
-function goToItem(itemId) {
-  router.push(`/items/${itemId}`);
-}
-
 // Sincroniza o deep-link (:championId) com a ficha aberta, quando a lista existir.
 function syncFromRoute() {
   const id = route.params.championId;
   if (!id) {
-    selected.value = null;
+    fecharFicha();
     return;
   }
   if (!championList.value.length) return;
@@ -138,6 +120,15 @@ function syncFromRoute() {
 onMounted(syncFromRoute);
 watch(() => route.params.championId, syncFromRoute);
 watch(championList, (list) => {
-  if (list.length && route.params.championId && !selected.value) syncFromRoute();
+  if (list.length && route.params.championId && !store.championSheet.champ) syncFromRoute();
+});
+
+// Mão inversa: fechar a ficha pelo host (X, Esc, clique fora) tira o :championId da
+// URL — senão o Panteão ficaria com um deep-link apontando para uma ficha fechada.
+// O teste de PATH é obrigatório: ao expandir para /ficha/:championId o host fecha o
+// modal e o param continua existindo (com outro nome de rota) — sem o filtro, este
+// watcher desfaria a navegação que acabou de acontecer.
+watch(() => store.championSheet.champ, (champ) => {
+  if (!champ && route.path.startsWith('/champions/')) router.replace('/champions');
 });
 </script>

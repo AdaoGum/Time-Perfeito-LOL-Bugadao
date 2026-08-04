@@ -41,14 +41,42 @@ export const TAB_IDS = {
   sinergia: 'aba-sinergia'
 };
 
+// Nome de exibição → id do Data Dragon, para os casos em que tirar espaço/apóstrofo
+// não basta. Inclui os rótulos pt_BR que divergem do id (Bardo=Bard, Nunu e
+// Willump=Nunu, Renata Glasc=Renata): sem eles a arte desses campeões dá 404 em
+// TODA tela, porque as URLs de imagem são montadas a partir do nome.
 const CHAMPION_KEY_OVERRIDES = {
   "Wukong": "MonkeyKing", "Cho'Gath": "Chogath", "Dr. Mundo": "DrMundo", "Nunu & Willump": "Nunu",
   "K'Sante": "KSante", "Kai'Sa": "Kaisa", "Kha'Zix": "Khazix", "Bel'Veth": "Belveth",
-  "Rek'Sai": "RekSai", "Vel'Koz": "Velkoz", "LeBlanc": "Leblanc"
+  "Rek'Sai": "RekSai", "Vel'Koz": "Velkoz", "LeBlanc": "Leblanc",
+  "Bardo": "Bard", "Nunu e Willump": "Nunu", "Renata Glasc": "Renata"
 };
 
 export function getChampionIdFromName(name) {
   return CHAMPION_KEY_OVERRIDES[name] || name?.replace(/[\s'.]/g, '') || '';
+}
+
+/**
+ * Lista canônica de campeões a partir do `champion.json` do Data Dragon.
+ *
+ * O patch 16.15 passou a publicar 60 entradas DUPLICADAS junto dos campeões de
+ * verdade (`Jade_Ahri`, `Jade_Brand`, … — mesmo `name`, `key` = 60000 + a original).
+ * São variantes internas da Riot, não campeões novos. Sem filtro elas viram cards
+ * repetidos no Panteão, podem ganhar o índice de `championByName` (e aí o deep-link
+ * vira /champions/Jade_Brand) e o `key` inflado quebra o link 3D do Khada, que é
+ * `key * 1000 + nº da skin`.
+ *
+ * Critério: por NOME fica a entrada de MENOR `key` — a original é sempre a mais
+ * antiga. Não depende do prefixo "Jade_", que é só o nome desta leva.
+ */
+export function canonicalChampionList(championList) {
+  const porNome = new Map();
+  for (const champ of championList || []) {
+    if (!champ?.name) continue;
+    const atual = porNome.get(champ.name);
+    if (!atual || Number(champ.key) < Number(atual.key)) porNome.set(champ.name, champ);
+  }
+  return [...porNome.values()];
 }
 
 export function championImage(name) {
