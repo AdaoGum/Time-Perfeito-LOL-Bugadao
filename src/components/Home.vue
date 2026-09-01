@@ -124,8 +124,8 @@ const store = state;
 defineEmits(['show-overlay', 'hide-overlay', 'show-udyr', 'search-start']);
 
 // Fundo PADRÃO: a roda de fogo do Udyr nas duas versões (mantido).
-const HOME_UDYR_FOREST = '/home_udyr_forest.png';
-const HOME_UDYR = '/home_udyr.png';
+const HOME_UDYR_FOREST = '/home_udyr_forest.webp';
+const HOME_UDYR = '/home_udyr.webp';
 
 // Fundo ativo: 0 = padrão (roda de fogo); 1..4 = espírito sob o mouse (casa com `n`).
 const activeBg = ref(0);
@@ -137,7 +137,7 @@ function setBg(n) {
 // Cada portal tem um hub (clique no cabeçalho) e sub-links diretos às páginas.
 const paths = [
   {
-    n: 1, key: 'jogador', img: '/Udyr_notudyr_tiger.png', icon: 'fa-user-astronaut', primary: '/profile',
+    n: 1, key: 'jogador', img: '/Udyr_notudyr_tiger.webp', icon: 'fa-user-astronaut', primary: '/profile',
     spirit: 'Espírito do Tigre', title: 'Jogador',
     desc: 'Perfil, histórico de caçadas e o olhar espiritual sobre o invocador.',
     links: [
@@ -148,7 +148,7 @@ const paths = [
     glowCls: 'bg-cyan-400/20', spiritCls: 'text-cyan-400', titleCls: 'text-cyan-100', chipCls: 'border-cyan-800/50 hover:border-cyan-500'
   },
   {
-    n: 2, key: 'maestria', img: '/Udyr_notudyr_bear.png', icon: 'fa-trophy', primary: '/mastery',
+    n: 2, key: 'maestria', img: '/Udyr_notudyr_bear.webp', icon: 'fa-trophy', primary: '/mastery',
     spirit: 'Espírito do Urso', title: 'Maestrias',
     desc: 'A caverna dos monos: os campeões mais dominados e seus pontos.',
     links: [
@@ -158,7 +158,7 @@ const paths = [
     glowCls: 'bg-orange-500/25', spiritCls: 'text-amber-400', titleCls: 'text-amber-100', chipCls: 'border-amber-800/50 hover:border-amber-500'
   },
   {
-    n: 3, key: 'campeoes', img: '/Udyr_notudyr_phoenix.png', icon: 'fa-dragon', primary: '/meta',
+    n: 3, key: 'campeoes', img: '/Udyr_notudyr_phoenix.webp', icon: 'fa-dragon', primary: '/meta',
     spirit: 'Espírito da Fênix', title: 'Campeões',
     desc: 'Tier list do patch, fichas do panteão e o arsenal de relíquias.',
     links: [
@@ -170,12 +170,13 @@ const paths = [
     glowCls: 'bg-violet-400/25', spiritCls: 'text-violet-400', titleCls: 'text-violet-100', chipCls: 'border-violet-800/50 hover:border-violet-500'
   },
   {
-    n: 4, key: 'equipes', img: '/Udyr_notudyr_turtle.png', icon: 'fa-people-group', primary: '/synergy',
+    n: 4, key: 'equipes', img: '/Udyr_notudyr_turtle.webp', icon: 'fa-people-group', primary: '/synergy',
     spirit: 'Espírito da Tartaruga', title: 'Equipes',
     desc: 'Monte a tribo perfeita por sinergia e equilibre partidas customizadas.',
     links: [
       { label: 'Tribo Perfeita', to: '/synergy', icon: 'fa-people-group' },
-      { label: 'Customizada 5x5', to: '/saguaoCustom', icon: 'fa-shuffle' }
+      { label: 'Customizada 5x5', to: '/saguaoCustom', icon: 'fa-shuffle' },
+      { label: 'Relatórios Premium', to: '/relatorios', icon: 'fa-file-invoice' }
     ],
     cardCls: 'border-lime-500/40 bg-gradient-to-br from-emerald-900/80 via-teal-900/40 to-slate-950 hover:shadow-[0_0_40px_rgba(132,204,22,0.3)]',
     glowCls: 'bg-lime-400/25', spiritCls: 'text-lime-400', titleCls: 'text-lime-100', chipCls: 'border-lime-800/50 hover:border-lime-500'

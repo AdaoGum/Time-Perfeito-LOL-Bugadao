@@ -1,15 +1,26 @@
 import { createRouter, createWebHistory } from 'vue-router';
-// Imports de cada página necessária do sistema
+
+// A Home é a única tela EAGER: é a porta de entrada, e esperar um chunk para
+// desenhar a primeira tela seria trocar bundle por latência à toa.
 import Home from './components/Home.vue';
-import Profile from './components/Profile.vue';
-import Mastery from './components/Mastery.vue';
-import Tribo from './components/Tribo.vue';
-import SaguaoCustom from './components/saguaoCustom.vue';
-import Ancestralidade from './components/Ancestralidade.vue';
-import Champions from './components/Champions.vue';
-import Items from './components/Items.vue';
-import MetaTierList from './components/MetaTierList.vue';
-import ModuleHub from './components/ModuleHub.vue';
+
+// Todas as outras entram por `() => import(...)`, cada uma no seu chunk. O que
+// isso tira do bundle inicial não é só o componente: é a cauda de dados que ele
+// arrasta (o Panteão/Meta puxam `meta-builds.json`, que sozinho é a maior parte
+// do que era baixado antes mesmo de o usuário sair da Home).
+// Rota nova nasce aqui dentro — voltar a `import X from ...` no topo devolve a
+// tela (e a cauda dela) para o chunk inicial sem ninguém perceber.
+const Profile = () => import('./components/Profile.vue');
+const Mastery = () => import('./components/Mastery.vue');
+const Tribo = () => import('./components/Tribo.vue');
+const SaguaoCustom = () => import('./components/saguaoCustom.vue');
+const Ancestralidade = () => import('./components/Ancestralidade.vue');
+const Champions = () => import('./components/Champions.vue');
+const Items = () => import('./components/Items.vue');
+const MetaTierList = () => import('./components/MetaTierList.vue');
+const ModuleHub = () => import('./components/ModuleHub.vue');
+const RelatoriosPremium = () => import('./components/RelatoriosPremium.vue');
+const ChampionPage = () => import('./components/ChampionPage.vue');
 
 // Constantes das rotas de cada página do sistema
 const routes = [
@@ -35,6 +46,12 @@ const routes = [
   { path: '/mastery/:gameName/:tagLine', component: Mastery },
   { path: '/synergy', component: Tribo },
   { path: '/saguaoCustom', component: SaguaoCustom },
+
+  // Relatórios Premium. UM registro de rota com params opcionais (igual ao
+  // /champions/:championId?): sem params = o grid de cards; com o jogador = a
+  // tela cheia dele. Como o registro é o mesmo, o scrollBehavior abaixo NÃO rola
+  // ao abrir/fechar — o "X" devolve a lista na posição em que ela estava.
+  { path: '/relatorios/:gameName?/:tagLine?', component: RelatoriosPremium },
   { path: '/ancestralidade', component: Ancestralidade },
 
   // Hubs de módulo (títulos clicáveis das categorias da sidebar)
@@ -52,7 +69,7 @@ const routes = [
   // Ficha do campeão em TELA CHEIA: substitui a tela de onde veio (Panteão, Meta,
   // Caverna, Histórico…) e volta para ela pelo botão "Voltar". Carregada sob demanda
   // — é a maior tela do sistema e não precisa pesar no bundle inicial.
-  { path: '/ficha/:championId', component: () => import('./components/ChampionPage.vue') },
+  { path: '/ficha/:championId', component: ChampionPage },
 ];
 
 const router = createRouter({

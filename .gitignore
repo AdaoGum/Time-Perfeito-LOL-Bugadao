@@ -14,5 +14,6 @@ local/*
 local/scrape/out/
 logs
 .wrangler
-# Executável local da atualização do meta (fonte em local/atualizador/, também ignorado)
-Atualizar-Meta.exe
+# O Atualizar-Meta.exe agora mora em local/atualizador/ (junto do fonte), já coberto
+# pelo `local/*` acima. Esta linha é só uma trava contra cópias antigas na raiz.
+/Atualizar-Meta.exe

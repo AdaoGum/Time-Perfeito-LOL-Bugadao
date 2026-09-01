@@ -258,3 +258,34 @@ export async function loadProfileIntoStore(gameName, tagLine, { loadMasteries = 
     state.searchProfile.loading = false;
   }
 }
+
+// ----------------------------------------------------------------------
+// RELATÓRIOS PREMIUM (/relatorios)
+// Duas leituras agregadas do D1 — NÃO gastam a chave da Riot (o worker devolve
+// apiCalls: 0). O que volta são só NÚMEROS: a prosa é montada aqui no front,
+// por shared/relatorio-prosa.js.
+// ----------------------------------------------------------------------
+
+// Grid de cards: jogadores premium + atividade em 7/15/30 dias por fila.
+//
+// A busca em voo é COMPARTILHADA: num link direto para /relatorios/Nome/TAG, a
+// lista e a tela cheia pedem a mesma leitura no mesmo tick (a lista para montar
+// o grid por trás, a tela cheia para descobrir o puuid do jogador da URL). Sem
+// isto eram duas idas ao Worker para o mesmo D1. O cache dura só enquanto a
+// promessa está pendente — resolvida, a próxima chamada busca de novo.
+let premiumEmVoo = null;
+
+export async function fetchPremiumPlayers() {
+  if (premiumEmVoo) return premiumEmVoo;
+  premiumEmVoo = workerRequest('premium_players', {})
+    .then((data) => (Array.isArray(data?.players) ? data.players : []))
+    .finally(() => { premiumEmVoo = null; });
+  return premiumEmVoo;
+}
+
+// Relatório de um jogador num intervalo livre.
+// `de`/`ate` no formato AAAA-MM-DD (o que o <input type="date"> entrega); `ate`
+// é INCLUSIVO — o worker empurra para o fim do dia antes de recortar.
+export async function fetchRelatorioPremium({ puuid, de, ate, fila = 'ambas' }) {
+  return workerRequest('relatorio_premium', { puuid, de, ate, fila });
+}

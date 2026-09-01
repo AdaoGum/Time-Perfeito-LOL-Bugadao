@@ -14,10 +14,31 @@
 
 // ----------------------------------------------------------------------------
 // 1) Metadados globais da partida (tabela `partidas`).
-//    INSERT OR REPLACE reescreve a linha inteira -> idempotente / permite reprocesso.
+//    O upsert reescreve as colunas da linha -> idempotente / permite reprocesso.
 // ----------------------------------------------------------------------------
-export const SQL_PARTIDAS =
-  "INSERT OR REPLACE INTO partidas (match_id, game_duration, game_creation, queue_id, game_version, game_mode, bans, team_objectives, participants) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+// ⚠️ UPSERT, NUNCA "INSERT OR REPLACE". Em SQLite, REPLACE é DELETE + INSERT — e o
+// D1 roda com PRAGMA foreign_keys = 1, então esse DELETE dispara a cascata:
+//
+//   partidas --ON DELETE CASCADE--> estatisticas_jogador_partida --ON DELETE CASCADE--> estatisticas_jogador_marcos
+//
+// Como uma partida é COMPARTILHADA por todos os membros da tribo que jogaram
+// juntos, o REPLACE aqui apagava as estatísticas de quem já tinha sido coletado:
+// em cada partida de Flex sobrava só o ÚLTIMO jogador processado na rodada.
+// O upsert ATUALIZA a linha existente em vez de removê-la, e nada cascateia.
+// A ordem/quantidade dos `?` é idêntica — `valoresPartida` não muda.
+export const SQL_PARTIDAS = `
+  INSERT INTO partidas
+  (match_id, game_duration, game_creation, queue_id, game_version, game_mode, bans, team_objectives, participants)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(match_id) DO UPDATE SET
+    game_duration   = excluded.game_duration,
+    game_creation   = excluded.game_creation,
+    queue_id        = excluded.queue_id,
+    game_version    = excluded.game_version,
+    game_mode       = excluded.game_mode,
+    bans            = excluded.bans,
+    team_objectives = excluded.team_objectives,
+    participants    = excluded.participants`;
 
 export function valoresPartida(matchId, info, teams) {
   const bans = JSON.stringify((info.teams || []).map(t => ({ teamId: t.teamId, bans: t.bans || [] })));
@@ -51,8 +72,12 @@ export function montarTeams(info) {
 // 2) Estatísticas consolidadas de fim de jogo (tabela `estatisticas_jogador_partida`).
 //    37 colunas — espelha exatamente o schema D1 recriado.
 // ----------------------------------------------------------------------------
+// Mesmo motivo do SQL_PARTIDAS: REPLACE aqui apagaria a linha e cascataria em
+// `estatisticas_jogador_marcos` (FK ON DELETE CASCADE). O worker regrava os marcos
+// logo depois, MAS só quando a timeline responde — se ela falhar, os marcos que o
+// coletor já tinha juntado sumiam sem reposição. O upsert não remove nada.
 export const SQL_ESTATISTICAS = `
-  INSERT OR REPLACE INTO estatisticas_jogador_partida
+  INSERT INTO estatisticas_jogador_partida
   (puuid, match_id, champion_id, champion_name, team_position, win,
    kills, deaths, assists, solo_kills, double_kills, triple_kills, quadra_kills, penta_kills,
    gold_earned, gold_per_min, items, cs, damage_champions,
@@ -61,6 +86,42 @@ export const SQL_ESTATISTICAS = `
    vision_score, control_wards, wards_placed, wards_killed,
    summoner1_id, summoner2_id, perk_keystone, perk_secondary_style, challenges)
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(puuid, match_id) DO UPDATE SET
+    champion_id                = excluded.champion_id,
+    champion_name              = excluded.champion_name,
+    team_position              = excluded.team_position,
+    win                        = excluded.win,
+    kills                      = excluded.kills,
+    deaths                     = excluded.deaths,
+    assists                    = excluded.assists,
+    solo_kills                 = excluded.solo_kills,
+    double_kills               = excluded.double_kills,
+    triple_kills               = excluded.triple_kills,
+    quadra_kills               = excluded.quadra_kills,
+    penta_kills                = excluded.penta_kills,
+    gold_earned                = excluded.gold_earned,
+    gold_per_min               = excluded.gold_per_min,
+    items                      = excluded.items,
+    cs                         = excluded.cs,
+    damage_champions           = excluded.damage_champions,
+    physical_damage            = excluded.physical_damage,
+    magic_damage               = excluded.magic_damage,
+    true_damage                = excluded.true_damage,
+    damage_taken               = excluded.damage_taken,
+    damage_mitigated           = excluded.damage_mitigated,
+    total_heal_teammates       = excluded.total_heal_teammates,
+    damage_shielded_teammates  = excluded.damage_shielded_teammates,
+    kill_participation         = excluded.kill_participation,
+    total_time_spent_dead      = excluded.total_time_spent_dead,
+    vision_score               = excluded.vision_score,
+    control_wards              = excluded.control_wards,
+    wards_placed               = excluded.wards_placed,
+    wards_killed               = excluded.wards_killed,
+    summoner1_id               = excluded.summoner1_id,
+    summoner2_id               = excluded.summoner2_id,
+    perk_keystone              = excluded.perk_keystone,
+    perk_secondary_style       = excluded.perk_secondary_style,
+    challenges                 = excluded.challenges
 `;
 
 export function valoresEstatisticas(puuid, matchId, info, participant) {

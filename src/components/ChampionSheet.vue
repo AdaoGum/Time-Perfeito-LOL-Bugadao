@@ -669,8 +669,11 @@ import {
 } from '../utils.js';
 import {
   TAG_LABELS, DAMAGE_LABELS, TACTICAL_DIMENSIONS, TIER_STYLES, ROLES,
-  rolesWithMeta, buildsFor, metaBuildFor, metaBuildVariants, metaEntriesOf, countersEntriesOf, metaInfo, formatPct, sanitizeDDragonText
+  rolesWithMeta, metaEntriesOf, metaInfo, formatPct, sanitizeDDragonText
 } from '../utils/championCatalog.js';
+// As builds moram à parte porque arrastam `meta-builds.json` junto — e a ficha,
+// que é carregada sob demanda, é justamente quem pode pagar por esse peso.
+import { buildsFor, metaBuildFor, metaBuildVariants, countersEntriesOf } from '../utils/championBuilds.js';
 import { getChampionMetrics } from '../utils/sinergiaMotor.js';
 import RadarChart from './RadarChart.vue';
 import ChampionCard from './ChampionCard.vue';

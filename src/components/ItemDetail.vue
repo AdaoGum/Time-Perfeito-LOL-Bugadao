@@ -111,7 +111,10 @@
 import { computed } from 'vue';
 import { state } from '../store.js';
 import { itemImage, championImage, getChampionIdFromName } from '../utils.js';
-import { championsForItem, sanitizeDDragonText } from '../utils/championCatalog.js';
+import { sanitizeDDragonText } from '../utils/championCatalog.js';
+// `championsForItem` deriva a sinergia inversa das builds, então mora no módulo
+// pesado (o que traz `meta-builds.json` / `builds-champs.json`).
+import { championsForItem } from '../utils/championBuilds.js';
 
 const props = defineProps({
   item: { type: Object, required: true }

@@ -29,13 +29,26 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Instalar o Node.js
+        # 24 = o mesmo major do dev local, e o mínimo que a suíte exige:
+        #  • `node:sqlite` (DatabaseSync), usado pelos testes de ingestão em
+        #    memória, não existe no Node 20;
+        #  • `npm test` passa o glob para o `--test`, e quem resolve o padrão é
+        #    o Node (a aspa impede o shell de expandir).
+        # Os jobs de cron (riot-sync / relatorio-discord) seguem no 20: rodam
+        # outro código e não dependem de nada disso.
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
 
       - name: Instalar dependências
         run: npm install
+
+      # Antes do build: um deploy só sai se a suíte passar. Sem isto, uma
+      # regressão como o INSERT OR REPLACE que apagava as partidas da tribo
+      # chegava ao ar mesmo com o teste de regressão no repo.
+      - name: Rodar os testes
+        run: npm test
 
       - name: Compilar o Vue (Build)
         run: npm run build

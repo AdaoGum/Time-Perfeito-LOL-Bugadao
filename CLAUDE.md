@@ -42,8 +42,9 @@ Slash commands: **`/atualizar-meta`** (tier list) e **`/atualizar-builds`** (bui
 lolalytics — roda `local/scrape/`, ~6 min de rede local, zero IA).
 Sempre rode `npm run build` **e** `npm test` antes de dar por concluída uma mudança.
 
-O usuário tem um **`Atualizar-Meta.exe`** na raiz (fonte em `local/atualizador/`, tudo
-gitignored) que roda sozinho os passos MECÂNICOS: `archive-meta` → `gen-targets` →
+O usuário tem um **`Atualizar-Meta.exe`** em **`local/atualizador/`** (junto do fonte
+`AtualizarMeta.cs`; a pasta inteira é gitignored — e é o ÚNICO executável: a cópia que
+ficava na raiz saiu) que roda sozinho os passos MECÂNICOS: `archive-meta` → `gen-targets` →
 `fetch-builds` → `verify`. Quando ele disser "rodei o Atualizar-Meta", os passos 1–3 do
 `/atualizar-builds` **já estão feitos** — comece pela verificação/relatório (leia
 `local/scrape/out/run.log` e rode `verify.mjs` se precisar), sem re-raspar.
@@ -61,6 +62,7 @@ gitignored) que roda sozinho os passos MECÂNICOS: `archive-meta` → `gen-targe
 | `/mastery[/:g/:t]` | Mastery | "Caverna dos Monos" (busca aqui NÃO sai da tela) |
 | `/synergy` | Tribo | "Tribo Perfeita" (planejador de sinergia) |
 | `/saguaoCustom` | saguaoCustom | "Customizada 5x5" (lobby custom) |
+| `/relatorios[/:g/:t]` | RelatoriosPremium | Relatórios Premium; com o jogador na URL = tela cheia |
 | `/ancestralidade` | Ancestralidade | Painel D1 (admin, exige senha no Worker) |
 | `/meta` | MetaTierList | Tier list S/A/B/C/D por rota + WR |
 | `/champions/:championId?` | Champions | Panteão; param opcional = deep-link da ficha (modal) |
@@ -68,7 +70,14 @@ gitignored) que roda sozinho os passos MECÂNICOS: `archive-meta` → `gen-targe
 | `/items/:itemId?` | Items | Relíquias; param opcional = deep-link do detalhe |
 
 `Router.js` tem um `scrollBehavior` que **não rola** quando só muda o param da mesma
-rota (abrir/fechar modal de ficha/item) — evita o "pulo" da tela de fundo.
+rota (abrir/fechar modal de ficha/item, abrir/fechar um Relatório Premium) — evita o
+"pulo" da tela de fundo.
+
+**Só a Home é eager.** Toda outra rota entra por `() => import(...)`, com o chunk
+próprio. O que isso tira do bundle inicial não é o componente, é a CAUDA DE DADOS
+dele (o Panteão/Meta puxam `meta-builds.json`). Rota nova nasce lazy — voltar a
+`import X from './components/X.vue'` no topo do `Router.js` devolve a tela e a
+cauda dela para o chunk inicial sem quebrar nada e sem ninguém perceber.
 
 ## Onde as coisas moram (front `src/`)
 
@@ -99,10 +108,16 @@ rota (abrir/fechar modal de ficha/item) — evita o "pulo" da tela de fundo.
   **`canonicalChampionList`** (o `champion.json` do patch 16.15 traz 60 CÓPIAS dos
   campeões — ids `Jade_*`, `key` = 60000 + a original; sem o filtro o Panteão duplica
   card, `championByName` pode cair na cópia e o link 3D do Khada quebra).
-- **`utils/championCatalog.js`** — motor do módulo Campeões: `rolesOf`, **`rolesWithMeta`**,
-  `championByName`, `buildsFor` (até 3 presets por campeão, com runas+itens),
-  **`metaBuildVariants`**, `championsForItem` (sinergia inversa), `metaTiersByRole`,
-  `metaEntriesOf`, `countersEntriesOf`, `TIER_STYLES`, `ROLES`, `sanitizeDDragonText`.
+- **`utils/championCatalog.js`** — parte LEVE do módulo Campeões: `rolesOf`,
+  **`rolesWithMeta`**, `championByName`, `normalizeSearch`, `metaTiersByRole`,
+  `metaEntriesOf`, `metaInfo`, `TIER_STYLES`, `ROLES`, `sanitizeDDragonText`.
+- **`utils/championBuilds.js`** — parte PESADA, separada só por causa do bundle:
+  `buildsFor` (até 3 presets com runas+itens), **`metaBuildVariants`**, `metaBuildFor`,
+  `countersEntriesOf`, `championsForItem` (sinergia inversa). É quem importa
+  `meta-builds.json` + `builds-champs.json`. **Não importe daqui em nada que carregue
+  no boot** (App.vue, SearchBar, store, api): o catálogo leve é usado pela SearchBar,
+  que é eager, então qualquer ponte entre os dois devolve os 33k linhas de JSON para o
+  chunk inicial — sem quebrar nada e sem avisar. Só a ficha e o detalhe de item usam.
 - **`utils/sinergiaMotor.js`** — motor de sinergia v2 + `parseMetaCsv` (lê o meta com
   colunas opcionais `winrate,pickrate,banrate`).
 - **`utils/proficiencia.js`** — proficiência real do jogador no campeão.
@@ -121,6 +136,11 @@ rota (abrir/fechar modal de ficha/item) — evita o "pulo" da tela de fundo.
 - **Componentes de Jogador/Tribo:** `Home`, `Profile`, `Mastery`, `Tribo`, `saguaoCustom`,
   `Ancestralidade`, `SearchBar`, `SearchGate`, `PlayerAnalysis`, `RadarChart`, `KpiCard`,
   `CustomSlotCard`, `FilaSelecao`, `AsyncState`.
+- **Relatórios Premium:** `RelatoriosPremium.vue` (a rota — grid de cards **e** host da
+  tela cheia) + `RelatorioJogador.vue` (a tela cheia, `defineAsyncComponent`).
+  A tela cheia tem 4 gráficos além do dia a dia: evolução (WR acumulada + KDA),
+  radar contra o `BENCH` da rota, rosca de rotas e mapa de calor dia×faixa. Todos
+  saem de dados que o Worker JÁ manda — nenhum custa requisição a mais.
 
 ## Convenções que importam (não quebre)
 
@@ -172,6 +192,39 @@ rota (abrir/fechar modal de ficha/item) — evita o "pulo" da tela de fundo.
   Caverna** usam **`gesto: 'arrasto'`** (gira só com o ponteiro pressionado). Elemento com
   `'arrasto'` que também tem clique precisa checar `arrastou` antes de agir — senão girar
   dispara o clique ao soltar (o `ChampionCard` já faz isso).
+- **Relatório Premium não tem tabela própria — e isso é de propósito.** Os "dados
+  puros" já são `estatisticas_jogador_partida` + `partidas`; o motor agrega sobre a
+  janela pedida na hora da consulta. É o que permite o filtro de datas ser LIVRE:
+  snapshot semanal/mensal gravado não responderia "01/08 a 17/08". Se um dia ficar
+  lento, o caminho é uma tabela de rollup DIÁRIO escrita pelo cron — medindo antes.
+  As rotas `premium_players` e `relatorio_premium` do worker **não gastam a chave da
+  Riot** (devolvem `apiCalls: 0`) e **não pedem senha**: "premium" ali significa só
+  *quem tem relatório* (`has_premium = 1` é quem o cron sincroniza), não área restrita.
+- **A data final do filtro é INCLUSIVA para o usuário.** Todo o SQL do relatório usa
+  recorte semiaberto `[desde, ate)`, então `diaParaEpoch(iso, true)` empurra a data
+  final para o início do dia seguinte — sem isso o último dia escolhido ficaria fora.
+  E as duas pontas são fechadas no fuso de **Brasília** (`T00:00:00-03:00`), igual ao
+  `'-3 hours'` que o SQL usa em `dias_ativos` e na série diária. `toISOString()` ali
+  erraria o dia depois das 21h.
+- **O post do Discord é um TEASER, não o relatório.** Desde set/2026 é um card curto
+  por jogador (nome, poucos KPIs por fila, @menção e o **link** para `/relatorios`),
+  em vez das duas mensagens gordas com prosa e cinco quadros. O detalhe mora no site.
+  `SITE_URL` (env, default `https://ugabugatimeperfeito.bugadao.com`) monta o link,
+  e `PRESET_DO_PERIODO` traduz o período do post no preset da tela.
+- **NUNCA `INSERT OR REPLACE` em `partidas` ou `estatisticas_jogador_partida`.**
+  REPLACE é DELETE + INSERT, o D1 roda com `PRAGMA foreign_keys = 1` e existe a cadeia
+  `partidas → estatisticas_jogador_partida → estatisticas_jogador_marcos`, toda
+  ON DELETE CASCADE. Como uma partida é COMPARTILHADA pela tribo, o REPLACE apagava
+  as estatísticas de quem já tinha sido coletado — sobrava só o último da rodada
+  (98,6% das partidas com 1 jogador só). Use upsert (`ON CONFLICT ... DO UPDATE`).
+  Travado por `src/utils/__tests__/ingestao-cascade.test.js`.
+- **Imagem no repo é WebP, no tamanho em que aparece.** Os brasões de elo
+  (`src/assets/rank-emblem/`) são exibidos a 64/80px e os fundos da Home ocupam a
+  tela; tudo isso já foi convertido — o `public/` inteiro saiu de 62 MB para 2,9 MB,
+  e o `dist/` de 67 MB para ~4 MB. Ao adicionar arte nova, converta antes de
+  commitar: PNG de 1000px para um ícone de 80px é peso que todo visitante baixa.
+  Atenção ao `public/`: ele vai **inteiro e verbatim** para o site publicado — o
+  que for largado ali fica acessível na URL, e o Vite não avisa nem otimiza.
 - **Degradação graciosa é regra:** dado ausente (campeão novo, item fora do patch, meta
   sem WR) vira fallback neutro/"—", **nunca** crash. IDs de item mortos são filtrados em
   runtime contra o `item.json` do patch.
@@ -186,7 +239,7 @@ rota (abrir/fechar modal de ficha/item) — evita o "pulo" da tela de fundo.
   reescreve). Meta > 30 dias = a UI avisa "desatualizado" e o peso do meta cai 50%.
 - **Builds (`builds-champs.json`)** são **curadas/heurísticas**, não winrate ao vivo:
   `presets` (itens + página de runas por estilo) + `champions` (itens da build principal
-  por campeão). `championCatalog.classPresetChain` escolhe até 3 presets por classe/dano/rota.
+  por campeão). `championBuilds.classPresetChain` escolhe até 3 presets por classe/dano/rota.
   **Só daqui saem as RUNAS** — o scrape do lolalytics não captura runa.
 - **Builds do meta (`meta-builds.json`)** são dados REAIS, raspados do lolalytics por
   campeão×rota (`/atualizar-builds`, pipeline local em `local/scrape/`, ~6 min):
@@ -225,8 +278,14 @@ rota (abrir/fechar modal de ficha/item) — evita o "pulo" da tela de fundo.
   `ADMIN_PASSWORD` (fail-closed → 503 sem secret).
 - **`shared/match-extract.js`** — lógica ÚNICA de extração/SQL de partidas, importada
   pelo worker e pelo coletor (sem duplicação).
+- **`shared/relatorio-metricas.js`** — SQL agregado + `analisarJogador` do relatório.
+  Importado pelo coletor E pelo worker. **`shared/relatorio-prosa.js`** — o banco de
+  frases (`gerarProsa`); importado pelo coletor E pelo FRONT.
 - **`cron/`** — coletor noturno (`sync.js`, `backfill.js`), relatório do Discord
   (`relatorio-discord.js`), infra compartilhada em `cron/lib/`.
+  `cron/lib/relatorio-engine.js` hoje é **só a camada de embed do Discord**: as duas
+  camadas de baixo moram em `shared/` (ver acima) e ele as re-exporta, então quem já
+  importava dele não precisou mudar nada.
 - **`docs/DATABASE.md`** — schema do D1 (jogadores, partidas, estatisticas_*, maestrias,
   lp_historico).
 

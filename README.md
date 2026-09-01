@@ -246,16 +246,24 @@ Job que lê o D1 e posta um relatório analítico por jogador (pontos fortes/fra
 evolução vs. período anterior, recomendações de champ/rota cruzadas com o meta) num
 canal do Discord via **webhook**. Texto gerado por regras (NLG "IA sem IA"), sem LLM.
 
-**Uma mensagem por jogador:** o job posta um cabeçalho e, em seguida, **uma mensagem
-para cada jogador**. Dentro dela vão um embed de resumo (cruzando as filas) e **um embed
-por fila — Solo/Duo e Flex —, cada um com prosa, números, top 5 de campeões e datas
-próprios** (o mesmo jogador lê textos diferentes nas duas filas, porque a semente da
-prosa inclui a fila, o período e o dia).
+**Um card por jogador:** o job posta um cabeçalho e, em seguida, **um card curto para
+cada jogador** — nome, uma linha de KPIs por fila jogada, a menção e o **link para o
+relatório completo em `/relatorios`**. O post é a chamada; o relatório mora no site.
+Nenhum número soma Solo/Duo com Flex: as duas filas vêm de consultas separadas por
+`queue_id` (420 e 440) e ocupam linhas diferentes do card. Quem não jogou uma das filas
+no período simplesmente não ganha a linha dela.
 
 Cobre **só jogadores premium** (`has_premium = 1`), igual ao sync/backfill. Uma lista
 explícita de `PUUIDS` (run manual) é escape hatch e ignora o filtro premium.
 
-- Motor: [`cron/lib/relatorio-engine.js`](cron/lib/relatorio-engine.js) (JS puro).
+- Motor, em três camadas (JS puro, sem `fs`/`process`/Vite — roda no Node, no Worker e no browser):
+  - números → [`shared/relatorio-metricas.js`](shared/relatorio-metricas.js)
+  - texto → [`shared/relatorio-prosa.js`](shared/relatorio-prosa.js)
+  - embed do Discord → [`cron/lib/relatorio-engine.js`](cron/lib/relatorio-engine.js)
+- O mesmo relatório vive no site em **`/relatorios`** (Relatórios Premium), com filtro
+  de datas livre: o Worker devolve só os números e o browser monta a narração. Não há
+  tabela de relatório no D1 — a agregação é feita na consulta, sobre as partidas já
+  sincronizadas, e por isso o intervalo pode ser qualquer um.
 - Job: [`cron/relatorio-discord.js`](cron/relatorio-discord.js).
 - Agendamento: [`.github/workflows/relatorio-discord.yaml`](.github/workflows/relatorio-discord.yaml)
   — **semanal todo dia às 19:00 BRT** (últimos 7 dias) e **mensal toda sexta às 19:00 BRT**
@@ -264,24 +272,22 @@ explícita de `PUUIDS` (run manual) é escape hatch e ignora o filtro premium.
   · `50` = últimas 50 partidas por jogador · `todos` = todo o histórico. (`50`/`todos` não
   têm tendência, por não serem recorte de tempo.) Os nomes antigos (`dia`/`semana`/`mes`/`geral`)
   ainda funcionam como aliases.
-- **Fila (`FILA`):** `ambas` (default) reporta Solo/Duo **e** Flex na **mesma mensagem** de
-  cada jogador, cada uma com sua análise · `solo` = só Ranked Solo/Duo · `flex` = só Ranked Flex.
+- **Fila (`FILA`):** `ambas` (default) põe **uma linha de cada fila** no card do jogador
+  (Solo/Duo e depois Flex) · `solo` = só Ranked Solo/Duo · `flex` = só Ranked Flex.
 - **Seletor (`PUUIDS`):** vazio = **só premium** · lista de puuids = exatamente esses ·
   **`Nome#Tag`** (ex.: `UGA Fulano#2109`) = match **exato** por nome+tag (imune a nick
   duplicado) · **prefixo de nick** (ex.: `UGA`) = todos cujo game_name começa com isso.
   Tudo ignora o filtro premium; dá para misturar `Nome#Tag` e prefixos na mesma lista.
 - **Cabeçalho** (1ª mensagem): período, filas cobertas, **nº de partidas avaliadas por fila**
   (e total) e a **data da primeira/última partida** da amostra.
-- **Mensagem do jogador:** embed de resumo (elo por fila, total de jogos/WR somados, janela de
-  datas, tempo em jogo, prosa cruzando Solo/Duo × Flex) + **um embed por fila** com prosa
-  própria, **placar** (jogos, V-D, WR, KDA médio, CS/min, visão/min, KP, ouro/min, dano),
-  **Top 5 campeões com taxa de vitória e KDA**, **WR por rota**, **quando foram os jogos**
-  (primeira e última partida com hora, dias ativos, tempo total e duração média) e
-  **destaques** (maior sequência de vitórias/derrotas, sequência final, tamanho do pool,
-  dia/horário em que mais joga).
-- Se um jogador muito ativo estourar o limite de 6000 caracteres do Discord, o card enxuga
-  os quadros acessórios (rotas → destaques) para continuar cabendo em **uma** mensagem;
-  só se ainda assim não couber é que vira uma segunda.
+- **Card do jogador** (uma mensagem por jogador): o post é um **teaser**, não o relatório.
+  Traz o nome, **uma linha por fila jogada** (jogos, V-D, WR, KDA, rota, main e elo daquela
+  fila), a **@menção** no `content` (para o ping chegar) e o **link** para a tela
+  `/relatorios` do jogador — já na fila mais jogada e no preset do período. A cor do card
+  vem da WR geral. O detalhe (prosa, gráficos, Top 5, WR por rota, destaques) mora no site.
+- Até ago/2026 eram **duas mensagens gordas por jogador**, cada uma com a prosa inteira e
+  cinco quadros de números. O post ficou ilegível e o mesmo conteúdo já existia em
+  `/relatorios` — daí o teaser.
   Disparo manual: GitHub → Actions → "Relatorio Tribo Discord" → Run workflow.
 
 ```bash
@@ -378,11 +384,16 @@ jogada de cada slot, a Build 2 a seguinte, e assim por diante.
 O Panteão, as Relíquias e o Meta rodam **inteiramente no navegador**, sobre o Data Dragon
 + arquivos estáticos do repo — sem Worker, sem D1, sem gastar a chave da Riot.
 
-- **Motor:** [`src/utils/championCatalog.js`](src/utils/championCatalog.js) — cruza
-  `sinergia-champs.csv` (rotas/tags), `meta-tiers.csv` (tier + WR/PR/BR) e
-  [`builds-champs.json`](src/data/builds-champs.json) (builds). Expõe `rolesOf`,
-  `buildsFor` (até 3 builds com runas+itens), `championsForItem` (sinergia inversa),
-  `metaTiersByRole`, `metaEntriesOf`.
+- **Motor, em duas metades (a divisão é de PESO, não de assunto):**
+  [`championCatalog.js`](src/utils/championCatalog.js) cruza `sinergia-champs.csv`
+  (rotas/tags) e `meta-tiers.csv` (tier + WR/PR/BR), e expõe `rolesOf`,
+  `metaTiersByRole`, `metaEntriesOf`, `championByName`, `normalizeSearch`;
+  [`championBuilds.js`](src/utils/championBuilds.js) guarda o que depende de
+  [`builds-champs.json`](src/data/builds-champs.json) e
+  [`meta-builds.json`](src/data/meta-builds.json) — `buildsFor` (até 3 builds com
+  runas+itens), `metaBuildVariants`, `championsForItem` (sinergia inversa).
+  O catálogo é importado pela SearchBar, que carrega no boot; as builds só entram
+  junto com a ficha do campeão e o detalhe do item, que são sob demanda.
 - **Builds:** `builds-champs.json` tem `presets` (itens + página de runas por estilo),
   `runePages` (IDs de perk do runesReforged) e `champions` (itens da build principal por
   campeão). `classPresetChain` escolhe até 3 presets por classe/dano/rota.
@@ -403,7 +414,8 @@ src/                 Front-end Vue
   store.js           Estado reativo (searchProfile, staticData, telemetry, ui)
   api.js             Cliente do Worker + telemetria de rate limit
   utils.js           WORKER_URL, Data Dragon, helpers de imagem (incl. roleIconImage oficial)
-  utils/championCatalog.js   Motor do módulo Campeões (rotas, builds, meta, sinergia inversa)
+  utils/championCatalog.js   Módulo Campeões, parte leve (rotas, nomes, meta/tier)
+  utils/championBuilds.js    Módulo Campeões, parte pesada (builds + meta-builds.json)
   utils/sinergiaMotor.js     Motor de sinergia v2 + parser do meta (com WR/PR/BR)
   utils/proficiencia.js      Proficiência do jogador no campeão
   components/        Telas e auxiliares (ver abaixo)

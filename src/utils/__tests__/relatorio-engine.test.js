@@ -70,9 +70,11 @@ const DATA = {
 
 const embedsDe = (r) => r.mensagens.flatMap(m => m.embeds || []);
 const headerDe = (r) => embedsDe(r).find(e => /Relatório/.test(e.title || ''));
-// A mensagem de um jogador é a que tem o embed de resumo com o nome dele.
+// Cada relatório de jogador é uma mensagem com o nome dele no título do embed.
 const msgDoJogador = (r, nome) => r.mensagens.filter(m => (m.embeds || []).some(e => (e.title || '').includes(nome)));
-const embedFila = (msgs, label) => msgs.flatMap(m => m.embeds || []).find(e => (e.title || '').includes(label));
+const embedFila = (msgs, label) => msgs.flatMap(m => m.embeds || []).find(e => (e.title || '').includes(`Ranked ${label}`));
+// A mensagem (não o embed) do relatório de uma fila.
+const msgDaFila = (msgs, label) => msgs.find(m => (m.embeds || []).some(e => (e.title || '').includes(`Ranked ${label}`)));
 
 test('parseMetaTiers: extrai patch e tiers normalizados', () => {
   const { table, patch } = parseMetaTiers('# patch: 15.13 | atualizado: 2026-07-15\nchampion,role,tier\nAhri,MID,S\nWukong,JUNGLE,A\n');
@@ -111,101 +113,120 @@ test('normalizarPeriodo: novos nomes + aliases antigos', () => {
   assert.equal(normalizarPeriodo(undefined), 'semanal'); // default
 });
 
-test('gerarRelatorio: cabeçalho é a 1ª mensagem e cada jogador tem a SUA mensagem', async () => {
-  const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo: 'semanal', fila: 'ambas', somentePremium: false });
+// ---------------------------------------------------------------------------
+// FORMATO DO DISCORD (set/2026): o post deixou de carregar o relatório inteiro.
+// Agora é UM card curto por jogador — nome, alguns KPIs, a menção e o LINK para
+// a tela /relatorios, que é onde o detalhe (prosa, gráficos, top 5) passou a
+// viver. Antes eram DUAS mensagens por jogador com cinco quadros de números.
+// ---------------------------------------------------------------------------
+const cardDe = (r, nome) => embedsDe(r).find((e) => (e.title || '').includes(nome));
+const msgDe = (r, nome) => r.mensagens.find((m) => (m.embeds || []).some((e) => (e.title || '').includes(nome)));
+
+test('gerarRelatorio: cabeçalho + UM card por jogador (não mais dois)', async () => {
+  const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo: 'semanal', agora: T('2026-08-01T00:00:00Z') });
+  assert.equal(r.mensagens.length, 2, 'cabeçalho + 1 card do único jogador');
+  assert.match(r.mensagens[0].embeds[0].title, /Relatório Semanal/);
+  assert.equal(r.mensagens[1].embeds.length, 1);
   assert.equal(r.ativos, 1);
-  assert.equal(r.mensagens.length, 2, 'cabeçalho + 1 mensagem do jogador');
-  assert.ok(/Relatório/.test(r.mensagens[0].embeds[0].title), 'a 1ª mensagem é o cabeçalho');
-  const msgs = msgDoJogador(r, 'UGA Teste#2109');
-  assert.equal(msgs.length, 1, 'uma mensagem por jogador');
 });
 
-test('gerarRelatorio "ambas": a mensagem do jogador tem prosa própria de Solo/Duo E de Flex', async () => {
-  const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo: 'semanal', fila: 'ambas', somentePremium: false });
-  const msgs = msgDoJogador(r, 'UGA Teste#2109');
-  const solo = embedFila(msgs, 'Solo/Duo');
-  const flex = embedFila(msgs, 'Flex');
-  assert.ok(solo && flex, 'existe um embed por fila');
-  assert.ok(solo.description.length > 200, 'prosa da Solo/Duo');
-  assert.ok(flex.description.length > 200, 'prosa da Flex');
-  assert.notEqual(solo.description, flex.description, 'as duas filas têm textos distintos');
-  // Cada fila mostra os próprios números e o próprio elo.
-  assert.ok(/20j · 60% WR/.test(solo.title), 'título da Solo/Duo com jogos e WR');
-  assert.ok(/6j · 33% WR/.test(flex.title), 'título da Flex com jogos e WR');
-  assert.ok(/Ouro II/.test(solo.title), 'elo Solo/Duo no título');
-  assert.ok(/Prata I/.test(flex.title), 'elo Flex no título');
-  assert.equal(solo.color, 0x22c55e, 'cor da fila vem da WR dela (60% → verde)');
-  assert.equal(flex.color, 0xef4444, 'Flex em 33% → vermelho');
+test('o card traz o nome do jogador e o link do relatório completo', async () => {
+  const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo: 'semanal', agora: T('2026-08-01T00:00:00Z') });
+  const card = cardDe(r, 'UGA Teste');
+  assert.match(card.title, /UGA Teste#2109/);
+  // O título do embed vira link clicável, e a descrição repete a chamada.
+  assert.match(card.url, /^https:\/\/ugabugatimeperfeito\.bugadao\.com\/relatorios\//);
+  assert.match(card.description, /Acesse o link para ver o relat/);
+  assert.ok(card.description.includes(card.url), 'a descrição precisa carregar o mesmo link');
 });
 
-test('gerarRelatorio: cada fila lista o top 5 campeões com taxa de vitória', async () => {
-  const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo: 'semanal', fila: 'ambas', somentePremium: false });
-  const solo = embedFila(msgDoJogador(r, 'UGA Teste#2109'), 'Solo/Duo');
-  const top = solo.fields.find(f => /Top \d+ campeões/.test(f.name));
-  assert.ok(top, 'existe o campo de top campeões');
-  assert.ok(/Ahri.*12j.*67%/.test(top.value), 'Ahri com jogos e WR');
-  assert.ok(/Viktor.*5j.*60%/.test(top.value), 'Viktor com jogos e WR');
-  assert.ok(/Zed.*3j.*33%/.test(top.value), 'Zed com jogos e WR');
-  assert.ok(/KDA/.test(top.value), 'KDA por campeão');
+test('o link aponta para o jogador, a fila mais jogada e o período do post', async () => {
+  const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo: 'semanal', agora: T('2026-08-01T00:00:00Z') });
+  const url = new URL(cardDe(r, 'UGA Teste').url);
+  assert.equal(url.pathname, '/relatorios/UGA%20Teste/2109');
+  assert.equal(url.searchParams.get('fila'), 'solo', 'solo tem 20 jogos contra 6 do flex');
+  assert.equal(url.searchParams.get('preset'), 'semana');
 });
 
-test('gerarRelatorio: cada fila diz quando foi o primeiro e o último jogo', async () => {
-  const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo: 'semanal', fila: 'ambas', somentePremium: false });
-  const msgs = msgDoJogador(r, 'UGA Teste#2109');
-  const solo = embedFila(msgs, 'Solo/Duo');
-  const quando = solo.fields.find(f => /Quando/.test(f.name));
-  assert.ok(quando, 'existe o campo da janela');
-  assert.ok(/01\/07/.test(quando.value), 'data do primeiro jogo');
-  assert.ok(/20\/07/.test(quando.value), 'data do último jogo');
-  assert.ok(/dia\(s\) com jogo/.test(quando.value), 'dias ativos');
-  assert.ok(/em jogo \(média/.test(quando.value), 'tempo total e duração média');
-  // E o resumo do jogador cruza as duas filas na mesma janela.
-  const resumo = msgs[0].embeds[0].fields.find(f => /Resumo do período/.test(f.name));
-  assert.ok(/26 jogos/.test(resumo.value), 'total das duas filas');
-  assert.ok(/14V-12D/.test(resumo.value), 'placar somado');
+test('período mensal manda o preset "mes"; período sem equivalente vai sem query', async () => {
+  const mensal = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo: 'mensal', agora: T('2026-08-01T00:00:00Z') });
+  assert.equal(new URL(cardDe(mensal, 'UGA Teste').url).searchParams.get('preset'), 'mes');
+
+  const cinquenta = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo: '50', agora: T('2026-08-01T00:00:00Z') });
+  const url = new URL(cardDe(cinquenta, 'UGA Teste').url);
+  assert.equal(url.searchParams.get('preset'), null, '"50 jogos" não tem preset na tela');
+  assert.equal(url.searchParams.get('fila'), 'solo');
 });
 
-test('gerarRelatorio: destaques trazem sequências, pool e horário', async () => {
-  const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo: 'semanal', fila: 'ambas', somentePremium: false });
-  const solo = embedFila(msgDoJogador(r, 'UGA Teste#2109'), 'Solo/Duo');
-  const dest = solo.fields.find(f => /Destaques/.test(f.name));
-  assert.ok(/Melhor sequência: \*\*5V\*\*/.test(dest.value), 'maior sequência de vitórias');
-  assert.ok(/Pior sequência: \*\*3D\*\*/.test(dest.value), 'maior sequência de derrotas');
-  assert.ok(/Terminou com \*\*3D\*\*/.test(dest.value), 'sequência mais recente');
-  assert.ok(/3 campeão\(ões\) diferente\(s\)/.test(dest.value), 'tamanho do pool');
-  assert.ok(/sábado à noite/.test(dest.value), 'dia/faixa em que mais joga');
+test('o card resume as DUAS filas em poucos KPIs, sem misturar os números', async () => {
+  const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo: 'semanal', agora: T('2026-08-01T00:00:00Z') });
+  const d = cardDe(r, 'UGA Teste').description;
+  assert.match(d, /Solo\/Duo.*20j.*12V-8D.*60% WR/s);
+  assert.match(d, /Flex.*6j.*2V-4D.*33% WR/s);
+  assert.match(d, /KDA/, 'o KDA é um dos KPIs do resumo');
 });
 
-test('gerarRelatorio: cabeçalho diz nº de partidas por fila e a primeira/última data', async () => {
-  const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo: 'semanal', fila: 'ambas', somentePremium: false });
-  const header = headerDe(r);
-  assert.ok(header, 'existe um embed de cabeçalho');
-  assert.ok(/Solo\/Duo: \*\*20\*\*/.test(header.description), 'partidas avaliadas na Solo/Duo');
-  assert.ok(/Flex: \*\*6\*\*/.test(header.description), 'partidas avaliadas na Flex');
-  assert.ok(/total \*\*26\*\*/.test(header.description), 'total geral');
-  assert.ok(/01\/07\/2026/.test(header.description), 'primeira partida (janela global)');
-  assert.ok(/20\/07\/2026/.test(header.description), 'última partida (janela global)');
+test('o card NÃO carrega mais a prosa nem os quadros de números', async () => {
+  const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo: 'semanal', agora: T('2026-08-01T00:00:00Z') });
+  const card = cardDe(r, 'UGA Teste');
+  assert.equal(card.fields, undefined, 'os quadros (placar, top 5, rotas, destaques) saíram do Discord');
+  assert.ok(card.description.length < 700, `resumo deve ser curto, veio com ${card.description.length} chars`);
+  assert.ok(!/Top 5 campe/i.test(card.description));
 });
 
-test('gerarRelatorio "solo": mensagem do jogador só com o bloco Solo/Duo', async () => {
-  const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo: 'semanal', fila: 'solo', somentePremium: false });
-  const msgs = msgDoJogador(r, 'UGA Teste#2109');
-  const titulos = msgs.flatMap(m => m.embeds).map(e => e.title).join(' ');
-  assert.ok(/Solo\/Duo/.test(titulos));
-  assert.ok(!/Ranked Flex/.test(titulos));
+test('a menção vai no content da mensagem do próprio jogador', async () => {
+  const r = await gerarRelatorio({
+    queryRows: fakeQuery(DATA), periodo: 'semanal', agora: T('2026-08-01T00:00:00Z'),
+    userMap: { P1: '123456789' }
+  });
+  const msg = msgDe(r, 'UGA Teste');
+  assert.match(msg.content, /<@123456789>/);
+  assert.deepEqual(msg.allowed_mentions, { parse: ['users'] });
+  // Uma mensagem por jogador => uma menção por jogador, nunca duas.
+  assert.equal(r.mensagens.filter((m) => (m.content || '').includes('<@123456789>')).length, 1);
 });
 
-test('gerarRelatorio: todos os períodos entregam mensagem por jogador com as duas filas', async () => {
+test('sem userMap o card sai igual, só que sem ping', async () => {
+  const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo: 'semanal', agora: T('2026-08-01T00:00:00Z') });
+  const msg = msgDe(r, 'UGA Teste');
+  assert.equal(msg.content, undefined);
+  assert.ok(msg.embeds[0].url, 'o link continua lá');
+});
+
+test('quem só jogou uma fila tem só a linha dela no card', async () => {
+  const soSolo = { solo: DATA.solo, flex: null };
+  const r = await gerarRelatorio({ queryRows: fakeQuery(soSolo), periodo: 'semanal', agora: T('2026-08-01T00:00:00Z') });
+  const d = cardDe(r, 'UGA Teste').description;
+  assert.match(d, /Solo\/Duo/);
+  assert.ok(!/\*\*Flex\*\*/.test(d), 'fila sem partida não vira linha vazia');
+  assert.equal(new URL(cardDe(r, 'UGA Teste').url).searchParams.get('fila'), 'solo');
+});
+
+test('gerarRelatorio "flex": o link e os KPIs cobrem só o Flex', async () => {
+  const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), fila: 'flex', periodo: 'semanal', agora: T('2026-08-01T00:00:00Z') });
+  const card = cardDe(r, 'UGA Teste');
+  assert.match(card.description, /Flex.*6j/s);
+  assert.ok(!/Solo\/Duo/.test(card.description));
+  assert.equal(new URL(card.url).searchParams.get('fila'), 'flex');
+});
+
+test('todos os períodos entregam UM card por jogador', async () => {
   for (const periodo of ['semanal', 'mensal', '50', 'todos']) {
-    const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo, fila: 'ambas', somentePremium: false });
-    const msgs = msgDoJogador(r, 'UGA Teste#2109');
-    assert.equal(msgs.length, 1, `${periodo}: uma mensagem por jogador`);
-    assert.ok(embedFila(msgs, 'Solo/Duo'), `${periodo}: bloco Solo/Duo`);
-    assert.ok(embedFila(msgs, 'Flex'), `${periodo}: bloco Flex`);
-    const top = embedFila(msgs, 'Solo/Duo').fields.find(f => /Top \d+ campeões/.test(f.name));
-    assert.ok(top && /Ahri/.test(top.value), `${periodo}: top campeões com WR`);
+    const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo, agora: T('2026-08-01T00:00:00Z') });
+    assert.equal(r.mensagens.length, 2, `${periodo}: cabeçalho + 1 card`);
+    assert.ok(cardDe(r, 'UGA Teste').url, `${periodo}: o card precisa do link`);
   }
 });
+
+test('o cabeçalho diz o período, quantos jogaram e quantas partidas', async () => {
+  const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo: 'semanal', agora: T('2026-08-01T00:00:00Z') });
+  const h = r.mensagens[0].embeds[0];
+  assert.match(h.description, /Ranked Solo\/Duo \+ Flex/);
+  assert.match(h.description, /1\*{0,2} jogador/);
+  assert.match(h.description, /26\*{0,2} partidas/, '20 do solo + 6 do flex');
+  assert.match(h.description, /link do relat/i, 'o cabeçalho explica onde está o detalhe');
+});
+
 
 test('gerarRelatorio: respeita o limite de 6000 caracteres por mensagem do Discord', async () => {
   const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo: 'semanal', fila: 'ambas', somentePremium: false });

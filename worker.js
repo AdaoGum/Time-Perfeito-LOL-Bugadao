@@ -3,6 +3,10 @@ import {
   SQL_ESTATISTICAS, valoresEstatisticas,
   SQL_MARCOS, extrairMarcos
 } from "./shared/match-extract.js";
+import {
+  FILAS, DIA, coletarAnalises, cteSel, qSerieDiaria, periodoIntervalo, diaParaEpoch,
+  resolverFilas, SQL_PREMIUM_JOGADORES, sqlPremiumAtividade, SQL_PREMIUM_HISTORICO
+} from "./shared/relatorio-metricas.js";
 
 // ----------------------------------------------------------------------
 // MIGRAÇÃO IDEMPOTENTE DO SCHEMA (roda 1x por isolate; ignora "duplicate column")
@@ -527,6 +531,8 @@ export default {
     // 2. CAPTURA DE PARÂMETROS
     // ----------------------------------------------------------------------
     let action, gameName, tagLine, puuid, refresh, q, premium, password, limit, before;
+    // Relatórios Premium: fila (solo|flex|ambas) e o intervalo de datas do filtro.
+    let fila, de, ate;
 
     if (request.method === "POST") {
       try {
@@ -541,6 +547,9 @@ export default {
         password = body.password;
         limit = body.limit;
         before = body.before;
+        fila = body.fila;
+        de = body.de;
+        ate = body.ate;
       } catch (e) {
         return new Response(JSON.stringify({ error: "JSON inválido." }), { status: 400, headers: corsHeaders });
       }
@@ -552,6 +561,9 @@ export default {
       puuid = url.searchParams.get("puuid");
       refresh = url.searchParams.get("refresh") === "true";
       q = url.searchParams.get("q");
+      fila = url.searchParams.get("fila");
+      de = url.searchParams.get("de");
+      ate = url.searchParams.get("ate");
     }
 
     const API_KEY = env.RIOT_API_KEY;
@@ -1058,6 +1070,155 @@ export default {
         return new Response(JSON.stringify({ success: true, puuid, has_premium: novoValor }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // ======================================================================
+    // ROTAS: RELATÓRIOS PREMIUM (tela /relatorios)
+    //
+    // NÃO gastam a chave da Riot — são leituras agregadas do D1 (por isso ficam
+    // fora de RIOT_ACTIONS e nem passam pelo contador global). Também não pedem
+    // senha: os mesmos números já aparecem em /profile e /analise; "premium" aqui
+    // significa apenas QUEM TEM relatório (só has_premium = 1 é sincronizado de
+    // madrugada pelo cron), não uma área restrita.
+    //
+    // Nada de tabela de relatório: o dado cru já mora em estatisticas_jogador_partida
+    // + partidas, e o motor (shared/relatorio-metricas.js) agrega sobre a janela
+    // pedida. É o que deixa o filtro de datas ser LIVRE — snapshot semanal/mensal
+    // gravado não responderia "01/08 a 17/08".
+    // ======================================================================
+    const queryRelatorio = async (sql, params) => {
+      const { results } = await env.DB.prepare(sql).bind(...(params || [])).all();
+      return results || [];
+    };
+
+    // Grid de cards: quem é premium + atividade em 7/15/30 dias por fila. Os
+    // contadores dos chips de preset já vêm aqui, então trocar de preset na tela
+    // não custa uma nova ida ao servidor.
+    if (action === "premium_players") {
+      try {
+        const agora = Date.now();
+        const atividade = sqlPremiumAtividade(agora - 7 * DIA, agora - 15 * DIA, agora - 30 * DIA);
+        const [jogadores, recentes, historico] = await Promise.all([
+          queryRelatorio(SQL_PREMIUM_JOGADORES, []),
+          queryRelatorio(atividade.sql, atividade.params),
+          queryRelatorio(SQL_PREMIUM_HISTORICO, [])
+        ]);
+
+        // queue_id -> chave da fila ('solo'/'flex'), para o front não precisar
+        // saber que 420/440 são números mágicos da Riot.
+        const chaveDaFila = {};
+        for (const k of Object.keys(FILAS)) chaveDaFila[FILAS[k].id] = k;
+
+        const porPuuid = new Map();
+        const vazio = () => ({ solo: null, flex: null });
+        const slot = (puuid) => {
+          if (!porPuuid.has(puuid)) porPuuid.set(puuid, { recente: vazio(), historico: vazio() });
+          return porPuuid.get(puuid);
+        };
+        for (const r of recentes) {
+          const k = chaveDaFila[Number(r.queue_id)];
+          if (!k) continue;
+          slot(r.puuid).recente[k] = {
+            j7: Number(r.j7) || 0, v7: Number(r.v7) || 0,
+            j15: Number(r.j15) || 0, v15: Number(r.v15) || 0,
+            j30: Number(r.j30) || 0, v30: Number(r.v30) || 0
+          };
+        }
+        for (const r of historico) {
+          const k = chaveDaFila[Number(r.queue_id)];
+          if (!k) continue;
+          slot(r.puuid).historico[k] = {
+            total: Number(r.total) || 0,
+            primeira: r.primeira != null ? Number(r.primeira) : null,
+            ultima: r.ultima != null ? Number(r.ultima) : null
+          };
+        }
+
+        const players = jogadores.map((j) => {
+          const dados = porPuuid.get(j.puuid) || { recente: vazio(), historico: vazio() };
+          const ultimas = [dados.historico.solo?.ultima, dados.historico.flex?.ultima].filter((v) => v != null);
+          const primeiras = [dados.historico.solo?.primeira, dados.historico.flex?.primeira].filter((v) => v != null);
+          return {
+            ...j,
+            atividade: dados.recente,
+            historico: dados.historico,
+            // Janela em que o filtro de datas tem o que mostrar (as duas filas juntas).
+            primeiraPartida: primeiras.length ? Math.min(...primeiras) : null,
+            ultimaPartida: ultimas.length ? Math.max(...ultimas) : null,
+            totalPartidas: (dados.historico.solo?.total || 0) + (dados.historico.flex?.total || 0)
+          };
+        });
+
+        // apiCalls: 0 é explícito — o front conta chamadas à Riot pela telemetria e,
+        // sem o campo, assumiria o custo estimado padrão (1) para esta leitura de D1.
+        return new Response(JSON.stringify({ success: true, players, agora, apiCalls: 0 }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+      }
+    }
+
+    // Relatório de UM jogador num intervalo livre. Devolve só NÚMEROS — a prosa
+    // e os componentes são montados no browser (shared/relatorio-prosa.js).
+    // Espera { puuid, de: "YYYY-MM-DD", ate: "YYYY-MM-DD", fila? }.
+    if (action === "relatorio_premium") {
+      if (!puuid) {
+        return new Response(JSON.stringify({ error: "puuid ausente." }), { status: 400, headers: corsHeaders });
+      }
+      // `ate` é inclusivo para o usuário e exclusivo no SQL: diaParaEpoch empurra
+      // para o início do dia seguinte, senão o último dia escolhido ficaria fora.
+      const desdeMs = diaParaEpoch(de);
+      const ateMs = diaParaEpoch(ate, true);
+      if (desdeMs == null || ateMs == null) {
+        return new Response(JSON.stringify({ error: "Datas inválidas: use o formato AAAA-MM-DD." }), { status: 400, headers: corsHeaders });
+      }
+      if (ateMs <= desdeMs) {
+        return new Response(JSON.stringify({ error: "A data final precisa ser igual ou posterior à inicial." }), { status: 400, headers: corsHeaders });
+      }
+      // Teto de 1 ano por consulta: protege a CPU do isolate de um intervalo absurdo.
+      if (ateMs - desdeMs > 366 * DIA) {
+        return new Response(JSON.stringify({ error: "Intervalo muito longo: escolha no máximo 1 ano." }), { status: 400, headers: corsHeaders });
+      }
+
+      try {
+        const P = periodoIntervalo(desdeMs, ateMs);
+        const chaves = resolverFilas(fila);
+        const alvo = [puuid];
+        const relatorios = {};
+
+        // Uma coleta por fila (queue_id) — Solo e Flex nunca se misturam num número.
+        // A série diária de cada fila alimenta o gráfico e a contagem do período.
+        await Promise.all(chaves.map(async (chave) => {
+          const queues = [FILAS[chave].id];
+          const { analises, resumo } = await coletarAnalises({
+            queryRows: queryRelatorio, P, puuids: alvo, soPrem: false,
+            meta: null, agora: ateMs, queues, filaChave: chave
+          });
+          const serieQ = qSerieDiaria(cteSel({ modo: 'janela', desde: desdeMs, ate: ateMs, puuids: alvo, queues }));
+          const serie = await queryRelatorio(serieQ.sql, serieQ.params).catch(() => []);
+          relatorios[chave] = {
+            analise: analises[0] || null,
+            resumo,
+            serie: serie.map((d) => ({
+              dia: d.dia,
+              jogos: Number(d.jogos) || 0,
+              vitorias: Number(d.vitorias) || 0,
+              k: Number(d.k) || 0, d: Number(d.d) || 0, a: Number(d.a) || 0,
+              csMin: d.cs_min != null ? Number(d.cs_min) : null
+            }))
+          };
+        }));
+
+        return new Response(JSON.stringify({
+          success: true, puuid, filas: chaves, relatorios, apiCalls: 0,
+          // `de`/`ate` = as datas ISO como o usuário escolheu; desde/ate = epoch ms
+          // (com `ate` já empurrado pro dia seguinte, que é o recorte real do SQL).
+          periodo: { desde: desdeMs, ate: ateMs, janela: P.janela, deIso: de, ateIso: ate }
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       } catch (err) {
         return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
       }

@@ -1,3 +1,16 @@
+# Prompt: tier list do meta por IA (caminho MANUAL, de reserva)
+
+> **O caminho normal é o slash command `/atualizar-meta`**, que raspa o mobatrainer,
+> valida os nomes contra `sinergia-champs.csv` e reescreve o `src/data/meta-tiers.csv`
+> preservando o histórico — sem IA no meio, e sem inventar número.
+>
+> Este prompt fica guardado para quando a fonte raspada estiver fora do ar. O CSV
+> que ele devolve é um **consenso pedido a um modelo**, não dado medido: confira
+> antes de commitar, e mantenha o cabeçalho `# patch: … | atualizado: … | fonte: …`
+> dizendo de onde veio. Ver `docs/SINERGIA-E-META.md` para o contrato do arquivo.
+
+---
+
 Pesquise na web o tier list atual de League of Legends para Ranked Solo Queue,
 no patch mais recente disponível. Consulte fontes de referência de meta
 (ex.: u.gg, op.gg, lolalytics, Mobalytics) e consolide num consenso.

@@ -900,8 +900,11 @@ const getLocalRankEmblem = (tier) => {
   }
   
   const formattedTier = tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase();
-  const fileName = `Rank=${formattedTier}.png`;
-  
+  // WebP 256×256: os brasões são exibidos a 64/80px (h-16 sm:h-20), então 256
+  // já cobre tela 3x com folga. Os originais eram PNG 1000×1000 — 4,9 MB no
+  // bundle, porque este `new URL()` dinâmico faz o Vite empacotar os DEZ.
+  const fileName = `Rank=${formattedTier}.webp`;
+
   return new URL(`../assets/rank-emblem/${fileName}`, import.meta.url).href;
 };
 

@@ -61,7 +61,7 @@
     <!-- Udyr caminhando da esquerda para a direita, logo abaixo do contador -->
     <div class="relative z-10 mt-6 h-24 w-full max-w-2xl overflow-hidden">
       <img
-        src="/udyr-walking.gif"
+        src="/udyr-walking.webp"
         alt="Udyr caminhando"
         class="udyr-walker absolute bottom-0 h-24 w-auto drop-shadow-[0_0_20px_rgba(6,182,212,0.5)]"
       />
@@ -508,7 +508,7 @@ const tooltipEl = ref(null);
 const MIN_OVERLAY_MS = 4000;
 const overlayVisible = ref(false);
 const countdown = ref(1);
-const udyrCountImage = computed(() => `/udyr%20${countdown.value}.png`);
+const udyrCountImage = computed(() => `/udyr-${countdown.value}.webp`);
 let countInterval = null;
 let hideTimeout = null;
 let overlayStart = 0;
@@ -603,6 +603,7 @@ const sidebarSections = [
     items: [
       { id: 'sinergia', path: '/synergy', match: ['/synergy'], label: 'Tribo Perfeita', icon: 'fa-people-group', active: 'border-lime-500 bg-lime-500/10 text-lime-300' },
       { id: 'custom', path: '/saguaoCustom', match: ['/saguaoCustom'], label: 'Customizada 5x5', icon: 'fa-shuffle', active: 'border-orange-500 bg-orange-500/10 text-orange-300' },
+      { id: 'relatorios', path: '/relatorios', match: ['/relatorios'], label: 'Relatórios Premium', icon: 'fa-file-invoice', active: 'border-emerald-500 bg-emerald-500/10 text-emerald-300' },
     ]
   }
 ];
@@ -694,6 +695,7 @@ const pageThemeBorder = computed(() => {
   if (p.startsWith('/mastery')) return 'border-amber-500/60';
   if (p.startsWith('/synergy')) return 'border-lime-500/60';
   if (p.startsWith('/saguaoCustom')) return 'border-orange-500/60';
+  if (p.startsWith('/relatorios')) return 'border-emerald-500/60';
   if (p.startsWith('/ancestralidade')) return 'border-fuchsia-500/60';
   if (p.startsWith('/meta')) return 'border-amber-500/60';
   if (p.startsWith('/champions')) return 'border-sky-500/60';
