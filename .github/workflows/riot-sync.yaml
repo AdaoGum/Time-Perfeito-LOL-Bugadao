@@ -1,9 +1,14 @@
 name: Riot API Daily Sync Trator
 
+# O relatório do Discord LÊ o que este job escreveu — ele não busca nada na Riot.
+# Por isso a rodada de 07:00 BRT de segunda e sexta: são os dias de post (09:00
+# BRT), e ela encosta o que entrou depois da coleta da madrugada. Duas horas de
+# folga porque a segunda chega com o fim de semana inteiro de partidas novas.
 on:
   schedule:
-    - cron: '0 7 * * *'    # 07:00 UTC = 04:00 BRT (coleta da madrugada)
-    - cron: '30 20 * * *'  # 20:30 UTC = 17:30 BRT (alimenta o relatório das 19:00)
+    - cron: '0 7 * * *'     # 07:00 UTC = 04:00 BRT (coleta da madrugada)
+    - cron: '0 10 * * 1,5'  # 10:00 UTC = 07:00 BRT, seg e sex: fecha os dados do relatório das 09:00
+    - cron: '30 20 * * *'   # 20:30 UTC = 17:30 BRT (mantém o site fresco no fim da tarde)
   workflow_dispatch:
 
 jobs:

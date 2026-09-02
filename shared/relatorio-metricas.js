@@ -35,15 +35,67 @@ export function resolverFilas(fila) {
 }
 export const DIA = 86400000;
 
+// Hora (de Brasília) em que os relatórios AGENDADOS são postados — e, por isso
+// mesmo, o ponto de corte das janelas deles. Mexer aqui muda o recorte; mexer no
+// cron do `.github/workflows/relatorio-discord.yaml` muda a hora do post. Os
+// dois precisam andar juntos, senão sobra ou falta um pedaço de dia na janela.
+export const HORA_CORTE = 9;
+
 // Períodos. `modo`: 'janela' (recorte por tempo, com tendência vs. período anterior),
 // 'jogos' (últimas N partidas por jogador) ou 'tudo' (todo o histórico do alvo).
 // `emoji`/`titulo` alimentam o cabeçalho; `janela` é a descrição humana da amostra.
+//
+// Janela por `ms` (últimos N dias) x janela por `ancora` (desde o corte anterior):
+// os dois relatórios agendados são ancorados de propósito. "Últimos 3 dias" numa
+// segunda pegaria a sexta inteira — inclusive o que o post da sexta de manhã já
+// tinha contado. Ancorando em (dia da semana + HORA_CORTE), a janela da sexta
+// termina exatamente onde a da segunda começa: nada fica de fora, nada conta duas
+// vezes. `desloc` manda a comparação "período anterior" pular uma SEMANA inteira,
+// porque a referência justa desta sexta é a sexta passada, não a terça.
 export const PERIODOS = {
   semanal: { modo: 'janela', ms: 7 * DIA,  emoji: '📅', titulo: 'Relatório Semanal',          janela: 'últimos 7 dias' },
   mensal:  { modo: 'janela', ms: 30 * DIA, emoji: '🗓️', titulo: 'Relatório Mensal',           janela: 'últimos 30 dias' },
+  // Sexta de manhã: o que a tribo jogou na semana útil (desde segunda de manhã).
+  'semana-util': {
+    modo: 'janela', ancora: { dia: 1, hora: HORA_CORTE }, desloc: 7 * DIA,
+    emoji: '📅', titulo: 'Relatório da Semana', janela: 'dias desde segunda-feira'
+  },
+  // Segunda de manhã: sexta à noite + sábado + domingo (desde sexta de manhã).
+  'fim-de-semana': {
+    modo: 'janela', ancora: { dia: 5, hora: HORA_CORTE }, desloc: 7 * DIA,
+    emoji: '🎲', titulo: 'Relatório do Fim de Semana', janela: 'dias desde sexta-feira'
+  },
   '50':    { modo: 'jogos',  n: 50,        emoji: '🎯', titulo: 'Relatório — 50 jogos',       janela: 'últimos 50 jogos' },
   todos:   { modo: 'tudo',                 emoji: '📚', titulo: 'Relatório — Todos os Jogos',  janela: 'todo o histórico' }
 };
+
+// Brasília é UTC-3 fixo desde 2019 (o SQL daqui já assume isso no '-3 hours').
+const OFFSET_BRT = 3 * 3600000;
+
+// O último instante em que bateu {diaSemana} às {hora} de Brasília, olhando de
+// `agora` para trás. Se hoje É o dia e a hora ainda não chegou, volta uma semana.
+// Deslocar o epoch em -3h faz os getters UTC do Date lerem o relógio de Brasília
+// sem depender de Intl nem do fuso da máquina que roda o job.
+export function corteAnterior(agora, diaSemana, hora) {
+  const brt = Number(agora) - OFFSET_BRT;
+  const d = new Date(brt);
+  const alvoHoje = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) + hora * 3600000;
+  let recuo = (d.getUTCDay() - diaSemana + 7) % 7;
+  if (recuo === 0 && alvoHoje >= brt) recuo = 7;
+  return alvoHoje - recuo * DIA + OFFSET_BRT;
+}
+
+// Período (chave) -> a janela CONCRETA do instante em que o job rodou. Períodos de
+// "últimos N dias" passam direto; os ancorados ganham aqui o `ms` do recorte real,
+// que é o que `coletarAnalises` consome. Rodar 20 minutos atrasado só alarga a
+// janela nesses 20 minutos — o começo dela continua preso ao corte anterior.
+export function resolverJanela(periodo, agora = Date.now()) {
+  const P = PERIODOS[normalizarPeriodo(periodo)];
+  if (!P.ancora) return P;
+  const desde = corteAnterior(agora, P.ancora.dia, P.ancora.hora);
+  const ms = Math.max(3600000, agora - desde);
+  return { ...P, ms, desde: agora - ms, ate: agora, dias: Math.max(1, Math.round(ms / DIA)) };
+}
 
 // Nomes antigos ainda aceitos (workflow/env/atalhos antigos) → mapeiam pros novos.
 const ALIAS_PERIODO = { dia: 'semanal', semana: 'mensal', mes: 'mensal', geral: 'todos' };
@@ -621,11 +673,17 @@ export async function coletarAnalises({ queryRows, P, puuids, soPrem, meta, agor
   // Tendência (período anterior) + marcos @10 só fazem sentido no modo 'janela'.
   const temJanela = P.modo === 'janela';
   if (temJanela) {
-    const antesDesde = desde - P.ms;
-    const ctePrev = cteSel({ modo: 'janela', desde: antesDesde, ate: desde, puuids, queues });
+    // Quanto o "período anterior" recua. Padrão: o próprio tamanho da janela — a
+    // fatia imediatamente antes. Os relatórios ancorados pedem `desloc` de uma
+    // SEMANA: a janela comparável desta sexta é a da sexta passada (mesmos dias
+    // da semana), não os quatro dias que terminaram na segunda.
+    const desloc = P.desloc || P.ms;
+    const antesDesde = desde - desloc;
+    const antesAte = ate - desloc;
+    const ctePrev = cteSel({ modo: 'janela', desde: antesDesde, ate: antesAte, puuids, queues });
     const qAP = qAgg(ctePrev, { somentePremium: soPrem });
     const qM = sqlMarcos10(desde, ate, puuids, queues);
-    const qMP = sqlMarcos10(antesDesde, desde, puuids, queues);
+    const qMP = sqlMarcos10(antesDesde, antesAte, puuids, queues);
     promessas.push(
       queryRows(qAP.sql, qAP.params).catch(() => []),
       queryRows(qM.sql, qM.params).catch(() => []),

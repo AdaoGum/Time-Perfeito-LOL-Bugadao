@@ -18,6 +18,18 @@
       @show-udyr="$emit('show-udyr')"
     />
 
+    <!-- ALTERNADOR NO CANTO: a MESMA barra do perfil e do relatório. A Caverna virou
+         um dos quatro caminhos do JOGADOR, então ela não pode ser um beco — daqui dá
+         para pular direto para o histórico, as estatísticas ou o relatório do mesmo
+         jogador. Só aparece quando há jogador; sem isso a barra não teria para onde ir. -->
+    <AbasJogador
+      v-if="jogadorAtual.gameName && jogadorAtual.tagLine"
+      view="maestria"
+      :game-name="jogadorAtual.gameName"
+      :tag-line="jogadorAtual.tagLine"
+      :premium="store.searchProfile.hasPremium"
+    />
+
     <!-- Buscando: perfil leve + maestrias (mesmo feedback das Caçadas/Visão) -->
     <div
       v-if="carregando"
@@ -121,9 +133,16 @@ import { championByName } from '../utils/championCatalog.js';
 import { loadProfileIntoStore, loadMasteriesInBackground } from '../api.js';
 import SearchGate from './SearchGate.vue';
 import ChampionCard from './ChampionCard.vue';
+import AbasJogador from './AbasJogador.vue';
 
 const store = state;
 const route = useRoute();
+
+// O jogador desta tela: o store manda, a URL é o retrato de segurança (link direto).
+const jogadorAtual = computed(() => ({
+  gameName: store.searchProfile.gameName || (route.params.gameName ? decodeURIComponent(route.params.gameName) : ''),
+  tagLine: store.searchProfile.tagLine || (route.params.tagLine ? decodeURIComponent(route.params.tagLine) : '')
+}));
 
 // A busca aqui é leve (profile_brief) + maestrias: as duas etapas contam como "buscando".
 const carregando = computed(() => store.searchProfile.loading || store.masteryDashboard.loading);

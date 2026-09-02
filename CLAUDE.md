@@ -53,18 +53,18 @@ ficava na raiz saiu) que roda sozinho os passos MECÂNICOS: `archive-meta` → `
 
 | Rota | Tela | Observação |
 |---|---|---|
-| `/` | Home | 4 portais (espíritos do Udyr) + busca híbrida |
-| `/jogadores` | ModuleHub (players) | Hub da categoria (título clicável da sidebar) |
-| `/campeoes` | ModuleHub (champions) | Hub da categoria |
+| `/` | Home | 4 portais (espíritos do Udyr). **Sem busca** — ela vive na topbar |
+| `/jogadores` | ModuleHub (`pilar="jogador"`) | Hub do pilar (título clicável da sidebar / 1º nível da topbar) |
+| `/campeoes` | ModuleHub (`pilar="campeoes"`) | Hub do pilar |
 | `/historico[/:g/:t]` | Profile (histórico) | "Caçadas Passadas" |
 | `/analise[/:g/:t]` | Profile (estatísticas) | "Olhar Espiritual" |
-| `/profile[/:g/:t/:view?]` | Profile | Seletor Histórico↔Estatísticas |
-| `/mastery[/:g/:t]` | Mastery | "Caverna dos Monos" (busca aqui NÃO sai da tela) |
+| `/profile[/:g/:t/:view?]` | Profile | Seletor dos 4 caminhos do jogador |
+| `/mastery[/:g/:t]` | Mastery | "Caverna dos Monos" — 3ª aba do JOGADOR (busca aqui NÃO sai da tela) |
 | `/synergy` | Tribo | "Tribo Perfeita" (planejador de sinergia) |
 | `/saguaoCustom` | saguaoCustom | "Customizada 5x5" (lobby custom) |
-| `/relatorios[/:g/:t]` | RelatoriosPremium | Relatórios Premium; com o jogador na URL = tela cheia |
+| `/relatorios[/:g/:t]` | RelatoriosPremium | Relatórios Premium; com o jogador na URL = tela cheia (4ª aba do jogador) |
 | `/ancestralidade` | Ancestralidade | Painel D1 (admin, exige senha no Worker) |
-| `/meta` | MetaTierList | Tier list S/A/B/C/D por rota + WR |
+| `/meta` | MetaTierList | Tier list S/A/B/C/D por rota + WR. É o PILAR 2 inteiro (hub e página) |
 | `/champions/:championId?` | Champions | Panteão; param opcional = deep-link da ficha (modal) |
 | `/ficha/:championId` | ChampionPage | Ficha em TELA CHEIA; substitui a tela anterior (botão Voltar) |
 | `/items/:itemId?` | Items | Relíquias; param opcional = deep-link do detalhe |
@@ -81,11 +81,19 @@ cauda dela para o chunk inicial sem quebrar nada e sem ninguém perceber.
 
 ## Onde as coisas moram (front `src/`)
 
-- **`App.vue`** — layout global: topbar (com prévias por aba), **sidebar em seções**
-  (Jogadores / Campeões / Equipes, com **títulos clicáveis → hubs**), botão especial
+- **`navegacao.js`** — a **fonte ÚNICA** da árvore de telas: os 4 PILARES e as
+  PÁGINAS de cada um, com rota, `match`, ícone, descrição e as classes de cor das
+  quatro superfícies. Quem lê: `Home.vue`, a topbar e a sidebar do `App.vue` e o
+  `ModuleHub.vue`. Ver Convenções — mover tela de lugar é mexer AQUI, e só aqui.
+- **`App.vue`** — layout global: topbar de **DUAS LINHAS** (1ª: marca + busca sempre
+  visível + os 4 espíritos; 2ª, só dentro de um pilar: as páginas dele + MENU),
+  **sidebar com uma seção por pilar** (títulos clicáveis → hubs), botão especial
   laranja **Ancestralidade** no rodapé, e o **Monitor da API** minimizável
   (`ui.telemetryLevel` = tiny|mini|full). Z-index: sidebar/topbar acima do conteúdo;
   overlay de busca e fichas de detalhe acima da sidebar.
+- **`TopbarItem.vue`** — um botão da topbar + a prévia de hover (mini mockup por
+  `preview`). É componente porque as DUAS linhas usam o mesmo botão: inline no
+  `App.vue` seriam ~70 linhas escritas duas vezes.
 - **`store.js`** — estado reativo: `searchProfile`, `masteryDashboard`, `telemetry`,
   `ui` (sidebarCollapsed, telemetryLevel), **`championSheet`** (`champ` = ficha aberta;
   `origem` = para onde o Voltar da tela cheia leva) com os helpers **`abrirFicha(champ)`
@@ -135,12 +143,16 @@ cauda dela para o chunk inicial sem quebrar nada e sem ninguém perceber.
   `ModuleHub.vue` (hubs), e o **`ChampionCard.vue`**.
 - **Componentes de Jogador/Tribo:** `Home`, `Profile`, `Mastery`, `Tribo`, `saguaoCustom`,
   `Ancestralidade`, `SearchBar`, `SearchGate`, `PlayerAnalysis`, `RadarChart`, `KpiCard`,
-  `CustomSlotCard`, `FilaSelecao`, `AsyncState`.
+  `CustomSlotCard`, `FilaSelecao`, `AsyncState`, **`AbasJogador`** (a barra de abas do
+  canto — ver Convenções) e **`ModuleHub`** (o hub de um pilar, montado do
+  `navegacao.js`).
 - **Relatórios Premium:** `RelatoriosPremium.vue` (a rota — grid de cards **e** host da
   tela cheia) + `RelatorioJogador.vue` (a tela cheia, `defineAsyncComponent`).
   A tela cheia tem 4 gráficos além do dia a dia: evolução (WR acumulada + KDA),
   radar contra o `BENCH` da rota, rosca de rotas e mapa de calor dia×faixa. Todos
-  saem de dados que o Worker JÁ manda — nenhum custa requisição a mais.
+  saem de dados que o Worker JÁ manda — nenhum custa requisição a mais. "Campeões do
+  período" usa o **`ChampionCard`** (o mesmo dos cards de partida), no tamanho compacto
+  canônico; por isso a seção é de largura inteira e não meia coluna.
 
 ## Convenções que importam (não quebre)
 
@@ -206,11 +218,69 @@ cauda dela para o chunk inicial sem quebrar nada e sem ninguém perceber.
   E as duas pontas são fechadas no fuso de **Brasília** (`T00:00:00-03:00`), igual ao
   `'-3 hours'` que o SQL usa em `dias_ativos` e na série diária. `toISOString()` ali
   erraria o dia depois das 21h.
+- **A árvore de navegação mora em `src/navegacao.js`, e SÓ lá.** Os 4 pilares
+  (Jogador · Meta · Campeões · Equipes) e as páginas de cada um alimentam a Home, a
+  topbar, a sidebar e o `ModuleHub` de uma vez. Antes a mesma árvore existia copiada
+  nesses quatro lugares: mover uma tela de seção exigia lembrar dos quatro, e esquecer
+  um fazia o sistema dizer duas coisas diferentes sobre onde a tela mora. **Tela nova,
+  ou tela que muda de pilar, se resolve editando esse arquivo** — nenhuma das quatro
+  superfícies precisa saber. Cada nó carrega as classes de cor das quatro (é verboso de
+  propósito: é o que faz a Caverna ser âmbar em todo lugar). O Tailwind v4 varre `.js`,
+  então as classes escritas lá GERAM CSS normalmente — não mova para variável montada
+  em runtime, aí ele deixa de ver.
+- **A topbar tem DUAS LINHAS, uma EMBAIXO da outra — não lado a lado.** A de cima
+  (marca + busca + TEMPLO e os 4 espíritos) está **sempre** lá e não se transforma: o
+  pilar da rota fica aceso nela e os outros três seguem a um clique. A de baixo só
+  existe dentro de um pilar e traz as páginas dele. Quem manda nela é a ROTA
+  (`pilarNaTopbar = pilarDaRota(route.path)`), então chegar em `/meta` pela sidebar, por
+  um link ou por F5 abre a mesma linha que chegar pela topbar — não há estado de "nível
+  selecionado" para desencontrar. O **MENU** da linha de baixo abre o **hub** do pilar
+  (a tela que lista todas as opções dele) e some quando você já está nele — no Meta, que
+  é pilar de página única, ele nunca aparece.
+- **A altura do header é MEDIDA, não chutada.** Ela muda quando a 2ª linha aparece, e a
+  sidebar (`top`) e o `main` (`padding-top`) se apoiam nela — um `top-16` fixo erra 40px
+  com a linha aberta, e erra de novo se a nav quebrar linha numa tela estreita. Um
+  `ResizeObserver` no `<header>` alimenta `alturaHeader`; `topoAbaixoDoHeader` e
+  `paddingDoMain` (com 32px de respiro) saem daí. Pelo mesmo motivo a `<aside>` usa
+  `transition-[width,transform]` e **não** `transition-all`: com `all`, o `top` também
+  animava e a sidebar chegava 300ms atrasada toda vez que o header crescia.
+- **A busca da topbar está SEMPRE disponível**, em toda rota. Ela sumia na Home, que
+  tinha a sua própria caixa central e um morph (FLIP) que a fazia "subir" até a topbar
+  ao pesquisar. A Home perdeu a caixa (os portais ficaram maiores no lugar dela), então
+  o morph e o `flipMorph` saíram junto: existe UM lugar de buscar, e ele não se move.
+- **As quatro telas do jogador são ABAS de um lugar só, e a barra é UMA.**
+  `AbasJogador.vue` (Histórico / Estatísticas / Maestrias / Relatório + a seta do
+  seletor) é montada pelo `Profile.vue`, pelo `Mastery.vue` E pelo `RelatorioJogador.vue`
+  — as mesmas quatro opções, na mesma ordem, do seletor de `/profile`. Cada aba é uma
+  ROTA de verdade (`/historico`, `/analise`, `/mastery`, `/relatorios`), então o link
+  continua compartilhável e o F5 cai onde estava — não é estado interno de tela nenhuma.
+  A aba de Relatório só liga com `premium` (no perfil e na Caverna vem de
+  `store.searchProfile.hasPremium`; na tela de relatório é sempre true, porque a lista só
+  traz premium); sem isso ela aparece APAGADA com o motivo no `title`, e no seletor o
+  cartão ganha um selo de cadeado — em vez de sumir sem explicação. Tela nova do jogador
+  entra na barra, senão vira beco: foi por isso que a Caverna ganhou a barra quando a
+  maestria deixou de ser portal próprio.
 - **O post do Discord é um TEASER, não o relatório.** Desde set/2026 é um card curto
   por jogador (nome, poucos KPIs por fila, @menção e o **link** para `/relatorios`),
   em vez das duas mensagens gordas com prosa e cinco quadros. O detalhe mora no site.
   `SITE_URL` (env, default `https://ugabugatimeperfeito.bugadao.com`) monta o link,
   e `PRESET_DO_PERIODO` traduz o período do post no preset da tela.
+- **Os dois posts agendados têm janela ANCORADA, e elas ENCAIXAM.** São 09:00 BRT de
+  **segunda** (`fim-de-semana`: desde a última sexta 09:00) e de **sexta** (`semana-util`:
+  desde a última segunda 09:00). Não é "últimos N dias": numa segunda, "últimos 3 dias"
+  pegaria a sexta inteira — inclusive o que o post da sexta de manhã já tinha contado.
+  Com a âncora, a janela de uma termina exatamente onde a da outra começa: nada fica
+  de fora, nada conta duas vezes. A hora do corte é `HORA_CORTE` em
+  `shared/relatorio-metricas.js` e **precisa bater com o cron** do
+  `.github/workflows/relatorio-discord.yaml` — mexer só num dos dois abre (ou repete) uma
+  manhã de partidas. Esses períodos também usam `desloc: 7 dias`, então "contra o período
+  anterior" é a MESMA janela da semana passada, e o link do card vai como intervalo livre
+  (`preset=outro&de&ate`), o único filtro da tela capaz de dizer "de sexta a segunda".
+- **Post individual = alvo de UM jogador.** O campo "Jogador (Nome#Tag)" do Run workflow
+  (env `JOGADOR`, ex-`PUUIDS`) manda; vazio = a rodada normal da tribo. Quando o seletor
+  resolve para **um** jogador, o post perde o cabeçalho da tribo e o card se apresenta
+  ("Relatório individual"). Quem decide é o TAMANHO do alvo, não o formato digitado —
+  um prefixo (`UGA`) que pega cinco pessoas segue sendo post de grupo.
 - **NUNCA `INSERT OR REPLACE` em `partidas` ou `estatisticas_jogador_partida`.**
   REPLACE é DELETE + INSERT, o D1 roda com `PRAGMA foreign_keys = 1` e existe a cadeia
   `partidas → estatisticas_jogador_partida → estatisticas_jogador_marcos`, toda

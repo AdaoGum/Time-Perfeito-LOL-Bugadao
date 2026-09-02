@@ -69,8 +69,12 @@ sobre o Data Dragon + arquivos estáticos do repo — sem tocar no Worker nem ga
 ### 🔎 Transversal
 - **Busca híbrida:** o `SearchBar` aceita jogador (`Nome#TAG`) **e** campeão no mesmo
   campo (prop `context`: players/champions/global — global mostra até 6, ideal 3+3).
-- **Navegação temática:** sidebar em seções com **títulos clicáveis** (hubs de Jogadores
-  e Campeões), prévias nas abas da topbar, e Home com 4 portais (espíritos do Udyr).
+- **Navegação temática, e toda ela desenhada do mesmo arquivo** ([`src/navegacao.js`](src/navegacao.js)):
+  Home com 4 portais (os espíritos do Udyr — **Jogador · Meta · Campeões · Equipes**),
+  sidebar com uma seção por pilar e **títulos clicáveis** (os hubs), e uma topbar de
+  **duas linhas** — a de cima espelha os portais e está sempre lá; a de baixo mostra as
+  páginas do pilar em que você está, acompanhando a rota navegada. A busca fica
+  **sempre** na topbar.
 - **Coleta contínua:** job noturno que ingere o histórico e extrai *snapshots* da
   timeline nos minutos-chave (Marcos Temporais) para gráficos de evolução.
 - **Monitor de API:** widget minimizável que monitora o rate limit da Riot (janela
@@ -266,18 +270,35 @@ explícita de `PUUIDS` (run manual) é escape hatch e ignora o filtro premium.
   sincronizadas, e por isso o intervalo pode ser qualquer um.
 - Job: [`cron/relatorio-discord.js`](cron/relatorio-discord.js).
 - Agendamento: [`.github/workflows/relatorio-discord.yaml`](.github/workflows/relatorio-discord.yaml)
-  — **semanal todo dia às 19:00 BRT** (últimos 7 dias) e **mensal toda sexta às 19:00 BRT**
-  (últimos 30 dias). Só Ranked (Solo + Flex). O sync roda 04:00 e 17:30 BRT.
-- **Janela de análise (`PERIODO`):** `semanal` = últimos 7 dias · `mensal` = últimos 30 dias
-  · `50` = últimas 50 partidas por jogador · `todos` = todo o histórico. (`50`/`todos` não
-  têm tendência, por não serem recorte de tempo.) Os nomes antigos (`dia`/`semana`/`mes`/`geral`)
-  ainda funcionam como aliases.
+  — **dois posts por semana, às 09:00 BRT**: **segunda** (`fim-de-semana`: sexta de manhã →
+  segunda de manhã) e **sexta** (`semana-util`: segunda de manhã → sexta de manhã). Só
+  Ranked (Solo + Flex). O sync roda 04:00 e 17:30 BRT todo dia, mais 07:00 BRT em segunda e
+  sexta — é ele que fecha os dados que o post das 09:00 vai ler.
+- **Janela de análise (`PERIODO`):**
+  - **Ancorada** (as agendadas): `semana-util` = desde a última segunda 09:00 BRT ·
+    `fim-de-semana` = desde a última sexta 09:00 BRT. Elas **encaixam**: a janela da sexta
+    termina exatamente onde a da segunda começa, então nenhuma partida fica de fora nem é
+    contada duas vezes. A hora do corte é a constante `HORA_CORTE` em
+    [`shared/relatorio-metricas.js`](shared/relatorio-metricas.js) e precisa bater com o
+    cron do workflow. A tendência dessas duas compara com a **mesma janela da semana
+    anterior** (`desloc`), não com os N dias imediatamente antes.
+  - **Relativa:** `semanal` = últimos 7 dias · `mensal` = últimos 30 dias ·
+    `50` = últimas 50 partidas por jogador · `todos` = todo o histórico. (`50`/`todos` não
+    têm tendência, por não serem recorte de tempo.) Os nomes antigos
+    (`dia`/`semana`/`mes`/`geral`) ainda funcionam como aliases.
 - **Fila (`FILA`):** `ambas` (default) põe **uma linha de cada fila** no card do jogador
   (Solo/Duo e depois Flex) · `solo` = só Ranked Solo/Duo · `flex` = só Ranked Flex.
-- **Seletor (`PUUIDS`):** vazio = **só premium** · lista de puuids = exatamente esses ·
-  **`Nome#Tag`** (ex.: `UGA Fulano#2109`) = match **exato** por nome+tag (imune a nick
-  duplicado) · **prefixo de nick** (ex.: `UGA`) = todos cujo game_name começa com isso.
-  Tudo ignora o filtro premium; dá para misturar `Nome#Tag` e prefixos na mesma lista.
+- **Seletor (`JOGADOR`, ex-`PUUIDS` — os dois envs ainda são lidos):** vazio = **só
+  premium** · lista de puuids = exatamente esses · **`Nome#Tag`** (ex.: `UGA Fulano#2109`)
+  = match **exato** por nome+tag (imune a nick duplicado) · **prefixo de nick** (ex.: `UGA`)
+  = todos cujo game_name começa com isso. Tudo ignora o filtro premium; dá para misturar
+  `Nome#Tag` e prefixos na mesma lista. No Actions é o campo **"Jogador (Nome#Tag)"** do
+  Run workflow — deixar vazio posta a rodada normal da tribo.
+- **Post individual:** quando o seletor cai em **UM** jogador só, o post vira um **card
+  avulso**: sem o cabeçalho da tribo, com uma linha dizendo que ele saiu fora da rodada e
+  o rodapé marcado como "pedido avulso". O que decide é o **tamanho do alvo**, não o
+  formato do que foi digitado — um prefixo que pega cinco pessoas segue sendo post de
+  grupo.
 - **Cabeçalho** (1ª mensagem): período, filas cobertas, **nº de partidas avaliadas por fila**
   (e total) e a **data da primeira/última partida** da amostra.
 - **Card do jogador** (uma mensagem por jogador): o post é um **teaser**, não o relatório.
@@ -297,9 +318,14 @@ DRY_RUN=1 PERIODO=mensal node --env-file=local/.env cron/relatorio-discord.js
 # Postar de verdade (precisa DISCORD_WEBHOOK no local/.env):
 PERIODO=semanal node --env-file=local/.env cron/relatorio-discord.js
 
-# Alvo específico (puuids OU prefixo de nick) e outras janelas:
-PUUIDS="UGA" PERIODO=50 node --env-file=local/.env cron/relatorio-discord.js   # todos "UGA", últimas 50
-PERIODO=todos node --env-file=local/.env cron/relatorio-discord.js             # premium, todo o histórico
+# Alvo específico (Nome#Tag, puuids OU prefixo de nick) e outras janelas:
+JOGADOR="UGA Fulano#2109" node --env-file=local/.env cron/relatorio-discord.js  # card individual
+JOGADOR="UGA" PERIODO=50 node --env-file=local/.env cron/relatorio-discord.js   # todos "UGA", últimas 50
+PERIODO=todos node --env-file=local/.env cron/relatorio-discord.js              # premium, todo o histórico
+
+# As janelas agendadas, do jeito que o cron manda (dá para simular a qualquer hora):
+DRY_RUN=1 PERIODO=fim-de-semana node --env-file=local/.env cron/relatorio-discord.js
+DRY_RUN=1 PERIODO=semana-util   node --env-file=local/.env cron/relatorio-discord.js
 
 # Só uma fila (Solo OU Flex):
 DRY_RUN=1 FILA=solo PERIODO=mensal node --env-file=local/.env cron/relatorio-discord.js   # só Solo/Duo
@@ -409,8 +435,9 @@ O Panteão, as Relíquias e o Meta rodam **inteiramente no navegador**, sobre o 
 ```
 CLAUDE.md            Resumo do sistema para IAs (onboarding rápido)
 src/                 Front-end Vue
-  App.vue            Layout global: topbar (com prévias), sidebar em seções, monitor de API
-  Router.js          Rotas (jogador, campeões, hubs, tribo)
+  App.vue            Layout global: topbar em 2 linhas (com prévias), sidebar por pilar, monitor de API
+  navegacao.js       Fonte ÚNICA da árvore de telas (4 pilares x páginas) — Home, topbar, sidebar e hubs
+  Router.js          Rotas (jogador, meta, campeões, hubs, tribo)
   store.js           Estado reativo (searchProfile, staticData, telemetry, ui)
   api.js             Cliente do Worker + telemetria de rate limit
   utils.js           WORKER_URL, Data Dragon, helpers de imagem (incl. roleIconImage oficial)
@@ -449,8 +476,8 @@ public/ dist/        Assets estáticos e build
 |---|---|---|
 | [`deploy.yml`](.github/workflows/deploy.yml) | push na `main` / manual | Build do Vue e publish no **GitHub Pages**. |
 | [`deploy-worker.yaml`](.github/workflows/deploy-worker.yaml) | mudança em `worker.js`/`wrangler.toml` / manual | Publica o **Worker** na Cloudflare (Wrangler). |
-| [`riot-sync.yaml`](.github/workflows/riot-sync.yaml) | 04:00 e 17:30 BRT / manual | Roda o **coletor** (`cron/sync.js`) e sobe os logs como artefato. |
-| [`relatorio-discord.yaml`](.github/workflows/relatorio-discord.yaml) | 19:00 BRT diário (semanal) + sexta (mensal) / manual | Posta o **relatório da Tribo** no Discord. |
+| [`riot-sync.yaml`](.github/workflows/riot-sync.yaml) | 04:00 e 17:30 BRT diário + 07:00 BRT seg/sex / manual | Roda o **coletor** (`cron/sync.js`) e sobe os logs como artefato. |
+| [`relatorio-discord.yaml`](.github/workflows/relatorio-discord.yaml) | 09:00 BRT segunda (fim de semana) e sexta (semana útil) / manual | Posta o **relatório da Tribo** no Discord — ou o card de um jogador só, pelo campo "Jogador". |
 
 > Secrets usados: `RIOT_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`,
 > `D1_DATABASE_ID`, `DISCORD_WEBHOOK` (e `DISCORD_USER_MAP` opcional).

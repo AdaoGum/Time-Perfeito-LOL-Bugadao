@@ -1,23 +1,46 @@
 name: Relatorio Tribo Discord
 
+# ---------------------------------------------------------------------------
+# DOIS posts por semana, sempre às 09:00 de Brasília (12:00 UTC):
+#
+#   segunda  ->  fim-de-semana : sexta de manhã -> segunda de manhã
+#                (a sexta à noite, o sábado e o domingo inteiros)
+#   sexta    ->  semana-util   : segunda de manhã -> sexta de manhã
+#
+# As duas janelas ENCAIXAM: a da sexta termina exatamente onde a da segunda
+# começa. Quem define o recorte não é o cron, é o `ancora` do período (ver
+# PERIODOS em shared/relatorio-metricas.js) — o cron só escolhe a hora do post.
+# Mudar o horário aqui pede mudar HORA_CORTE lá, senão sobra (ou falta) um
+# pedaço de manhã entre um relatório e o outro.
+#
+# 09:00 e não 07:00: o sync das 04:00 BRT já fechou a madrugada, o de 07:00 BRT
+# (seg/sex) encosta o que ficou, e às 09:00 o pessoal está acordado para ler.
+# ---------------------------------------------------------------------------
 on:
   schedule:
-    - cron: '0 22 * * *'    # semanal → todo dia 19:00 Brasília (UTC-3), últimos 7 dias
-    - cron: '0 22 * * 5'    # mensal  → toda sexta 19:00 BRT, últimos 30 dias
+    - cron: '0 12 * * 1'    # segunda 09:00 BRT -> fim de semana (sex manhã -> seg manhã)
+    - cron: '0 12 * * 5'    # sexta   09:00 BRT -> semana útil   (seg manhã -> sex manhã)
   workflow_dispatch:
     inputs:
+      jogador:
+        description: 'Jogador (Nome#Tag). VAZIO = post normal da tribo, igual ao agendado.'
+        default: ''
       periodo:
         description: 'Janela de análise'
         type: choice
         options:
-          - semanal  # últimos 7 dias
-          - mensal   # últimos 30 dias
-          - '50'     # últimas 50 partidas por jogador
-          - todos    # todo o histórico
+          - semanal         # últimos 7 dias
+          - semana-util     # desde segunda 09:00 (o mesmo do post de sexta)
+          - fim-de-semana   # desde sexta 09:00   (o mesmo do post de segunda)
+          - mensal          # últimos 30 dias
+          - '50'            # últimas 50 partidas por jogador
+          - todos           # todo o histórico
         default: semanal
-      puuids:
-        description: 'Alvo: vazio = premium | puuids (vírgula) | Nome#Tag exato (ex: UGA Fulano#2109) | prefixo de nick (ex: UGA)'
-        default: ''
+      fila:
+        description: 'Filas cobertas'
+        type: choice
+        options: [ambas, solo, flex]
+        default: ambas
 
 jobs:
   relatorio:
@@ -31,9 +54,7 @@ jobs:
         with:
           node-version: 20
 
-      # Descobre o período a partir de QUAL cron disparou (ou do input manual).
-      # Na sexta os dois crons batem 22:00 UTC → o Actions dispara o workflow duas
-      # vezes (uma por schedule), então saem semanal E mensal.
+      # Período: no agendado vem de QUAL cron disparou; no manual, do input.
       - name: Definir periodo
         id: periodo
         run: |
@@ -41,8 +62,8 @@ jobs:
             echo "valor=${{ github.event.inputs.periodo }}" >> "$GITHUB_OUTPUT"
           else
             case "${{ github.event.schedule }}" in
-              "0 22 * * 5") echo "valor=mensal"  >> "$GITHUB_OUTPUT" ;;
-              *)            echo "valor=semanal" >> "$GITHUB_OUTPUT" ;;
+              "0 12 * * 5") echo "valor=semana-util"   >> "$GITHUB_OUTPUT" ;;
+              *)            echo "valor=fim-de-semana" >> "$GITHUB_OUTPUT" ;;
             esac
           fi
 
@@ -50,7 +71,11 @@ jobs:
         run: node cron/relatorio-discord.js
         env:
           PERIODO: ${{ steps.periodo.outputs.valor }}
-          PUUIDS: ${{ github.event.inputs.puuids }}
+          FILA: ${{ github.event.inputs.fila }}
+          # Vazio = a tribo inteira (premium). Com "Nome#Tag" o post vira um card
+          # individual, sem o cabeçalho da tribo. Aceita também puuid ou um
+          # prefixo de nick ("UGA"), que continua sendo um post de grupo.
+          JOGADOR: ${{ github.event.inputs.jogador }}
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           DISCORD_USER_MAP: ${{ secrets.DISCORD_USER_MAP }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

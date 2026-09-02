@@ -7,8 +7,8 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import {
   DIA, SQL_PREMIUM_HISTORICO, SQL_PREMIUM_JOGADORES, coletarAnalises, cteSel,
-  diaParaEpoch, parseMetaTiers, periodoIntervalo, qSerieDiaria, sqlPremiumAtividade,
-  sugerirDoMeta
+  diaParaEpoch, parseMetaTiers, periodoIntervalo, qSerieDiaria, resolverJanela,
+  sqlPremiumAtividade, sugerirDoMeta
 } from '../../../shared/relatorio-metricas.js';
 import { gerarProsa } from '../../../shared/relatorio-prosa.js';
 
@@ -113,6 +113,22 @@ test('periodoIntervalo: a tendência compara com a janela de MESMO tamanho logo 
   const [, anterior] = agregadas(chamadas);
   assert.equal(anterior.params[1], desde);              // termina onde o atual começa
   assert.equal(desde - anterior.params[0], 7 * DIA);    // e tem os mesmos 7 dias
+});
+
+test('desloc: o período ancorado compara com a MESMA janela da semana passada', async () => {
+  const sexta9h = Date.parse('2026-09-11T12:00:00Z');
+  const P = resolverJanela('semana-util', sexta9h);   // segunda 09h -> sexta 09h
+  const chamadas = [];
+  await coletarAnalises({
+    queryRows: fakeQuery(chamadas), P, puuids: ['P1'],
+    soPrem: false, meta: null, agora: sexta9h, queues: [420], filaChave: 'solo'
+  });
+  const [atual, anterior] = agregadas(chamadas);
+  // A comparação recua 7 dias INTEIROS (a semana útil passada), e não os 4 dias da
+  // janela — que jogariam a referência em cima de uma quinta e de um domingo.
+  assert.equal(atual.params[0] - anterior.params[0], 7 * DIA);
+  assert.equal(atual.params[1] - anterior.params[1], 7 * DIA);
+  assert.equal(anterior.params[1] - anterior.params[0], atual.params[1] - atual.params[0]);
 });
 
 test('periodoIntervalo: rótulo da janela mostra a data final que o usuário escolheu', () => {

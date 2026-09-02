@@ -30,29 +30,17 @@
     </template>
 
     <template v-else>
-      <!-- ALTERNADOR NO CANTO: Histórico ↔ Estatísticas (só nas páginas internas) -->
-      <div v-if="view !== 'seletor'" class="sticky top-2 z-40 -mb-3 flex justify-end">
-        <div class="flex gap-1 rounded-xl border border-slate-700 bg-slate-950/95 p-1 shadow-2xl backdrop-blur">
-          <button
-            type="button"
-            @click="goView('')"
-            title="Voltar ao seletor do perfil"
-            class="rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-400 transition hover:text-slate-200"
-          ><i class="fa-solid fa-arrow-left"></i></button>
-          <button
-            type="button"
-            @click="goView('historico')"
-            class="rounded-lg px-3 py-1.5 text-xs font-bold transition"
-            :class="view === 'historico' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
-          ><i class="fa-solid fa-scroll mr-1"></i> Histórico</button>
-          <button
-            type="button"
-            @click="goView('estatisticas')"
-            class="rounded-lg px-3 py-1.5 text-xs font-bold transition"
-            :class="view === 'estatisticas' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
-          ><i class="fa-solid fa-chart-simple mr-1"></i> Estatísticas</button>
-        </div>
-      </div>
+      <!-- ALTERNADOR NO CANTO: Histórico ↔ Estatísticas ↔ Relatório. O componente é
+           o MESMO que a tela do Relatório Premium monta — é ele que faz as três
+           telas do jogador se comportarem como abas de um lugar só, e não como
+           três destinos que só a sidebar liga. -->
+      <AbasJogador
+        v-if="view !== 'seletor'"
+        :view="view"
+        :game-name="jogadorAtual.gameName"
+        :tag-line="jogadorAtual.tagLine"
+        :premium="store.searchProfile.hasPremium"
+      />
 
       <!-- LINHA 1: PERFIL (2/3) + COMPANHEIROS DE BATALHA (1/3) — seletor e histórico.
            Na página de Estatísticas entra o card SIMPLES logo abaixo. -->
@@ -279,8 +267,9 @@
         </button>
       </section>
 
-      <!-- SELETOR: dois caminhos — Histórico ou Estatísticas -->
-      <div v-if="view === 'seletor'" class="grid gap-4 sm:grid-cols-2">
+      <!-- SELETOR: os quatro caminhos do jogador. A MESMA lista (e a mesma ordem)
+           da barra de abas do canto — o seletor é a barra antes de você escolher. -->
+      <div v-if="view === 'seletor'" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <button
           type="button"
           @click="goView('historico')"
@@ -302,6 +291,51 @@
           </span>
           <span class="text-lg font-black text-slate-100">Estatísticas do Jogador</span>
           <span class="text-center text-xs font-medium text-slate-400">Gráficos, radar, rotas, campeões e tendências sobre todo o histórico.</span>
+        </button>
+        <!-- Caverna dos Monos: a maestria passou a ser um caminho do JOGADOR (antes
+             era um portal próprio na Home). Mesma cor âmbar de sempre. -->
+        <button
+          type="button"
+          @click="goView('maestria')"
+          class="group flex flex-col items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-8 shadow-xl backdrop-blur-sm transition hover:border-amber-500/60 hover:bg-slate-800/60"
+        >
+          <span class="flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-800/50 bg-amber-950/40 text-2xl text-amber-400 transition group-hover:scale-110">
+            <i class="fa-solid fa-trophy"></i>
+          </span>
+          <span class="text-lg font-black text-slate-100">Caverna dos Monos</span>
+          <span class="text-center text-xs font-medium text-slate-400">Ranking de maestrias: nível, pontos e os campeões mais dominados.</span>
+        </button>
+        <!-- Relatório: ÚLTIMO e só para premium (é quem o coletor sincroniza — sem
+             sincronização não há o que agregar). O selo PREMIUM diz isso de cara;
+             para os outros o cartão fica apagado, com o motivo, em vez de sumir. -->
+        <button
+          type="button"
+          :disabled="!store.searchProfile.hasPremium"
+          :title="store.searchProfile.hasPremium ? 'Abrir o Relatório Premium' : 'Só jogador premium tem relatório.'"
+          @click="goView('relatorio')"
+          class="group relative flex flex-col items-center gap-3 rounded-2xl border p-8 shadow-xl backdrop-blur-sm transition disabled:cursor-not-allowed disabled:border-slate-800 disabled:bg-slate-900/80 disabled:opacity-50"
+          :class="store.searchProfile.hasPremium
+            ? 'border-emerald-600/60 bg-gradient-to-br from-emerald-950/60 via-slate-900/80 to-slate-950 hover:border-emerald-400 hover:shadow-[0_0_35px_rgba(16,185,129,0.25)]'
+            : 'border-slate-800 bg-slate-900/80'"
+        >
+          <span
+            class="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider"
+            :class="store.searchProfile.hasPremium
+              ? 'border-emerald-500/70 bg-emerald-500/15 text-emerald-300'
+              : 'border-slate-700 bg-slate-950 text-slate-500'"
+          >
+            <i class="fa-solid" :class="store.searchProfile.hasPremium ? 'fa-certificate' : 'fa-lock'"></i>
+            Premium
+          </span>
+          <span class="flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-800/50 bg-emerald-950/40 text-2xl text-emerald-400 transition group-hover:scale-110 group-disabled:scale-100">
+            <i class="fa-solid fa-file-invoice"></i>
+          </span>
+          <span class="text-lg font-black text-slate-100">Relatório Premium</span>
+          <span class="text-center text-xs font-medium text-slate-400">
+            {{ store.searchProfile.hasPremium
+              ? 'O relatório do Cronista com filtro de período, prosa e gráficos.'
+              : 'Este jogador não é premium — só quem o coletor sincroniza tem relatório.' }}
+          </span>
         </button>
       </div>
 
@@ -551,6 +585,7 @@ import { loadProfileIntoStore, fetchRecentMatches } from '../api.js';
 import SearchGate from './SearchGate.vue';
 import PlayerAnalysis from './PlayerAnalysis.vue';
 import ChampionCard from './ChampionCard.vue';
+import AbasJogador from './AbasJogador.vue';
 
 const store = state;
 
@@ -575,14 +610,24 @@ const gateTitle = computed(() => {
   return 'UGA! Perfil do Jogador';
 });
 
-// Cada visão tem sua rota dedicada (Caçada/Visão); o seletor mora no /profile.
+// O jogador desta tela: o store manda (é ele que a busca preenche) e a URL é o
+// retrato de segurança — link direto e F5 chegam aqui antes de o store carregar.
+const jogadorAtual = computed(() => ({
+  gameName: store.searchProfile.gameName || (route.params.gameName ? decodeURIComponent(route.params.gameName) : ''),
+  tagLine: store.searchProfile.tagLine || (route.params.tagLine ? decodeURIComponent(route.params.tagLine) : '')
+}));
+
+// Cada visão tem sua rota dedicada (Caçada/Visão/Relatório); o seletor mora no
+// /profile. A barra de abas do canto faz o mesmo trajeto por conta própria — aqui
+// é o que os cartões grandes do seletor usam.
 function goView(v) {
-  const gn = store.searchProfile.gameName || route.params.gameName || '';
-  const tl = store.searchProfile.tagLine || route.params.tagLine || '';
+  const { gameName: gn, tagLine: tl } = jogadorAtual.value;
   if (!gn || !tl) return;
   const enc = (s) => encodeURIComponent(s);
   if (v === 'historico') router.push(`/historico/${enc(gn)}/${enc(tl)}`);
   else if (v === 'estatisticas') router.push(`/analise/${enc(gn)}/${enc(tl)}`);
+  else if (v === 'maestria') router.push(`/mastery/${enc(gn)}/${enc(tl)}`);
+  else if (v === 'relatorio') router.push(`/relatorios/${enc(gn)}/${enc(tl)}`);
   else router.push(`/profile/${enc(gn)}/${enc(tl)}`); // seletor
 }
 

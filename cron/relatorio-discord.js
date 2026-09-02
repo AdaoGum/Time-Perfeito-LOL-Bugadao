@@ -4,8 +4,12 @@
 // Lê as partidas já salvas no D1 (o cron/sync.js popula antes), monta o relatório
 // pelo motor compartilhado (cron/lib/relatorio-engine.js) e posta num webhook.
 //
-// PERIODO = semanal | mensal | 50 | todos  (default: semanal; aceita nomes antigos)
+// PERIODO = semana-util | fim-de-semana | semanal | mensal | 50 | todos
+//           (default: semanal; os dois primeiros são os AGENDADOS — janela ancorada
+//            no corte anterior, ver PERIODOS em shared/relatorio-metricas.js)
 // FILA    = solo | flex | ambas  (default: ambas → um card por jogador com as duas)
+// JOGADOR = "Nome#Tag" de UM jogador → post individual (sem cabeçalho da tribo).
+//           Vazio = a rodada normal, com todo mundo que é premium.
 //
 // Local:  PERIODO=mensal node --env-file=local/.env cron/relatorio-discord.js
 // Actions: envs vêm dos secrets (ver .github/workflows/relatorio-discord.yaml)
@@ -45,18 +49,24 @@ function lerUserMap() {
   catch { console.warn('⚠️  DISCORD_USER_MAP não é JSON válido — ignorado.'); return null; }
 }
 
-// Resolve o env PUUIDS (o "seletor"):
+// Resolve o env JOGADOR/PUUIDS (o "seletor"):
 //   vazio                    -> null  (relatório só dos premium)
 //   puuids (>=40 chars/token)-> a lista exata (escape hatch, ignora premium)
 //   "Nome#Tag" (tem '#')     -> match EXATO por nome+tag (nick sozinho pode duplicar)
 //   prefixo de nick (curto)  -> LIKE 'prefixo%' no game_name (ex.: "UGA" pega todos os UGA)
+//
+// Devolve { puuids, individual, rotulo }. `individual` liga quando o seletor caiu
+// em UM jogador só: é o caso do campo "jogador" do Actions, e é ele que troca o
+// post da tribo por um card avulso. Um prefixo que pega cinco pessoas continua
+// sendo um post de grupo — o que decide é o tamanho do alvo, não o formato do que
+// foi digitado.
 async function resolverAlvo() {
-  const raw = (process.env.PUUIDS || '').trim();
+  const raw = (process.env.JOGADOR || process.env.PUUIDS || '').trim();
   if (!raw) return null;
   const tokens = raw.split(',').map(s => s.trim()).filter(Boolean);
   if (tokens.some(t => t.length >= 40)) {
     console.log(`🎯 Alvo: ${tokens.length} puuid(s) explícito(s).`);
-    return tokens;
+    return { puuids: tokens, individual: tokens.length === 1, rotulo: tokens.length === 1 ? tokens[0].slice(0, 8) : '' };
   }
 
   // Tokens "Nome#Tag": match exato (nome E tag), imune a nick duplicado.
@@ -92,8 +102,14 @@ async function resolverAlvo() {
   const unicos = rows.filter(r => !vistos.has(r.puuid) && vistos.add(r.puuid));
 
   console.log(`🎯 Alvo "${raw}": ${unicos.length} jogador(es)${unicos.length ? ' → ' + unicos.map(r => `${r.game_name}#${r.tag_line}`).join(', ') : ''}.`);
-  // Sem match: sentinela pra dar relatório vazio (NÃO cair pro filtro premium).
-  return unicos.length ? unicos.map(r => r.puuid) : ['__nenhum__'];
+  // Sem match: sentinela pra dar relatório vazio (NÃO cair pro filtro premium) —
+  // e como quem pediu digitou UM nome, o aviso de vazio sai nominal.
+  if (!unicos.length) return { puuids: ['__nenhum__'], individual: true, rotulo: raw };
+  return {
+    puuids: unicos.map(r => r.puuid),
+    individual: unicos.length === 1,
+    rotulo: unicos.length === 1 ? `${unicos[0].game_name}#${unicos[0].tag_line}` : ''
+  };
 }
 
 (async () => {
@@ -108,20 +124,28 @@ async function resolverAlvo() {
   }
 
   console.log('=========================================================');
-  console.log(`📜 [CRONISTA] Relatório "${PERIODO}" da tribo (fila: ${FILA})`);
+  console.log(`📜 [CRONISTA] Relatório "${PERIODO}" (fila: ${FILA})`);
   console.log('=========================================================');
 
   // Seletor: vazio = premium; puuids = esses; prefixo de nick = LIKE (ex.: "UGA").
-  const puuids = await resolverAlvo();
+  const alvo = await resolverAlvo();
+  if (alvo?.individual) console.log(`👤 Post INDIVIDUAL (só ${alvo.rotulo}) — sem cabeçalho da tribo.`);
 
-  const { mensagens, ativos } = await gerarRelatorio({
+  const { mensagens, ativos, janela } = await gerarRelatorio({
     queryRows: queryD1,
     periodo: PERIODO,
     fila: FILA,
-    puuids,
+    puuids: alvo?.puuids || null,
+    individual: !!alvo?.individual,
+    rotuloAlvo: alvo?.rotulo || '',
     metaCsv: lerMetaCsv(),
     userMap: lerUserMap()
   });
+
+  if (janela?.desde) {
+    const fmt = (ms) => new Date(ms).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    console.log(`🕘 Janela: ${fmt(janela.desde)} → ${fmt(janela.ate)} (${janela.rotulo}).`);
+  }
 
   console.log(`📋 ${ativos} jogador(es) ativo(s) no período. ${mensagens.length} mensagem(ns).`);
 

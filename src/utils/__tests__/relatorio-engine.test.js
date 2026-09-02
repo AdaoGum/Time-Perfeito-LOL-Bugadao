@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  gerarRelatorio, parseMetaTiers, resolverFilas, normalizarPeriodo, nomeCampeao, FILAS
+  gerarRelatorio, parseMetaTiers, resolverFilas, normalizarPeriodo, nomeCampeao, FILAS,
+  corteAnterior, resolverJanela
 } from '../../../cron/lib/relatorio-engine.js';
 
 // queryRows falso: devolve a forma certa conforme o SQL; separa Solo (420) x Flex (440).
@@ -248,4 +249,102 @@ test('gerarRelatorio: ninguém jogou vira uma mensagem "ninguém jogou"', async 
   const r = await gerarRelatorio({ queryRows: fakeQuery(vazio), periodo: 'semanal', fila: 'ambas', somentePremium: false });
   assert.equal(r.ativos, 0);
   assert.ok(r.mensagens.some(m => m.content && /ninguém/.test(m.content)), 'sai um aviso de vazio');
+});
+
+// ---------------------------------------------------------------------------
+// OS DOIS POSTS AGENDADOS (set/2026) — janela ANCORADA no corte anterior.
+// O que se testa aqui não é o número de dias por si: é o ENCAIXE. Se a janela da
+// sexta não começar exatamente onde a da segunda terminou, ou fica um buraco (uma
+// manhã de jogos que nenhum post conta) ou uma sobreposição (a mesma partida
+// contada duas vezes, em dois relatórios seguidos).
+// ---------------------------------------------------------------------------
+const SEG_9H = T('2026-09-07T12:00:00Z');   // segunda, 09:00 de Brasília
+const SEX_9H = T('2026-09-11T12:00:00Z');   // sexta,   09:00 de Brasília
+
+test('as janelas de segunda e sexta se encaixam: sem buraco e sem sobreposição', () => {
+  const fds = resolverJanela('fim-de-semana', SEG_9H);
+  const util = resolverJanela('semana-util', SEX_9H);
+  assert.equal(fds.dias, 3, 'o post de segunda cobre sexta de manhã -> segunda de manhã');
+  assert.equal(util.dias, 4, 'o post de sexta cobre segunda de manhã -> sexta de manhã');
+  assert.equal(fds.ate, SEG_9H);
+  assert.equal(util.desde, SEG_9H, 'a janela da sexta começa onde a da segunda terminou');
+});
+
+test('rodar atrasado alarga a janela pelo fim, sem mexer no começo', () => {
+  const atrasado = SEG_9H + 37 * 60000;    // o Actions raramente dispara no minuto
+  const noHorario = resolverJanela('fim-de-semana', SEG_9H);
+  const tardio = resolverJanela('fim-de-semana', atrasado);
+  assert.equal(tardio.desde, noHorario.desde, 'o corte anterior é o mesmo');
+  assert.equal(tardio.ate, atrasado, 'e a janela vai até o instante do post');
+});
+
+test('corteAnterior: no próprio dia, antes da hora, volta uma semana', () => {
+  const segCedo = T('2026-09-07T10:00:00Z');           // segunda, 07:00 BRT
+  assert.equal(corteAnterior(segCedo, 1, 9), T('2026-08-31T12:00:00Z'));
+  // Depois da hora, é o corte de hoje mesmo.
+  assert.equal(corteAnterior(SEG_9H + 3600000, 1, 9), SEG_9H);
+});
+
+test('período de "últimos N dias" não ganha âncora nenhuma', () => {
+  const P = resolverJanela('semanal', SEG_9H);
+  assert.equal(P.ms, 7 * 86400000);
+  assert.equal(P.desde, undefined, 'janela relativa não carrega datas fixas');
+});
+
+test('período ancorado: o link leva o intervalo exato para a tela', async () => {
+  const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo: 'fim-de-semana', agora: SEG_9H });
+  const url = new URL(cardDe(r, 'UGA Teste').url);
+  assert.equal(url.searchParams.get('preset'), 'outro', 'só o intervalo livre representa "de sexta a segunda"');
+  assert.equal(url.searchParams.get('de'), '2026-09-04');
+  assert.equal(url.searchParams.get('ate'), '2026-09-07');
+  assert.equal(url.searchParams.get('fila'), 'solo');
+});
+
+test('período relativo continua mandando preset, e sem datas', async () => {
+  const url = new URL(cardDe(await gerarRelatorio({
+    queryRows: fakeQuery(DATA), periodo: 'semanal', agora: SEG_9H
+  }), 'UGA Teste').url);
+  assert.equal(url.searchParams.get('preset'), 'semana');
+  assert.equal(url.searchParams.get('de'), null);
+});
+
+// ---------------------------------------------------------------------------
+// POST INDIVIDUAL — o campo "jogador" do Actions.
+// ---------------------------------------------------------------------------
+test('individual: um card só, sem o cabeçalho da tribo', async () => {
+  const r = await gerarRelatorio({
+    queryRows: fakeQuery(DATA), periodo: 'semanal', agora: SEG_9H, puuids: ['P1'], individual: true
+  });
+  assert.equal(r.mensagens.length, 1, 'o cabeçalho resumiria uma tribo que ninguém pediu');
+  assert.equal(r.individual, true);
+  const card = r.mensagens[0].embeds[0];
+  assert.ok(card.description.includes('Relatório individual'), 'o card se apresenta');
+  assert.ok(card.footer.text.includes('pedido avulso'));
+  assert.ok(card.url, 'o link para o relatório completo continua lá');
+});
+
+test('individual: a menção avisa que o relatório é avulso', async () => {
+  const r = await gerarRelatorio({
+    queryRows: fakeQuery(DATA), periodo: 'semanal', agora: SEG_9H, puuids: ['P1'],
+    individual: true, userMap: { P1: '123456789' }
+  });
+  assert.ok(r.mensagens[0].content.includes('<@123456789>'));
+  assert.ok(r.mensagens[0].content.includes('individual'));
+});
+
+test('individual sem partidas no período: o aviso sai nominal', async () => {
+  const r = await gerarRelatorio({
+    queryRows: fakeQuery({ solo: null, flex: null }), periodo: 'semanal',
+    puuids: ['P1'], individual: true, rotuloAlvo: 'UGA Teste#2109'
+  });
+  assert.equal(r.ativos, 0);
+  assert.ok(r.mensagens[0].content.includes('UGA Teste#2109'));
+  assert.ok(!r.mensagens[0].content.includes('ninguém da tribo'));
+});
+
+test('a rodada normal da tribo não vira individual por acidente', async () => {
+  const r = await gerarRelatorio({ queryRows: fakeQuery(DATA), periodo: 'semanal', agora: SEG_9H });
+  assert.equal(r.individual, false);
+  assert.equal(r.mensagens.length, 2, 'cabeçalho + card');
+  assert.ok(!r.mensagens[1].embeds[0].description.includes('Relatório individual'));
 });

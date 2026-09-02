@@ -27,13 +27,13 @@
 // ============================================================================
 
 import {
-  FILAS, PERIODOS, TZ, coletarAnalises, fmtData, fmtKda, normalizarPeriodo, parseMetaTiers, pct, resolverFilas, truncar
+  FILAS, TZ, coletarAnalises, fmtData, fmtKda, normalizarPeriodo, parseMetaTiers, pct, resolverFilas, resolverJanela, truncar
 } from '../../shared/relatorio-metricas.js';
 // Superfície pública histórica: quem já importava daqui não precisa mudar nada.
 export {
-  QUEUES_RANKED, FILAS, PERIODOS, resolverFilas, normalizarPeriodo,
+  QUEUES_RANKED, FILAS, PERIODOS, HORA_CORTE, resolverFilas, normalizarPeriodo,
   nomeCampeao, parseMetaTiers, sqlMarcos10, coletarAnalises,
-  periodoIntervalo, diaParaEpoch
+  periodoIntervalo, diaParaEpoch, corteAnterior, resolverJanela
 } from '../../shared/relatorio-metricas.js';
 export { gerarProsa } from '../../shared/relatorio-prosa.js';
 
@@ -65,11 +65,26 @@ const SITE_URL = (process.env.SITE_URL || 'https://ugabugatimeperfeito.bugadao.c
 // 'todos'), o link vai sem query e a tela abre no padrão dela (Semana).
 const PRESET_DO_PERIODO = { semanal: 'semana', mensal: 'mes' };
 
+// epoch -> 'AAAA-MM-DD' no fuso de Brasília (é por DIA que a tela filtra).
+function isoBrt(ms) {
+  return new Date(Number(ms) - 3 * 3600000).toISOString().slice(0, 10);
+}
+
 // Link direto para o Relatório Premium do jogador, já na fila e no período do post.
-function linkDoJogador(jog, periodoKey, filaChave) {
+// Janela ANCORADA (os agendados de segunda/sexta) vai como intervalo livre: é o
+// único filtro da tela capaz de dizer "de sexta a segunda". A tela recorta por dia
+// inteiro, então as pontas dela são um pouco mais largas que as do post — os jogos
+// da manhã do primeiro dia aparecem lá e não aqui.
+function linkDoJogador(jog, periodoKey, P, filaChave) {
   const caminho = `/relatorios/${encodeURIComponent(jog.gameName)}/${encodeURIComponent(jog.tagLine)}`;
   const q = new URLSearchParams();
   if (filaChave) q.set('fila', filaChave);
+  if (P?.desde && P?.ate) {
+    q.set('preset', 'outro');
+    q.set('de', isoBrt(P.desde));
+    q.set('ate', isoBrt(P.ate));
+    return `${SITE_URL}${caminho}?${q.toString()}`;
+  }
   const preset = PRESET_DO_PERIODO[periodoKey];
   if (preset) q.set('preset', preset);
   const query = q.toString();
@@ -86,14 +101,17 @@ function linhaKpis(filaInfo, a) {
 }
 
 // O card do jogador: nome, KPIs das filas que ele jogou, e o link.
-function embedResumo(jog, periodoKey, chaves) {
-  const P = PERIODOS[periodoKey] || PERIODOS.semanal;
+// `individual` = o post foi pedido para UM jogador só (campo "jogador" do Actions).
+// Sem o cabeçalho da tribo por cima, o card precisa se apresentar sozinho.
+function embedResumo(jog, periodoKey, P, chaves, individual = false) {
   // A fila do link é a mais jogada no período — a que ele quer ver primeiro.
   const filaPrincipal = chaves
     .filter((k) => jog[k])
     .sort((x, y) => (jog[y].jogos || 0) - (jog[x].jogos || 0))[0];
 
   const blocos = chaves.filter((k) => jog[k]).map((k) => linhaKpis(FILAS[k], jog[k]));
+  // Entra como primeiro "bloco" para pegar de graça o mesmo espaçamento das filas.
+  if (individual) blocos.unshift(`🎯 **Relatório individual** — este card saiu só para **${jog.gameName}**, fora da rodada da tribo.`);
   const total = chaves.reduce((n, k) => n + (jog[k]?.jogos || 0), 0);
   const wrGeral = pct(
     chaves.reduce((n, k) => n + (jog[k]?.vitorias || 0), 0),
@@ -102,7 +120,7 @@ function embedResumo(jog, periodoKey, chaves) {
 
   // O mesmo link vai no `url` do embed (que torna o título clicável) e escrito
   // por extenso no corpo — no celular o título não parece um link.
-  const link = linkDoJogador(jog, periodoKey, filaPrincipal);
+  const link = linkDoJogador(jog, periodoKey, P, filaPrincipal);
 
   return {
     title: truncar(`👤 ${jog.nome}`, 256),
@@ -112,7 +130,7 @@ function embedResumo(jog, periodoKey, chaves) {
       4000
     ),
     color: corPorWr(wrGeral),
-    footer: { text: `${P.titulo} · ${P.janela}` }
+    footer: { text: `${P.titulo} · ${P.janela}${individual ? ' · pedido avulso' : ''}` }
   };
 }
 
@@ -138,26 +156,27 @@ function montarHeader(P, resumo, ativos, chaves) {
 // UMA mensagem por jogador: a menção no content (para o ping chegar) e o card
 // com os KPIs + link no embed. Antes eram DUAS mensagens por jogador, cada uma
 // com a prosa inteira e cinco quadros de números — o que agora vive no site.
-function montarMensagemJogador(jog, periodoKey, userMap, chaves) {
+function montarMensagemJogador(jog, periodoKey, P, userMap, chaves, individual) {
   const msg = {
     username: NOME_BOT,
-    embeds: [embedResumo(jog, periodoKey, chaves)],
+    embeds: [embedResumo(jog, periodoKey, P, chaves, individual)],
     allowed_mentions: { parse: ['users'] }
   };
   const m = mencao(jog, userMap);
-  if (m) msg.content = `${m} seu relatório saiu 👇`;
+  if (m) msg.content = individual ? `${m} seu relatório individual saiu 👇` : `${m} seu relatório saiu 👇`;
   return msg;
 }
 
-// Cabeçalho + um card por jogador.
-export function montarMensagens(jogadores, periodoKey, userMap, { resumo, ativos, chaves }) {
-  const P = PERIODOS[periodoKey] || PERIODOS.semanal;
-  const mensagens = [{
+// Cabeçalho + um card por jogador. No modo INDIVIDUAL o cabeçalho da tribo não
+// existe: quem pediu quer um card só, e um "👥 1 jogador · 12 partidas" em cima
+// dele seria um resumo da tribo que a tribo nem viu.
+export function montarMensagens(jogadores, periodoKey, P, userMap, { resumo, ativos, chaves, individual = false }) {
+  const mensagens = individual ? [] : [{
     username: NOME_BOT,
     embeds: [montarHeader(P, resumo, ativos, chaves)],
     allowed_mentions: { parse: ['users'] }
   }];
-  for (const jog of jogadores) mensagens.push(montarMensagemJogador(jog, periodoKey, userMap, chaves));
+  for (const jog of jogadores) mensagens.push(montarMensagemJogador(jog, periodoKey, P, userMap, chaves, individual));
   return mensagens;
 }
 
@@ -197,9 +216,11 @@ export async function postarDiscord(webhookUrl, mensagens) {
 //   opts: { queryRows, periodo, fila?, puuids?, metaCsv?, userMap?, agora? }
 //   retorna { mensagens, ativos, periodo, fila }
 // ---------------------------------------------------------------------------
-export async function gerarRelatorio({ queryRows, periodo = 'semanal', fila = 'ambas', puuids = null, somentePremium = null, metaCsv = null, userMap = null, agora = Date.now() }) {
+export async function gerarRelatorio({ queryRows, periodo = 'semanal', fila = 'ambas', puuids = null, somentePremium = null, metaCsv = null, userMap = null, agora = Date.now(), individual = false, rotuloAlvo = '' }) {
   const periodoKey = normalizarPeriodo(periodo);
-  const P = PERIODOS[periodoKey];
+  // A janela dos períodos ancorados (segunda/sexta) só existe no INSTANTE do post:
+  // é aqui que "desde o corte anterior" vira um recorte concreto em milissegundos.
+  const P = resolverJanela(periodoKey, agora);
 
   // Regra: sem seleção explícita de puuids ("para todos") o relatório cobre SÓ premium
   // (has_premium = 1) — igual ao sync/backfill. Alvo explícito ignora o filtro.
@@ -244,13 +265,14 @@ export async function gerarRelatorio({ queryRows, periodo = 'semanal', fila = 'a
   let mensagens;
   if (!jogadores.length) {
     const filaLabel = chaves.map(k => FILAS[k].label).join(' + ');
+    const quem = individual && rotuloAlvo ? `**${rotuloAlvo}** não jogou` : 'ninguém da tribo jogou';
     mensagens = [{
       username: NOME_BOT,
-      content: `${P.emoji} **${P.titulo} — Ranked ${filaLabel}**: ninguém da tribo jogou ranqueada nos ${P.janela}. 😴`
+      content: `${P.emoji} **${P.titulo} — Ranked ${filaLabel}**: ${quem} ranqueada nos ${P.janela}. 😴`
     }];
   } else {
-    mensagens = montarMensagens(jogadores, periodoKey, userMap, { resumo, ativos, chaves });
+    mensagens = montarMensagens(jogadores, periodoKey, P, userMap, { resumo, ativos, chaves, individual });
   }
 
-  return { ativos, periodo: periodoKey, fila, mensagens };
+  return { ativos, periodo: periodoKey, fila, individual, janela: { desde: P.desde ?? null, ate: P.ate ?? null, rotulo: P.janela }, mensagens };
 }

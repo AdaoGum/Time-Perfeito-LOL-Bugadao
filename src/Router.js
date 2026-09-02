@@ -54,9 +54,11 @@ const routes = [
   { path: '/relatorios/:gameName?/:tagLine?', component: RelatoriosPremium },
   { path: '/ancestralidade', component: Ancestralidade },
 
-  // Hubs de módulo (títulos clicáveis das categorias da sidebar)
-  { path: '/jogadores', component: ModuleHub, props: { module: 'players' } },
-  { path: '/campeoes', component: ModuleHub, props: { module: 'champions' } },
+  // Hubs de PILAR (títulos clicáveis das categorias da sidebar / cabeçalho dos
+  // portais da Home). Só os pilares com MAIS DE UMA página têm hub — o do Meta é a
+  // própria tier list, e o das Equipes é a Tribo. Ver src/navegacao.js.
+  { path: '/jogadores', component: ModuleHub, props: { pilar: 'jogador' } },
+  { path: '/campeoes', component: ModuleHub, props: { pilar: 'campeoes' } },
 
   // --- SEÇÃO CAMPEÕES ---
   // Panteão dos Campeões: catálogo completo. `:championId` (id do DDragon,

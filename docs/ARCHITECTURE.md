@@ -174,7 +174,7 @@ explícito (vetor vazio / sem `PUUIDS`) processa SÓ premium** — paridade com 
 | `cron/lib/d1.js` | Cliente **único** do D1 (REST) p/ os jobs Node: `queryD1` (com retry/backoff), `queryD1Rows`, `registrarUsoGlobal`. |
 | `cron/lib/riot.js` | Cliente **único** da Riot p/ os jobs Node: `fetchFromRiotHost` (429/5xx/backoff) + `respeitarRateLimit` (contador da janela). |
 | `cron/lib/relatorio-engine.js` | Camada de **embed do Discord** do relatório: monta os cards e posta no webhook. Analisa cada fila (Solo/Duo e Flex) em consultas separadas por `queue_id` e entrega **um card por jogador** — um teaser com uma linha de KPIs por fila e o **link para `/relatorios`**, que é onde o relatório completo vive. Re-exporta as duas camadas abaixo. |
-| `shared/relatorio-metricas.js` | **Números** do relatório: SQL agregado sobre o D1 (janela livre `[desde, ate)`) + `analisarJogador`. Importado pelo coletor **e pelo Worker** (rotas `premium_players` / `relatorio_premium` da tela `/relatorios`). |
+| `shared/relatorio-metricas.js` | **Números** do relatório: SQL agregado sobre o D1 (janela livre `[desde, ate)`) + `analisarJogador`. Importado pelo coletor **e pelo Worker** (rotas `premium_players` / `relatorio_premium` da tela `/relatorios`). Também mora aqui a definição dos períodos — inclusive os dois **ancorados** dos posts agendados (`semana-util` / `fim-de-semana`), que `resolverJanela()` transforma em recorte concreto no instante em que o job roda. |
 | `shared/relatorio-prosa.js` | **Texto** do relatório: o banco de frases da NLG "IA sem IA" (`gerarProsa`, JS puro). Importado pelo coletor **e pelo front** — na tela `/relatorios` a narração é montada no browser, a partir dos números que o Worker devolveu. |
 | `migrations/*.sql` | Migrations do D1 (analíticas, `api_usage`, cache de perfil, `has_premium`). |
 | `local/.env` | Segredos locais do coletor (fora do git). |
@@ -236,7 +236,8 @@ scoreDeTime     = Σ scoreIndividual + 0.30·(aderênciaArquétipo + sinergiaDeP
   (`wrangler.toml`, `npm run deploy:worker`) — automatizado pelo workflow
   `deploy-worker.yaml` a cada mudança no worker. Binding `DB` → D1 e secret `RIOT_API_KEY`.
 - **Coletor:** `cron/sync.js` roda no **GitHub Actions** (`riot-sync.yaml`, 04:00 e 17:30
-  BRT) ou fora do edge (VM/PC/cron) lendo `local/.env`.
+  BRT todo dia, mais 07:00 BRT em segunda e sexta — os dias em que o relatório do Discord
+  sai às 09:00) ou fora do edge (VM/PC/cron) lendo `local/.env`.
 - **Assets (Data Dragon):** o patch é resolvido em runtime no boot do front
   (`resolveDDragonVersion()` em `src/utils.js`), com `DDRAGON_VERSION` só como fallback.
 

@@ -73,7 +73,24 @@
   </div>
 
   <!-- Header -->
-  <header class="fixed inset-x-0 top-0 z-[61] border-b border-slate-800/80 bg-slate-950/95 backdrop-blur">
+  <!-- ====================================================================== -->
+  <!-- HEADER — DUAS LINHAS, uma por nível da navegação.                       -->
+  <!--                                                                        -->
+  <!-- Linha 1 (sempre): marca + busca + os 4 espíritos, os mesmos portais da  -->
+  <!-- Home. Ela NÃO se transforma: o pilar em que você está fica aceso ali,   -->
+  <!-- e os outros três seguem a um clique de distância.                      -->
+  <!--                                                                        -->
+  <!-- Linha 2 (só quando a rota mora num pilar): as páginas daquele pilar,    -->
+  <!-- ABAIXO da linha 1 — não ao lado. Quem manda nela é a ROTA               -->
+  <!-- (`pilarDaRota`), então chegar em /meta pela sidebar, por um link ou por -->
+  <!-- F5 abre a mesma linha que chegar pela topbar.                          -->
+  <!--                                                                        -->
+  <!-- A altura do header MUDA quando a linha 2 aparece, e a sidebar e o main  -->
+  <!-- se apoiam nela — por isso ela é MEDIDA (ResizeObserver), não chutada em -->
+  <!-- `top-16`. Um número mágico aqui quebraria em qualquer quebra de linha   -->
+  <!-- da nav em tela estreita.                                               -->
+  <!-- ====================================================================== -->
+  <header ref="headerEl" class="fixed inset-x-0 top-0 z-[61] border-b border-slate-800/80 bg-slate-950/95 backdrop-blur">
     <div class="relative flex w-full items-center gap-4 py-3 pl-4 pr-2 md:pl-6">
       <button
         type="button"
@@ -94,14 +111,12 @@
         <span class="bg-gradient-to-r from-lime-300 via-yellow-300 to-orange-500 bg-clip-text text-transparent">UGA BUGA</span>
       </button>
 
-      <!-- Busca central: mesmo componente unificado. Invisível na Home (lá a busca
-           é a central que "sobe" para cá via morph ao pesquisar). -->
+      <!-- Busca central: SEMPRE disponível, em toda rota — inclusive na Home, que
+           deixou de ter caixa de busca própria. Era ela que sumia aqui em cima para
+           dar lugar à busca central da Home; agora existe um só lugar de buscar, e
+           ele não se move. -->
       <div class="hidden min-w-0 flex-1 justify-center md:flex">
-        <div
-          data-search-morph="topbar"
-          class="w-full max-w-sm transition-opacity duration-300"
-          :class="route.path === '/' ? 'pointer-events-none opacity-0' : 'opacity-100'"
-        >
+        <div class="w-full max-w-sm">
           <SearchBar
             buttonText=""
             autocomplete
@@ -114,102 +129,47 @@
         </div>
       </div>
 
-      <nav class="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
-        <!-- `secondary`: atalhos que também vivem na sidebar. Somem abaixo de lg para a
-             nav não quebrar linha (o header é fixed — crescer aqui cobre o conteúdo). -->
-        <div v-for="tab in topTabs" :key="tab.id" class="group relative" :class="tab.secondary ? 'hidden lg:block' : ''">
-          <button
-            type="button"
-            @click="router.push(tab.path)"
-            class="px-3 py-1.5 font-cave text-xs sm:text-sm transition-all border-b-4 cursor-pointer"
-            :class="isTabActive(tab.path)
-              ? `${tab.border} scale-105 font-bold`
-              : 'border-transparent opacity-60 hover:opacity-100'"
-          >
-            <span v-if="tab.gradient" class="bg-gradient-to-r from-lime-300 via-yellow-300 to-orange-500 bg-clip-text text-transparent">{{ tab.label }}</span>
-            <span v-else :class="tab.text">{{ tab.label }}</span>
-          </button>
-
-          <!-- Prévia da aba (hover, desktop): mini mockup + descrição -->
-          <div
-            class="pointer-events-none absolute right-0 top-full z-[75] mt-2 hidden w-60 max-w-[80vw] translate-y-1 rounded-xl border border-slate-700 bg-slate-950/97 p-3 opacity-0 shadow-2xl backdrop-blur transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 md:group-hover:block"
-          >
-            <p class="mb-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" :class="tab.accent">
-              <i class="fa-solid" :class="tab.icon"></i> {{ tab.label }}
-            </p>
-
-            <!-- TEMPLO: 4 caminhos -->
-            <div v-if="tab.preview.type === 'home'" class="grid grid-cols-4 gap-1.5">
-              <div v-for="(c, i) in ['fa-scroll','fa-trophy','fa-dragon','fa-people-group']" :key="i" class="flex h-9 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-slate-400">
-                <i class="fa-solid text-xs" :class="c"></i>
-              </div>
-            </div>
-
-            <!-- CAÇADA: mini cards de partida -->
-            <div v-else-if="tab.preview.type === 'historico'" class="space-y-1.5">
-              <div v-for="win in [true, false]" :key="String(win)" class="flex items-center gap-2 rounded-md border p-1.5" :class="win ? 'border-blue-800/60 bg-blue-950/30' : 'border-red-800/60 bg-red-950/30'">
-                <div class="h-5 w-5 shrink-0 rounded bg-slate-700"></div>
-                <div class="flex-1 space-y-1"><div class="h-1.5 w-10 rounded bg-slate-600"></div><div class="h-1.5 w-14 rounded bg-slate-700"></div></div>
-                <span class="text-[9px] font-black" :class="win ? 'text-blue-400' : 'text-red-400'">{{ win ? 'V' : 'D' }}</span>
-              </div>
-            </div>
-
-            <!-- VISÃO: radar + barras -->
-            <div v-else-if="tab.preview.type === 'analise'" class="flex items-center gap-3">
-              <svg viewBox="0 0 40 40" class="h-12 w-12 shrink-0">
-                <polygon points="20,3 36,15 30,36 10,36 4,15" fill="none" stroke="#7c3aed" stroke-width="1" opacity="0.6" />
-                <polygon points="20,11 30,17 26,31 14,30 10,18" fill="rgba(167,139,250,0.25)" stroke="#c4b5fd" stroke-width="1" />
-              </svg>
-              <div class="flex-1 space-y-1.5">
-                <div class="h-1.5 rounded bg-violet-500/70" style="width:82%"></div>
-                <div class="h-1.5 rounded bg-violet-500/50" style="width:58%"></div>
-                <div class="h-1.5 rounded bg-violet-500/60" style="width:70%"></div>
-              </div>
-            </div>
-
-            <!-- CAVERNA: pódio de maestria (ouro, prata, bronze) -->
-            <div v-else-if="tab.preview.type === 'mastery'" class="flex items-end justify-center gap-1.5 py-1">
-              <div
-                v-for="m in [{ h: 'h-8', c: 'border-slate-400/70 bg-slate-400/10 text-slate-200', i: 'fa-medal' }, { h: 'h-11', c: 'border-yellow-400/70 bg-yellow-400/10 text-yellow-300', i: 'fa-crown' }, { h: 'h-7', c: 'border-orange-500/70 bg-orange-500/10 text-orange-300', i: 'fa-medal' }]"
-                :key="m.i + m.h"
-                class="flex w-8 flex-col items-center justify-end rounded border pb-1" :class="[m.h, m.c]"
-              >
-                <i class="fa-solid text-[10px]" :class="m.i"></i>
-              </div>
-            </div>
-
-            <!-- RELÍQUIAS: grade de itens -->
-            <div v-else-if="tab.preview.type === 'items'" class="grid grid-cols-6 gap-1">
-              <div v-for="i in 12" :key="i" class="flex aspect-square items-center justify-center rounded border border-fuchsia-800/50 bg-fuchsia-950/30">
-                <i class="fa-solid fa-gem text-[8px] text-fuchsia-400/70"></i>
-              </div>
-            </div>
-
-            <!-- META: tier list S/A/B -->
-            <div v-else-if="tab.preview.type === 'meta'" class="space-y-1.5">
-              <div v-for="row in [{ t: 'S', c: 'text-rose-300 border-rose-500/60 bg-rose-500/10', n: 4 }, { t: 'A', c: 'text-amber-300 border-amber-500/60 bg-amber-500/10', n: 3 }, { t: 'B', c: 'text-sky-300 border-sky-500/60 bg-sky-500/10', n: 5 }]" :key="row.t" class="flex items-center gap-2">
-                <span class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border text-[9px] font-black" :class="row.c">{{ row.t }}</span>
-                <div class="flex gap-1"><div v-for="i in row.n" :key="i" class="h-4 w-4 rounded-full border border-slate-600 bg-slate-700"></div></div>
-              </div>
-            </div>
-
-            <!-- PANTEÃO: grade de campeões -->
-            <div v-else-if="tab.preview.type === 'pantheon'" class="grid grid-cols-6 gap-1">
-              <div v-for="i in 12" :key="i" class="aspect-square rounded border border-slate-700 bg-slate-800"></div>
-            </div>
-
-            <!-- TRIBO: 5 vagas -->
-            <div v-else class="flex justify-center gap-1.5 py-1">
-              <div v-for="i in 5" :key="i" class="flex h-8 w-8 items-center justify-center rounded-lg border border-lime-700/50 bg-lime-950/40">
-                <i class="fa-solid fa-user text-[10px] text-lime-400/80"></i>
-              </div>
-            </div>
-
-            <p class="mt-2.5 text-[10px] font-medium leading-snug text-slate-400">{{ tab.preview.desc }}</p>
-            <span class="absolute right-4 top-0 h-2.5 w-2.5 -translate-y-[6px] rotate-45 border-l border-t border-slate-700 bg-slate-950"></span>
-          </div>
-        </div>
+      <!-- 1º NÍVEL: TEMPLO + os 4 espíritos (o espelho dos portais da Home) -->
+      <nav class="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
+        <TopbarItem
+          v-for="item in itensNivel1"
+          :key="item.id"
+          :item="item"
+          :ativo="isTopAtivo(item)"
+          @ir="goToTab"
+        />
       </nav>
+    </div>
+
+    <!-- 2º NÍVEL: as páginas do pilar da rota atual -->
+    <div v-if="pilarNaTopbar" class="border-t border-slate-800/70 bg-slate-950/60">
+      <div class="flex w-full flex-wrap items-center gap-x-2 gap-y-1 py-1.5 pl-4 pr-2 md:pl-6">
+        <!-- "MENU" = a tela inicial do pilar, a que lista todas as opções dele.
+             Pilar de página única (o Meta) não tem hub próprio, então o botão
+             some em vez de virar um link para a tela em que você já está. -->
+        <button
+          v-if="pilarNaTopbar.hub !== route.path"
+          type="button"
+          @click="goToTab(pilarNaTopbar.hub)"
+          :title="`Abrir o menu de ${pilarNaTopbar.label}`"
+          class="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1 font-cave text-[11px] text-slate-300 transition hover:border-slate-500 hover:text-white sm:text-xs"
+        >
+          <i class="fa-solid fa-bars-staggered text-[10px]"></i> MENU
+        </button>
+        <span class="font-cave text-[11px] uppercase tracking-wider opacity-70 sm:text-xs" :class="pilarNaTopbar.text">
+          {{ pilarNaTopbar.topo }}
+        </span>
+
+        <nav class="ml-auto flex flex-wrap items-center justify-end gap-1">
+          <TopbarItem
+            v-for="item in paginasNivel2"
+            :key="item.id"
+            :item="item"
+            :ativo="isTopAtivo(item)"
+            @ir="goToTab"
+          />
+        </nav>
+      </div>
     </div>
   </header>
 
@@ -220,7 +180,8 @@
   ></div>
 
   <aside
-    class="fixed bottom-0 left-0 top-16 z-[60] flex flex-col overflow-hidden border-r border-slate-800 bg-slate-950/95 backdrop-blur transition-all duration-300"
+    class="fixed bottom-0 left-0 z-[60] flex flex-col overflow-hidden border-r border-slate-800 bg-slate-950/95 backdrop-blur transition-[width,transform] duration-300"
+    :style="{ top: topoAbaixoDoHeader }"
     :class="[
       effectiveCollapsed ? 'w-20' : 'w-72',
       store.ui.sidebarMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
@@ -268,26 +229,27 @@
     </div>
 
 
-    <nav class="min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden p-3">
-      <!-- Seções temáticas: Jogadores, Campeões e Equipes. O TÍTULO é clicável e leva
-           ao hub do módulo (Equipes → Tribo). As sub-opções abaixo seguem diretas. -->
-      <div v-for="section in sidebarSections" :key="`sec-${section.id}`" class="space-y-1.5">
+    <nav class="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden p-3">
+      <!-- Uma seção por PILAR — os mesmos quatro da Home e do 1º nível da topbar.
+           O TÍTULO é clicável e leva ao hub do pilar (Meta → a própria tier list;
+           Equipes → a Tribo). As sub-opções abaixo seguem diretas. -->
+      <div v-for="pilar in PILARES" :key="`sec-${pilar.id}`" class="space-y-1.5">
         <button
           type="button"
           class="group flex w-full items-center gap-2 rounded-md px-1 py-0.5 transition hover:bg-slate-900/60"
-          :class="[effectiveCollapsed ? 'justify-center' : '', isItemActive({ match: [section.hub] }) ? 'bg-slate-900/50' : '']"
-          @click="goToTab(section.hub)"
-          :title="`Abrir ${section.label}`"
+          :class="[effectiveCollapsed ? 'justify-center' : '', pilarDaRota(route.path)?.id === pilar.id ? 'bg-slate-900/50' : '']"
+          @click="goToTab(pilar.hub)"
+          :title="`Abrir ${pilar.label}`"
         >
-          <span class="inline-flex h-5 w-5 items-center justify-center text-[11px]" :class="section.labelClass">
-            <i class="fa-solid" :class="section.icon"></i>
+          <span class="inline-flex h-5 w-5 items-center justify-center text-[11px]" :class="pilar.labelClass">
+            <i class="fa-solid" :class="pilar.sidebarIcon"></i>
           </span>
-          <span v-if="!effectiveCollapsed" class="text-[10px] font-black uppercase tracking-[0.15em]" :class="section.labelClass">{{ section.label }}</span>
+          <span v-if="!effectiveCollapsed" class="text-[10px] font-black uppercase tracking-[0.15em]" :class="pilar.labelClass">{{ pilar.label }}</span>
           <span v-if="!effectiveCollapsed" class="ml-1 h-px flex-1 bg-slate-800 transition group-hover:bg-slate-600"></span>
-          <i v-if="!effectiveCollapsed" class="fa-solid fa-chevron-right text-[8px] opacity-0 transition group-hover:opacity-60" :class="section.labelClass"></i>
+          <i v-if="!effectiveCollapsed" class="fa-solid fa-chevron-right text-[8px] opacity-0 transition group-hover:opacity-60" :class="pilar.labelClass"></i>
         </button>
         <button
-          v-for="item in section.items"
+          v-for="item in pilar.paginas"
           :key="`side-${item.id}`"
           type="button"
           @click="goToTab(item.path)"
@@ -443,7 +405,7 @@
   </div>
 
   <!-- Main -->
-  <main class="w-full px-4 pb-16 pt-24 transition-[margin] duration-300 md:px-6" :style="mainStyle">
+  <main class="w-full px-4 pb-16 transition-[margin] duration-300 md:px-6" :style="mainStyle">
     <div
       class="min-h-[80vh] rounded-3xl border-2 p-4 transition-colors duration-700 sm:p-6"
       :class="pageThemeBorder"
@@ -451,7 +413,6 @@
       <router-view v-slot="{ Component }">
         <component
           :is="Component"
-          @search-start="handleSearchStart"
           @show-overlay="handleShowOverlay"
           @hide-overlay="handleHideOverlay"
           @show-udyr="handleShowUdyr"
@@ -487,10 +448,12 @@ import { useRoute, useRouter } from 'vue-router';
 import { state, abrirFicha, fecharFicha } from './store.js';
 import { fetchRateStatus } from './api.js';
 import {
-  profileIconImage, DDRAGON_VERSION, resolveDDragonVersion, flipMorph,
+  profileIconImage, DDRAGON_VERSION, resolveDDragonVersion,
   getChampionIdFromName, canonicalChampionList
 } from './utils.js';
+import { ANCESTRALIDADE, PILARES, casaRota, pilarDaRota } from './navegacao.js';
 import SearchBar from './components/SearchBar.vue';
+import TopbarItem from './components/TopbarItem.vue';
 
 // Ficha do campeão: componente pesado e nem toda sessão abre uma — chunk à parte,
 // baixado no primeiro clique (o mesmo chunk que a tela cheia /ficha/:id usa).
@@ -556,65 +519,85 @@ function setTelemetryLevel(level) {
 }
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1440);
 
-const topTabs = [
-  { id: 'home', path: '/', label: 'TEMPLO', icon: 'fa-fire', gradient: true, border: 'border-orange-500', active: 'border-orange-500 bg-orange-500/10 text-orange-300', accent: 'text-orange-300', preview: { type: 'home', desc: 'Escolha seu caminho ancestral: jogador, campeões ou tribo.' } },
-  { id: 'historico', path: '/historico', label: 'CAÇADA', icon: 'fa-paw', text: 'text-cyan-400', border: 'border-cyan-500', active: 'border-cyan-500 bg-cyan-500/10 text-cyan-400', accent: 'text-cyan-300', preview: { type: 'historico', desc: 'Histórico de partidas: KDA, itens e confrontos por rota.' } },
-  { id: 'analise', path: '/analise', label: 'VISÃO', icon: 'fa-chart-simple', text: 'text-violet-400', border: 'border-violet-500', active: 'border-violet-500 bg-violet-500/10 text-violet-400', accent: 'text-violet-300', preview: { type: 'analise', desc: 'Estatísticas e radar de desempenho sobre todo o histórico.' } },
-  { id: 'mastery', path: '/mastery', label: 'CAVERNA', icon: 'fa-trophy', text: 'text-amber-400', border: 'border-amber-500', active: 'border-amber-500 bg-amber-500/10 text-amber-400', accent: 'text-amber-300', secondary: true, preview: { type: 'mastery', desc: 'Caverna dos Monos: os campeões mais dominados, nível e pontos.' } },
-  { id: 'meta', path: '/meta', label: 'META', icon: 'fa-ranking-star', text: 'text-amber-400', border: 'border-amber-500', active: 'border-amber-500 bg-amber-500/10 text-amber-400', accent: 'text-amber-300', preview: { type: 'meta', desc: 'Tier list S/A/B/C/D por rota no patch atual.' } },
-  { id: 'pantheon', path: '/champions', label: 'PANTEÃO', icon: 'fa-dragon', text: 'text-sky-400', border: 'border-sky-500', active: 'border-sky-500 bg-sky-500/10 text-sky-400', accent: 'text-sky-300', preview: { type: 'pantheon', desc: 'Fichas de campeões: habilidades, perfil tático e relíquias.' } },
-  { id: 'items', path: '/items', label: 'RELÍQUIAS', icon: 'fa-gem', text: 'text-fuchsia-400', border: 'border-fuchsia-500', active: 'border-fuchsia-500 bg-fuchsia-500/10 text-fuchsia-400', accent: 'text-fuchsia-300', secondary: true, preview: { type: 'items', desc: 'Arsenal de itens: efeitos, custo e quem se dá bem com cada um.' } },
-  { id: 'sinergia', path: '/synergy', label: 'TRIBO', icon: 'fa-people-group', text: 'text-lime-400', border: 'border-lime-500', active: 'border-lime-500 bg-lime-500/10 text-lime-400', accent: 'text-lime-300', preview: { type: 'tribo', desc: 'Planejador de composição: encaixe 1 a 5 e ache a sinergia.' } },
+// ---------------------------------------------------------------------------
+// TOPBAR EM DOIS NÍVEIS — duas LINHAS, uma embaixo da outra.
+// Antes eram 8 abas soltas em fila, sem relação com os 4 portais da Home: duas
+// versões da mesma navegação, uma em cada tela. Agora a linha de cima É a Home
+// (TEMPLO + os 4 espíritos) e a de baixo são as páginas do espírito da rota.
+//
+// A linha de cima NÃO se transforma: o pilar em que você está fica aceso nela e os
+// outros três seguem a um clique. Por isso não existe mais um "voltar ao menu" que
+// troca o nível — o 2º nível não substitui o 1º, ele se soma embaixo. O botão MENU
+// da linha de baixo faz outra coisa: abre o HUB do pilar, a tela que lista todas as
+// opções dele.
+//
+// Quem manda na linha de baixo é a ROTA: chegar em /meta pela sidebar, por um link
+// ou por F5 abre a mesma linha que chegar pela topbar.
+// ---------------------------------------------------------------------------
+const pilarNaTopbar = computed(() => pilarDaRota(route.path));
+
+// A altura do header muda quando a 2ª linha aparece — e a sidebar (`top`) e o main
+// (`padding-top`) se apoiam nela. Medir é o único jeito que não quebra: um `top-16`
+// fixo erra 40px com a linha de baixo aberta, e erra de novo se a nav quebrar linha
+// numa tela estreita.
+const headerEl = ref(null);
+const alturaHeader = ref(64);
+let observadorHeader = null;
+onMounted(() => {
+  if (!headerEl.value || typeof ResizeObserver === 'undefined') return;
+  observadorHeader = new ResizeObserver(() => {
+    alturaHeader.value = headerEl.value?.offsetHeight || 64;
+  });
+  observadorHeader.observe(headerEl.value);
+  alturaHeader.value = headerEl.value.offsetHeight;
+});
+onUnmounted(() => observadorHeader?.disconnect());
+
+// 32px de respiro entre o header e o conteúdo — a mesma folga que o `pt-24` dava
+// sobre o header de 64px de antes.
+const RESPIRO = 32;
+const topoAbaixoDoHeader = computed(() => `${alturaHeader.value}px`);
+const paddingDoMain = computed(() => `${alturaHeader.value + RESPIRO}px`);
+
+// TEMPLO: o 5º botão da linha de cima — a Home, que é a tela com os quatro caminhos.
+const TEMPLO = {
+  id: 'home', path: '/', label: 'TEMPLO', icon: 'fa-fire', gradient: true,
+  border: 'border-orange-500', accent: 'text-orange-300', match: [],
+  preview: 'pilares', icones: PILARES.map((p) => p.icon),
+  desc: 'Escolha seu caminho ancestral: jogador, meta, campeões ou tribo.'
+};
+
+// Linha de cima: sempre os mesmos cinco botões.
+const itensNivel1 = [
+  TEMPLO,
+  ...PILARES.map((p) => ({
+    id: p.id, path: p.hub, label: p.topo, icon: p.icon,
+    // O pilar acende por QUALQUER rota que more nele, não só pelo hub.
+    match: [p.hub, ...p.paginas.flatMap((pg) => pg.match)],
+    text: p.text, border: p.border, accent: p.accent,
+    preview: 'pilares', icones: p.paginas.map((pg) => pg.icon), desc: p.desc
+  }))
 ];
 
-// Sidebar temática: duas seções grandes (Jogadores e Campeões). `match` = prefixos
-// de rota que acendem o item (cobre sub-rotas e apelidos como /historico, /analise).
-const sidebarSections = [
-  {
-    id: 'players',
-    label: 'Jogadores',
-    icon: 'fa-crown',
-    labelClass: 'text-cyan-300',
-    hub: '/jogadores',
-    items: [
-      { id: 'historico', path: '/historico', match: ['/historico', '/profile'], label: 'Caçadas Passadas', icon: 'fa-paw', active: 'border-cyan-500 bg-cyan-500/10 text-cyan-300' },
-      { id: 'analise', path: '/analise', match: ['/analise'], label: 'Olhar Espiritual', icon: 'fa-chart-simple', active: 'border-violet-500 bg-violet-500/10 text-violet-300' },
-      { id: 'mastery', path: '/mastery', match: ['/mastery'], label: 'Caverna dos Monos', icon: 'fa-trophy', active: 'border-amber-500 bg-amber-500/10 text-amber-300' },
-    ]
-  },
-  {
-    id: 'champions',
-    label: 'Campeões',
-    icon: 'fa-dragon',
-    labelClass: 'text-violet-300',
-    hub: '/campeoes',
-    items: [
-      { id: 'meta', path: '/meta', match: ['/meta'], label: 'Meta & Tier List', icon: 'fa-ranking-star', active: 'border-amber-500 bg-amber-500/10 text-amber-300' },
-      { id: 'pantheon', path: '/champions', match: ['/champions'], label: 'Panteão dos Campeões', icon: 'fa-dragon', active: 'border-sky-500 bg-sky-500/10 text-sky-300' },
-      { id: 'items', path: '/items', match: ['/items'], label: 'Relíquias Ancestrais', icon: 'fa-gem', active: 'border-fuchsia-500 bg-fuchsia-500/10 text-fuchsia-300' },
-    ]
-  },
-  {
-    id: 'teams',
-    label: 'Equipes',
-    icon: 'fa-people-group',
-    labelClass: 'text-lime-300',
-    hub: '/synergy',
-    items: [
-      { id: 'sinergia', path: '/synergy', match: ['/synergy'], label: 'Tribo Perfeita', icon: 'fa-people-group', active: 'border-lime-500 bg-lime-500/10 text-lime-300' },
-      { id: 'custom', path: '/saguaoCustom', match: ['/saguaoCustom'], label: 'Customizada 5x5', icon: 'fa-shuffle', active: 'border-orange-500 bg-orange-500/10 text-orange-300' },
-      { id: 'relatorios', path: '/relatorios', match: ['/relatorios'], label: 'Relatórios Premium', icon: 'fa-file-invoice', active: 'border-emerald-500 bg-emerald-500/10 text-emerald-300' },
-    ]
-  }
-];
+// Linha de baixo: as páginas do pilar atual (vazia fora de qualquer pilar).
+const paginasNivel2 = computed(() => (pilarNaTopbar.value?.paginas || []).map((pg) => ({
+  id: pg.id, path: pg.path, label: pg.topo, icon: pg.icon, match: pg.match,
+  text: pg.text, border: pg.border, accent: pg.accent, preview: pg.preview, desc: pg.desc
+})));
+
+// Botão aceso. O TEMPLO só acende na home exata: com `match` vazio ele nunca casaria
+// por prefixo, e casar por '/' acenderia em tudo.
+function isTopAtivo(item) {
+  if (item.id === 'home') return route.path === '/';
+  return casaRota(route.path, item.match);
+}
 
 // Ancestralidade (consulta avançada ao D1): botão especial ISOLADO no rodapé da
 // sidebar — não aparece em nenhuma seção nem na Home.
-const ancestralButton = { path: '/ancestralidade', match: ['/ancestralidade'], label: 'Ancestralidade', icon: 'fa-user-secret' };
+const ancestralButton = ANCESTRALIDADE;
 
 function isItemActive(item) {
-  const p = route.path;
-  return (item.match || [item.path]).some((prefix) => p === prefix || p.startsWith(prefix + '/'));
+  return casaRota(route.path, item.match || [item.path]);
 }
 
 // A animação de busca agora é única e guiada por store.searchProfile.loading.
@@ -655,15 +638,6 @@ function toggleSidebarCollapse() {
   localStorage.setItem('sidebar-collapsed', String(store.ui.sidebarCollapsed));
 }
 
-// Morph da busca: quando a pesquisa parte da Home, a caixa central "sobe" até a
-// busca da topbar (FLIP). Nas demais rotas a topbar já está visível — sem morph.
-function handleSearchStart() {
-  if (route.path !== '/') return;
-  const src = document.querySelector('[data-search-morph="home"]');
-  const dst = document.querySelector('[data-search-morph="topbar"]');
-  flipMorph(src, dst);
-}
-
 function updateViewport() {
   viewportWidth.value = window.innerWidth;
   if (window.innerWidth >= 1024) {
@@ -672,13 +646,6 @@ function updateViewport() {
 }
 
 const isDesktop = computed(() => viewportWidth.value >= 1024);
-
-// Aba ativa considerando sub-rotas (ex.: /historico/Kami/BR1 acende "CAÇADA").
-// '/' (Templo) só acende na home exata para não casar com tudo.
-function isTabActive(path) {
-  if (path === '/') return route.path === '/';
-  return route.path === path || route.path.startsWith(path + '/');
-}
 
 // Qual fundo fixo mostrar. Caçada e o /profile genérico compartilham o mesmo splash.
 function bgFor(section) {
@@ -704,8 +671,11 @@ const pageThemeBorder = computed(() => {
 });
 
 const mainStyle = computed(() => {
+  // O topo acompanha a altura MEDIDA do header (que cresce com a 2ª linha da
+  // topbar); a margem da esquerda, a sidebar.
+  const topo = { paddingTop: paddingDoMain.value };
   if (!isDesktop.value) {
-    return { marginLeft: '0px', width: '100%' };
+    return { ...topo, marginLeft: '0px', width: '100%' };
   }
 
   // A margem do conteúdo segue o estado REAL fixado (não o hover).
@@ -713,6 +683,7 @@ const mainStyle = computed(() => {
   // ao conteúdo (overlay) sem empurrá-lo.
   const leftOffset = store.ui.sidebarCollapsed ? 80 : 288;
   return {
+    ...topo,
     marginLeft: `${leftOffset}px`,
     width: `calc(100% - ${leftOffset}px)`
   };

@@ -16,6 +16,12 @@
 -->
 <template>
   <div class="min-h-[74vh]">
+    <!-- ALTERNADOR NO CANTO: o MESMO componente do perfil. Entrar pelo card do
+         relatório não pode ser um beco — daqui dá para pular para o histórico ou
+         as estatísticas do mesmo jogador sem passar pela busca de novo. Quem está
+         nesta tela é premium por definição (a lista só traz premium). -->
+    <AbasJogador view="relatorio" :game-name="gameName" :tag-line="tagLine" premium />
+
     <!-- ---------------------------------------------------------------- -->
     <!-- CABEÇALHO: identidade + o "X" que volta para a lista              -->
     <!-- ---------------------------------------------------------------- -->
@@ -316,88 +322,93 @@
           </section>
         </div>
 
+        <!-- Campeões do período: o MESMO ChampionCard dos cards de partida do
+             histórico, no tamanho compacto canônico (w-28 sm:w-32). Traz de graça a
+             arte, o popover de hover e o clique que abre a ficha única — o que
+             antes era um ícone de 36px e uma linha de texto. Fora da grade de duas
+             colunas porque cinco cards em retrato não cabem em meia largura. -->
+        <section v-if="analise.topPlayed.length" class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+          <h2 class="mb-1 flex items-center gap-2 text-sm font-black uppercase tracking-wider text-slate-300">
+            <i class="fa-solid fa-dragon text-sky-400"></i> Campeões do período
+          </h2>
+          <p class="mb-3 text-[11px] text-slate-500">
+            Os 5 mais jogados no recorte · o selo no canto é a taxa de vitória. Clique para abrir a ficha.
+          </p>
+          <div class="flex flex-wrap gap-3">
+            <div v-for="(c, i) in analise.topPlayed" :key="c.nome" class="w-28 sm:w-32">
+              <ChampionCard
+                :champ="champCard(c.nome)"
+                :winrate="c.wr"
+                :frame-class="c.wr >= 50
+                  ? 'border-emerald-700/70 shadow-[0_0_16px_rgba(16,185,129,0.22)]'
+                  : 'border-slate-700/70 shadow'"
+                @open="(ch) => ch?.id && abrirFicha(ch)"
+              >
+                <template #overlay>
+                  <span class="absolute left-1 top-1 rounded bg-slate-950/85 px-1 py-0.5 text-[10px] font-black text-slate-200">
+                    {{ MEDALHAS[i] || i + 1 }}
+                  </span>
+                </template>
+                <template #footer>
+                  <p class="w-full text-center text-[10px] font-bold text-slate-300">
+                    {{ c.n }}j · {{ c.v }}V-{{ c.derrotas }}D
+                  </p>
+                  <p class="w-full text-center text-[10px] font-bold text-slate-500">KDA {{ c.kda.toFixed(2) }}</p>
+                </template>
+              </ChampionCard>
+            </div>
+          </div>
+        </section>
+
         <div class="grid gap-5 lg:grid-cols-2">
-          <!-- Top campeões -->
-          <section v-if="analise.topPlayed.length" class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+          <!-- Rotas -->
+          <section v-if="analise.lanes.length" class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
             <h2 class="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider text-slate-300">
-              <i class="fa-solid fa-dragon text-sky-400"></i> Campeões do período
+              <i class="fa-solid fa-compass text-amber-400"></i> Rotas
             </h2>
             <ul class="space-y-2">
-              <li
-                v-for="(c, i) in analise.topPlayed"
-                :key="c.nome"
-                class="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/50 p-2"
-              >
-                <span class="w-5 shrink-0 text-center text-xs font-black text-slate-500">{{ MEDALHAS[i] || '·' }}</span>
-                <img
-                  v-if="champDoNome(c.nome)"
-                  :src="championImage(champDoNome(c.nome).id)"
-                  :alt="c.nome"
-                  class="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-slate-700 transition hover:border-sky-500"
-                  @click="abrirFicha(champDoNome(c.nome))"
-                />
+              <li v-for="l in analise.lanes.slice(0, 5)" :key="l.rota" class="flex items-center gap-2.5 rounded-lg border border-slate-800 bg-slate-950/50 p-2">
+                <img :src="roleIconImage(l.rota)" :alt="l.label" class="h-6 w-6 shrink-0" />
                 <div class="min-w-0 flex-1">
-                  <p class="truncate text-xs font-black text-slate-200">{{ c.nome }}</p>
-                  <p class="text-[10px] font-bold text-slate-500">{{ c.n }}j · KDA {{ c.kda.toFixed(2) }}</p>
+                  <p class="text-xs font-black text-slate-200">{{ l.label }}</p>
+                  <p v-if="l.melhorChamp" class="truncate text-[10px] font-bold text-slate-500">
+                    melhor: {{ l.melhorChamp.nome }} ({{ l.melhorChamp.wr }}%)
+                  </p>
                 </div>
                 <div class="shrink-0 text-right">
-                  <p class="text-sm font-black" :class="corWr(c.wr)">{{ c.wr }}%</p>
-                  <p class="text-[10px] font-bold text-slate-600">{{ c.v }}V-{{ c.derrotas }}D</p>
+                  <p class="text-xs font-black" :class="corWr(l.wr)">{{ l.wr }}%</p>
+                  <p class="text-[10px] font-bold text-slate-600">{{ l.n }}j</p>
                 </div>
               </li>
             </ul>
           </section>
 
-          <div class="space-y-5">
-            <!-- Rotas -->
-            <section v-if="analise.lanes.length" class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
-              <h2 class="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider text-slate-300">
-                <i class="fa-solid fa-compass text-amber-400"></i> Rotas
-              </h2>
-              <ul class="space-y-2">
-                <li v-for="l in analise.lanes.slice(0, 5)" :key="l.rota" class="flex items-center gap-2.5 rounded-lg border border-slate-800 bg-slate-950/50 p-2">
-                  <img :src="roleIconImage(l.rota)" :alt="l.label" class="h-6 w-6 shrink-0" />
-                  <div class="min-w-0 flex-1">
-                    <p class="text-xs font-black text-slate-200">{{ l.label }}</p>
-                    <p v-if="l.melhorChamp" class="truncate text-[10px] font-bold text-slate-500">
-                      melhor: {{ l.melhorChamp.nome }} ({{ l.melhorChamp.wr }}%)
-                    </p>
-                  </div>
-                  <div class="shrink-0 text-right">
-                    <p class="text-xs font-black" :class="corWr(l.wr)">{{ l.wr }}%</p>
-                    <p class="text-[10px] font-bold text-slate-600">{{ l.n }}j</p>
-                  </div>
-                </li>
-              </ul>
-            </section>
-
-            <!-- Destaques -->
-            <section class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
-              <h2 class="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider text-slate-300">
-                <i class="fa-solid fa-star text-violet-400"></i> Destaques
-              </h2>
-              <ul class="space-y-1.5 text-xs text-slate-300">
-                <li v-if="analise.seq?.maiorV">🔥 Melhor sequência: <b class="text-emerald-300">{{ analise.seq.maiorV }} vitórias</b> seguidas</li>
-                <li v-if="analise.seq?.maiorD">🧊 Pior sequência: <b class="text-rose-300">{{ analise.seq.maiorD }} derrotas</b> seguidas</li>
-                <li v-if="analise.seq?.atual">
-                  📍 Terminou com <b :class="analise.seq.atual.vitoria ? 'text-emerald-300' : 'text-rose-300'">
-                    {{ analise.seq.atual.tam }}{{ analise.seq.atual.vitoria ? 'V' : 'D' }}
-                  </b> em fila
-                </li>
-                <li>🎭 <b class="text-slate-100">{{ analise.pool }}</b> campeão(ões) diferente(s) · o mais jogado concentra <b class="text-slate-100">{{ analise.concentracao }}%</b></li>
-                <li v-if="analise.horarios?.dia">
-                  🕹️ Joga mais <b class="text-slate-100">{{ analise.horarios.dia.label }} {{ analise.horarios.faixa?.label }}</b>
-                </li>
-                <li v-if="analise.janela.tempoTotal">
-                  ⏱️ <b class="text-slate-100">{{ fmtDuracao(analise.janela.tempoTotal) }}</b> na Fenda ·
-                  {{ analise.janela.diasAtivos }} dia(s) ativo(s) · média de {{ fmtDuracao(analise.janela.durMedia) }}/jogo
-                </li>
-                <li v-if="analise.sugestaoMeta">
-                  🎯 O meta do patch pede <b class="text-amber-300">{{ analise.sugestaoMeta.nome }}</b> (tier {{ analise.sugestaoMeta.tier }}) {{ pRota(analise.rotaPrinc, 'em') }} {{ analise.rotaLabel }}
-                </li>
-              </ul>
-            </section>
-          </div>
+          <!-- Destaques -->
+          <section class="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+            <h2 class="mb-3 flex items-center gap-2 text-sm font-black uppercase tracking-wider text-slate-300">
+              <i class="fa-solid fa-star text-violet-400"></i> Destaques
+            </h2>
+            <ul class="space-y-1.5 text-xs text-slate-300">
+              <li v-if="analise.seq?.maiorV">🔥 Melhor sequência: <b class="text-emerald-300">{{ analise.seq.maiorV }} vitórias</b> seguidas</li>
+              <li v-if="analise.seq?.maiorD">🧊 Pior sequência: <b class="text-rose-300">{{ analise.seq.maiorD }} derrotas</b> seguidas</li>
+              <li v-if="analise.seq?.atual">
+                📍 Terminou com <b :class="analise.seq.atual.vitoria ? 'text-emerald-300' : 'text-rose-300'">
+                  {{ analise.seq.atual.tam }}{{ analise.seq.atual.vitoria ? 'V' : 'D' }}
+                </b> em fila
+              </li>
+              <li>🎭 <b class="text-slate-100">{{ analise.pool }}</b> campeão(ões) diferente(s) · o mais jogado concentra <b class="text-slate-100">{{ analise.concentracao }}%</b></li>
+              <li v-if="analise.horarios?.dia">
+                🕹️ Joga mais <b class="text-slate-100">{{ analise.horarios.dia.label }} {{ analise.horarios.faixa?.label }}</b>
+              </li>
+              <li v-if="analise.janela.tempoTotal">
+                ⏱️ <b class="text-slate-100">{{ fmtDuracao(analise.janela.tempoTotal) }}</b> na Fenda ·
+                {{ analise.janela.diasAtivos }} dia(s) ativo(s) · média de {{ fmtDuracao(analise.janela.durMedia) }}/jogo
+              </li>
+              <li v-if="analise.sugestaoMeta">
+                🎯 O meta do patch pede <b class="text-amber-300">{{ analise.sugestaoMeta.nome }}</b> (tier {{ analise.sugestaoMeta.tier }}) {{ pRota(analise.rotaPrinc, 'em') }} {{ analise.rotaLabel }}
+              </li>
+            </ul>
+          </section>
         </div>
 
         <!-- Tendência vs. o período anterior de MESMO tamanho -->
@@ -432,14 +443,16 @@ import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { fetchPremiumPlayers, fetchRelatorioPremium } from '../api.js';
 import { state, abrirFicha } from '../store.js';
-import { championImage, profileIconImage, roleIconImage } from '../utils.js';
+import { profileIconImage, roleIconImage } from '../utils.js';
 import { championByName } from '../utils/championCatalog.js';
 import {
   BENCH, DIA, FILAS, fmtDuracao, fmtElo, fmtMilhar, pRota, parseMetaTiers, sugerirDoMeta
 } from '../../shared/relatorio-metricas.js';
 import { gerarProsa } from '../../shared/relatorio-prosa.js';
 import metaCsvRaw from '../data/meta-tiers.csv?raw';
+import AbasJogador from './AbasJogador.vue';
 import AsyncState from './AsyncState.vue';
+import ChampionCard from './ChampionCard.vue';
 import KpiCard from './KpiCard.vue';
 import RadarChart from './RadarChart.vue';
 
@@ -709,6 +722,13 @@ function corClasse(c) {
 function champDoNome(nome) {
   const c = championByName(store.staticData.championList, nome);
   return c?.id ? c : null;
+}
+
+// O ChampionCard exige um `champ`. Campeão que o Data Dragon ainda não conhece
+// (lançamento recente, patch atrasado) entra só com o nome: o card cai na arte
+// alternativa sozinho e o clique não abre ficha nenhuma — degrada, não quebra.
+function champCard(nome) {
+  return champDoNome(nome) || { name: nome };
 }
 
 // ---------------------------------------------------------------------------
